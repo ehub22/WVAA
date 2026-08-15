@@ -3,133 +3,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
 
-/// JavaScript injected into the WebView to:
-/// 1. Detect when a <video> element is actually playing (Vimeo player).
-/// 2. Make the video fill the PiP window so only the video is visible.
-const String _videoPipScript = r'''
-(function() {
-  if (window.__pipScriptInstalled) return;
-  window.__pipScriptInstalled = true;
-
-  // ---- video playback detection ----
-  var lastState = null;
-
-  function anyVideoPlaying() {
-    var videos = document.querySelectorAll('video');
-    for (var i = 0; i < videos.length; i++) {
-      if (!videos[i].paused && !videos[i].ended) {
-        return true;
-      }
-    }
-    // Also check inside same-origin iframes (Vimeo embed player)
-    var frames = document.querySelectorAll('iframe');
-    for (var f = 0; f < frames.length; f++) {
-      try {
-        var doc = frames[f].contentDocument;
-        if (doc) {
-          var fvids = doc.querySelectorAll('video');
-          for (var j = 0; j < fvids.length; j++) {
-            if (!fvids[j].paused && !fvids[j].ended) return true;
-          }
-        }
-      } catch (e) { /* cross-origin iframe: skip */ }
-    }
-    return false;
-  }
-
-  function checkState() {
-    var playing = anyVideoPlaying();
-    if (playing !== lastState) {
-      lastState = playing;
-      try {
-        PiPChannel.postMessage(playing ? 'playing' : 'paused');
-      } catch (e) {}
-    }
-  }
-
-  function attachListeners(video) {
-    video.addEventListener('play', checkState);
-    video.addEventListener('playing', checkState);
-    video.addEventListener('pause', checkState);
-    video.addEventListener('ended', checkState);
-  }
-
-  // attach to existing videos
-  var videos = document.querySelectorAll('video');
-  for (var i = 0; i < videos.length; i++) {
-    attachListeners(videos[i]);
-  }
-
-  // watch for dynamically added videos (Vimeo creates the player lazily)
-  try {
-    var observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        mutation.addedNodes.forEach(function(node) {
-          if (node.tagName === 'VIDEO') {
-            attachListeners(node);
-            checkState();
-          } else if (node.querySelectorAll) {
-            var nested = node.querySelectorAll('video');
-            for (var j = 0; j < nested.length; j++) {
-              attachListeners(nested[j]);
-            }
-            if (nested.length > 0) checkState();
-          }
-        });
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  } catch (e) {}
-
-  // polling as a fallback for exotic player implementations
-  setInterval(checkState, 1000);
-  setTimeout(checkState, 800);
-
-  // ---- PiP visual helpers: make only the video visible ----
-  window.__pipVisual = {
-    originalStyles: {},
-    entered: false,
-    enter: function() {
-      var video = document.querySelector('video');
-      if (!video || this.entered) return;
-      this.entered = true;
-
-      var props = ['position','top','left','width','height','zIndex','objectFit','background'];
-      var style = video.style;
-      this.originalStyles = {};
-      for (var p = 0; p < props.length; p++) {
-        this.originalStyles[props[p]] = style[props[p]] || '';
-      }
-
-      style.position = 'fixed';
-      style.top = '0';
-      style.left = '0';
-      style.width = '100vw';
-      style.height = '100vh';
-      style.zIndex = '999999';
-      style.objectFit = 'contain';
-      style.background = '#000';
-
-      try { document.body.style.overflow = 'hidden'; } catch (e) {}
-    },
-    exit: function() {
-      if (!this.entered) return;
-      this.entered = false;
-
-      var video = document.querySelector('video');
-      if (video) {
-        var style = video.style;
-        var keys = Object.keys(this.originalStyles);
-        for (var k = 0; k < keys.length; k++) {
-          style[keys[k]] = this.originalStyles[keys[k]];
-        }
-      }
-      try { document.body.style.overflow = ''; } catch (e) {}
-      this.originalStyles = {};
-    }
-  };
-})();
-''';
+import 'vimeo_pip.dart';
 
 class WebPageInfo {
   final String title;
@@ -154,6 +28,8 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
   bool _autoPipSupported = false;
   bool _isVideoPlaying = false;
   bool _pipInitialized = false;
+
+  bool get _isVimeoPage => isVimeoUrl(widget.webPage.webPageURL);
 
   @override
   void initState() {
@@ -184,109 +60,165 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) => setState(() => loadingPercentage = 0),
-          onProgress: (progress) => setState(() => loadingPercentage = progress),
+          onPageStarted: (url) {
+            if (!mounted) return;
+            setState(() => loadingPercentage = 0);
+            if (_isVideoPlaying) {
+              _isVideoPlaying = false;
+              _syncPipMode();
+            }
+          },
+          onProgress: (progress) {
+            if (mounted) setState(() => loadingPercentage = progress);
+          },
           onPageFinished: (url) {
+            if (!mounted) return;
             setState(() => loadingPercentage = 100);
-            // Inject video detection + PiP visual helpers, then init PiP
-            controller.runJavaScript(_videoPipScript);
-            _setupPipMode();
+
+            if (_isVimeoPage) {
+              _installVimeoPipBridge();
+              _setupPipMode();
+            }
           },
         ),
       )
       ..loadRequest(Uri.parse(widget.webPage.webPageURL));
   }
 
-  /// Check PiP availability and auto-PiP support on this device.
+  Future<void> _installVimeoPipBridge() async {
+    try {
+      await controller.runJavaScript(vimeoPipScript);
+    } catch (error) {
+      debugPrint('Vimeo PiP script injection error: $error');
+    }
+  }
+
+  /// Checks Android PiP support and applies any playback state that arrived
+  /// while the asynchronous platform checks were running.
   Future<void> _setupPipMode() async {
-    if (_pipInitialized) return;
+    if (_pipInitialized || !_isVimeoPage) return;
     _pipInitialized = true;
 
     try {
       _pipAvailable = await SimplePip.isPipAvailable;
       _autoPipSupported = await SimplePip.isAutoPipAvailable;
-    } catch (e) {
-      debugPrint('PiP availability check error: $e');
+      await _syncPipMode();
+    } catch (error) {
+      debugPrint('PiP availability check error: $error');
     }
   }
 
-  /// Handle messages from the injected JS: video playing/paused.
+  /// Handles play/pause messages from direct HTML video elements and Vimeo's
+  /// cross-origin player iframe.
   void _handlePipMessage(String message) {
-    final bool isPlaying = message.trim() == 'playing';
+    if (!mounted || !_isVimeoPage) return;
+
+    final String state = message.trim();
+    if (state != 'playing' && state != 'paused') return;
+
+    final bool isPlaying = state == 'playing';
     if (isPlaying == _isVideoPlaying) return;
 
-    setState(() => _isVideoPlaying = isPlaying);
+    _isVideoPlaying = isPlaying;
     _syncPipMode();
   }
 
-  /// Enable/disable auto-PiP based on whether a video is actually playing.
+  /// Enables Android 12+ auto-PiP only for an actively playing Vimeo video.
   Future<void> _syncPipMode() async {
-    if (!_pipAvailable) return;
+    if (!_pipAvailable || !_autoPipSupported) return;
 
+    final bool shouldAutoEnter = _isVimeoPage && _isVideoPlaying;
     try {
-      if (_isVideoPlaying) {
-        // Video is playing -> allow PiP
-        if (_autoPipSupported) {
-          await _pip.setAutoPipMode(
-            aspectRatio: const (16, 9),
-            seamlessResize: true,
-            autoEnter: true,
-          );
-        }
-      } else {
-        // No video playing -> never auto-enter PiP
-        if (_autoPipSupported) {
-          await _pip.setAutoPipMode(autoEnter: false);
-        }
-      }
-    } catch (e) {
-      debugPrint('PiP sync error: $e');
+      await _pip.setAutoPipMode(
+        aspectRatio: const (16, 9),
+        seamlessResize: shouldAutoEnter,
+        autoEnter: shouldAutoEnter,
+      );
+    } catch (error) {
+      debugPrint('PiP sync error: $error');
     }
   }
 
-  /// Maximize the video in the PiP window so only the video is visible.
+  /// Removes all Flutter app chrome and expands only the Vimeo player over the
+  /// WebView. Android PiP captures the activity, so both steps are required.
   Future<void> _enterPipVisual() async {
-    if (!widget.webPage.title.contains('Newscast')) return;
+    if (!_isVimeoPage) return;
+
+    // Rebuild the persistent app tree without its tab bars. The WebView is not
+    // moved or recreated, so playback continues uninterrupted.
+    vimeoPipActive.value = true;
+
     try {
       await controller.runJavaScript(
-        'window.__pipVisual && window.__pipVisual.enter();',
+        'window.__westviewVimeoPip && window.__westviewVimeoPip.enter();',
       );
-    } catch (e) {
-      debugPrint('PiP visual enter error: $e');
+    } catch (error) {
+      debugPrint('PiP visual enter error: $error');
     }
   }
 
-  /// Restore the page when PiP is exited.
+  /// Restores the inline Vimeo watch page before showing the normal app chrome.
   Future<void> _exitPipVisual() async {
     try {
       await controller.runJavaScript(
-        'window.__pipVisual && window.__pipVisual.exit();',
+        'window.__westviewVimeoPip && window.__westviewVimeoPip.exit();',
       );
-    } catch (e) {
-      debugPrint('PiP visual exit error: $e');
+    } catch (error) {
+      debugPrint('PiP visual exit error: $error');
+    } finally {
+      vimeoPipActive.value = false;
     }
   }
 
   @override
   void didUpdateWidget(WebPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.webPage.webPageURL != widget.webPage.webPageURL) {
-      setState(() {
-        loadingPercentage = 0;
-        _pipInitialized = false;
-        _isVideoPlaying = false;
-      });
-      controller.loadRequest(Uri.parse(widget.webPage.webPageURL));
+    if (oldWidget.webPage.webPageURL == widget.webPage.webPageURL) return;
+
+    final bool wasPlaying = _isVideoPlaying;
+    setState(() {
+      loadingPercentage = 0;
+      _pipInitialized = false;
+      _isVideoPlaying = false;
+    });
+
+    // Disable an auto-PiP configuration left by the Vimeo page before loading
+    // Nexus (or any future non-Vimeo publication).
+    if (wasPlaying || !isVimeoUrl(widget.webPage.webPageURL)) {
+      _syncPipMode();
     }
+    controller.loadRequest(Uri.parse(widget.webPage.webPageURL));
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _isVideoPlaying = false;
+    _syncPipMode();
+    _pip.onPipEntered = null;
+    _pip.onPipExited = null;
+    vimeoPipActive.value = false;
     super.dispose();
   }
 
-  /// Manual PiP entry for Android < 12, only when a video is actually playing.
+  /// Android versions before 12 do not support auto-enter. Prepare the video
+  /// presentation first, then manually request PiP as the app is backgrounded.
+  Future<void> _enterLegacyPip() async {
+    await _enterPipVisual();
+
+    bool entered = false;
+    try {
+      entered = await _pip.enterPipMode(
+        aspectRatio: const (16, 9),
+        seamlessResize: true,
+      );
+    } catch (error) {
+      debugPrint('Legacy PiP entry error: $error');
+    }
+
+    if (!entered) await _exitPipVisual();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.hidden &&
@@ -294,24 +226,25 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
         _pipAvailable &&
         !_autoPipSupported &&
         _isVideoPlaying &&
-        widget.webPage.title.contains('Newscast')) {
-      _pip.enterPipMode(
-        aspectRatio: const (16, 9),
-      );
+        _isVimeoPage) {
+      _enterLegacyPip();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        WebViewWidget(controller: controller),
-        if (loadingPercentage < 100)
-          Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: const Center(child: CircularProgressIndicator()),
-          ),
-      ],
+    return ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        children: [
+          WebViewWidget(controller: controller),
+          if (loadingPercentage < 100)
+            Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -354,67 +287,93 @@ class _PublicationsPageState extends State<PublicationsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 90,
-              child: PageView.builder(
-                controller: _carouselController,
-                itemCount: publications.length,
-                onPageChanged: (index) => setState(() => selectedIndex = index),
-                itemBuilder: (context, index) {
-                  bool isSelected = selectedIndex == index;
+    return ValueListenableBuilder<bool>(
+      valueListenable: vimeoPipActive,
+      builder: (context, isPipActive, child) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: SafeArea(
+            top: !isPipActive,
+            bottom: !isPipActive,
+            left: !isPipActive,
+            right: !isPipActive,
+            child: Column(
+              children: [
+                // Keep the same widget structure while changing the height so
+                // the platform WebView is never detached during PiP entry.
+                SizedBox(
+                  height: isPipActive ? 0 : 90,
+                  child: Offstage(
+                    offstage: isPipActive,
+                    child: PageView.builder(
+                      controller: _carouselController,
+                      itemCount: publications.length,
+                      onPageChanged: (index) =>
+                          setState(() => selectedIndex = index),
+                      itemBuilder: (context, index) {
+                        final bool isSelected = selectedIndex == index;
 
-                  return GestureDetector(
-                    onTap: () => _onItemTapped(index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).appBarTheme.backgroundColor
-                            : Theme.of(context).appBarTheme.foregroundColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected
-                              ? Colors.transparent
-                              : Colors.grey.withOpacity(0.3),
-                          width: 2,
-                        ),
-                        boxShadow: isSelected
-                            ? [BoxShadow(
-                                color: Theme.of(context).primaryColor.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              )]
-                            : [],
-                      ),
-                      child: Center(
-                        child: Text(
-                          publications[index].title,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black87,
-                            fontSize: isSelected ? 16 : 14,
+                        return GestureDetector(
+                          onTap: () => _onItemTapped(index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context).appBarTheme.backgroundColor
+                                  : Theme.of(context).appBarTheme.foregroundColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : Colors.grey.withOpacity(0.3),
+                                width: 2,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: Theme.of(context)
+                                            .primaryColor
+                                            .withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: Center(
+                              child: Text(
+                                publications[index].title,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.black87,
+                                  fontSize: isSelected ? 16 : 14,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+                SizedBox(
+                  height: isPipActive ? 0 : 1,
+                  child: const Divider(height: 1),
+                ),
+                Expanded(
+                  child: WebPage(webPage: publications[selectedIndex]),
+                ),
+              ],
             ),
-
-            const Divider(height: 1),
-
-            Expanded(
-              child: WebPage(webPage: publications[selectedIndex]),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
