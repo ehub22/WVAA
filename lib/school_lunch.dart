@@ -84,7 +84,7 @@ class _SchoolLunchViewState extends State<SchoolLunchView> {
       debugPrint('Failed to fetch recipes: $e');
     }
 
-    final url = 'https://menus.healthepro.com/api/organizations/1556/menus/111591/year/$year/month/$month/date_overwrites';
+    final url = 'https://menus.healthepro.com/api/organizations/1556/menus/135312/year/$year/month/$month/date_overwrites';
 
     try {
       final response = await http.get(Uri.parse(url));
