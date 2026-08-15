@@ -50,17 +50,22 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          api-level: 35
-          build-tools: 35.0.0
           accept-android-sdk-licenses: true
+          # setup-android@v3 has no api-level/build-tools inputs; use `packages`.
+          # Install both platforms/build-tools 35 and 36 so the build works whether
+          # the installed Flutter targets compileSdk 35 or 36.
+          packages: >-
+            platform-tools
+            platforms;android-35
+            platforms;android-36
+            build-tools;35.0.0
+            build-tools;36.0.0
 
-      # Also install the newer Android platform/build-tools so the build works
-      # whether the installed Flutter targets compileSdk 35 or 36. Best-effort:
-      # if a package is not yet available it is skipped without failing the run.
-      - name: Install additional Android SDK packages
+      # Fallback: make sure the required platforms/build-tools are present.
+      - name: Ensure Android SDK packages are installed
         run: |
           set +e
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platforms;android-36" "build-tools;36.0.0"
           set -e
 
       - name: Show Flutter version
