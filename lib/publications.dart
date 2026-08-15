@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
+import 'package:simple_pip_mode/aspect_ratio.dart';
 
-
-// Note: PiP does not work currently.
 
 class WebPageInfo {
   final String title;
@@ -25,6 +24,15 @@ class WebPage extends StatefulWidget {
 class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
   late final WebViewController controller;
   int loadingPercentage = 0;
+  final SimplePip _pip = SimplePip(
+    onPipEntered: () {
+      // PiP mode entered successfully
+    },
+    onPipExited: () {
+      // User returned to full app
+    },
+  );
+  bool _pipInitialized = false;
 
   @override
   void initState() {
@@ -46,10 +54,42 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
         NavigationDelegate(
           onPageStarted: (url) => setState(() => loadingPercentage = 0),
           onProgress: (progress) => setState(() => loadingPercentage = progress),
-          onPageFinished: (url) => setState(() => loadingPercentage = 100),
+          onPageFinished: (url) {
+            setState(() => loadingPercentage = 100);
+            // Set up PiP once the page has loaded
+            _setupPipMode();
+          },
         ),
       )
       ..loadRequest(Uri.parse(widget.webPage.webPageURL));
+  }
+
+  /// Configure automatic PiP so the video keeps playing when user leaves the app.
+  Future<void> _setupPipMode() async {
+    if (_pipInitialized) return;
+    _pipInitialized = true;
+
+    try {
+      // Check if PiP is available on this device
+      final bool pipAvailable = await SimplePip.isPipAvailable;
+      if (!pipAvailable) return;
+
+      // Check if auto-PiP is supported (Android 12+ / API 31+)
+      final bool autoPipAvailable = await SimplePip.isAutoPipAvailable;
+
+      if (autoPipAvailable) {
+        // Android 12+: set automatic PiP mode — when user presses home
+        // or switches apps, the video automatically enters PiP
+        await _pip.setAutoPipMode(
+          aspectRatio: const AspectRatio(16, 9),
+          seamlessResize: true,
+          autoEnter: true,
+        );
+      }
+    } catch (e) {
+      // PiP setup failed silently — user can still use the app normally
+      debugPrint('PiP setup error: $e');
+    }
   }
 
   @override
@@ -59,6 +99,7 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
       // Reset loading state when the URL changes with carousel
       setState(() {
         loadingPercentage = 0;
+        _pipInitialized = false;
       });
       controller.loadRequest(Uri.parse(widget.webPage.webPageURL));
     }
@@ -70,11 +111,17 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // This detects when the user swipes up to go home, doesn't work though
+  /// Detect when the app is going to the background and manually enter PiP
+  /// for Android versions below 12 (where auto-PiP isn't available).
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && widget.webPage.title.contains('Newscast')) {
-      SimplePip().enterPipMode(); // Manually force the system into PiP (still doesn't work)
+    if (state == AppLifecycleState.hidden && _pipInitialized) {
+      // Only enter PiP for video pages (Newscast)
+      if (widget.webPage.title.contains('Newscast')) {
+        _pip.enterPipMode(
+          aspectRatio: const AspectRatio(16, 9),
+        );
+      }
     }
   }
 

@@ -39,6 +39,14 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
 
+  // Keep all pages alive so video (WebView) continues playing when switching tabs
+  final List<Widget> _pages = const [
+    SchedulePage(),
+    NewsletterPage(),
+    PublicationsPage(),
+    CalendarsPage(),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
@@ -85,7 +93,10 @@ class _MyHomePageState extends State<MyHomePage> {
           });
         },
       ),
-      body: [SchedulePage(), NewsletterPage(), PublicationsPage(), CalendarsPage()].elementAt(_selectedIndex)
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
     );
   }
 }

@@ -1,10 +1,10 @@
 package com.example.westview_app
 
-import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import com.example.live_activities.LiveActivityManagerHolder
+import cl.puntito.simple_pip_mode.PipCallbackHelperActivityWrapper
 
-class MainActivity: FlutterActivity() {
+class MainActivity: PipCallbackHelperActivityWrapper() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
