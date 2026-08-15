@@ -1,0 +1,95 @@
+name: Build Android APK
+
+# When does this workflow run?
+#   - on every push to the default branch (uploads an APK build artifact)
+#   - on every pull request targeting the default branch (validates the build)
+#   - when a version tag "vX.Y.Z" is pushed (creates a GitHub Release with the APK)
+#   - manually from the Actions tab (workflow_dispatch)
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+# The token needs write access to upload artifacts and to create releases.
+permissions:
+  contents: write
+
+# Cancel an in-progress build if a newer one for the same ref starts.
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java (Temurin 17)
+        # AGP 8.9 / Gradle 8.12 / Kotlin 2.1 require Java 17.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (latest stable)
+        # pubspec.yaml requires Dart SDK >= 3.11.4, so we install the latest
+        # stable Flutter channel, which always ships a compatible (newer) Dart.
+        # For fully reproducible builds, pin a version, e.g. flutter-version: "3.32.0".
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 35
+          build-tools: 35.0.0
+          accept-android-sdk-licenses: true
+
+      # Also install the newer Android platform/build-tools so the build works
+      # whether the installed Flutter targets compileSdk 35 or 36. Best-effort:
+      # if a package is not yet available it is skipped without failing the run.
+      - name: Install additional Android SDK packages
+        run: |
+          set +e
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          set -e
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # Build a release APK. The versionCode is set to the GitHub run number so
+      # each build is monotonically increasing. The APK is signed with Flutter's
+      # auto-generated debug key (see android/app/build.gradle.kts). To publish
+      # on Google Play, configure a real keystore (see the README).
+      - name: Build release APK
+        run: flutter build apk --release --build-number=${{ github.run_number }}
+
+      - name: Upload APK as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Runs only when a "vX.Y.Z" tag is pushed.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: build/app/outputs/flutter-apk/app-release.apk
