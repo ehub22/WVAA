@@ -48,58 +48,65 @@ class _MyHomePageState extends State<MyHomePage> {
     CalendarsPage(),
   ];
 
+  AdaptiveBottomNavigationBar _buildBottomNavigationBar() {
+    return AdaptiveBottomNavigationBar(
+      useNativeBottomBar: true,
+      items: [
+        AdaptiveNavigationDestination(
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'house.fill'
+              : PlatformInfo.isIOS
+              ? CupertinoIcons.home
+              : Icons.home_outlined,
+          label: 'Home',
+        ),
+        AdaptiveNavigationDestination(
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'newspaper'
+              : PlatformInfo.isIOS
+              ? CupertinoIcons.news
+              : Icons.newspaper,
+          label: 'Newsletter',
+        ),
+        AdaptiveNavigationDestination(
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'text.justify.leading'
+              : PlatformInfo.isIOS
+              ? CupertinoIcons.text_justifyleft
+              : Icons.cell_tower,
+          label: 'Publications',
+        ),
+        AdaptiveNavigationDestination(
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'text.justify.leading'
+              : PlatformInfo.isIOS
+              ? CupertinoIcons.text_justifyleft
+              : Icons.calendar_today,
+          label: 'Calendars',
+        ),
+      ],
+      selectedIndex: _selectedIndex,
+      onTap: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: vimeoPipActive,
       builder: (context, isPipActive, child) {
         return AdaptiveScaffold(
-          // Keep the scaffold and IndexedStack mounted, but remove the app's
-          // navigation chrome from the activity surface captured by Android.
+          // `tabBarHidden` hides the native iOS tab bar, while Android's
+          // adaptive bottom bar must be removed from the scaffold explicitly.
+          // The persistent IndexedStack below remains mounted either way.
           tabBarHidden: isPipActive,
-          bottomNavigationBar: AdaptiveBottomNavigationBar(
-            useNativeBottomBar: true,
-            items: [
-              AdaptiveNavigationDestination(
-                icon: PlatformInfo.isIOS26OrHigher()
-                    ? 'house.fill'
-                    : PlatformInfo.isIOS
-                    ? CupertinoIcons.home
-                    : Icons.home_outlined,
-                label: 'Home',
-              ),
-              AdaptiveNavigationDestination(
-                icon: PlatformInfo.isIOS26OrHigher()
-                    ? 'newspaper'
-                    : PlatformInfo.isIOS
-                    ? CupertinoIcons.news
-                    : Icons.newspaper,
-                label: 'Newsletter',
-              ),
-              AdaptiveNavigationDestination(
-                icon: PlatformInfo.isIOS26OrHigher()
-                    ? 'text.justify.leading'
-                    : PlatformInfo.isIOS
-                    ? CupertinoIcons.text_justifyleft
-                    : Icons.cell_tower,
-                label: 'Publications',
-              ),
-              AdaptiveNavigationDestination(
-                icon: PlatformInfo.isIOS26OrHigher()
-                    ? 'text.justify.leading'
-                    : PlatformInfo.isIOS
-                    ? CupertinoIcons.text_justifyleft
-                    : Icons.calendar_today,
-                label: 'Calendars',
-              ),
-            ],
-            selectedIndex: _selectedIndex,
-            onTap: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          ),
+          bottomNavigationBar: isPipActive
+              ? null
+              : _buildBottomNavigationBar(),
           body: ColoredBox(
             color: Colors.black,
             child: IndexedStack(
