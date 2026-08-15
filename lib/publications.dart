@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
-import 'package:simple_pip_mode/aspect_ratio.dart';
 
 
 class WebPageInfo {
@@ -81,7 +80,7 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
         // Android 12+: set automatic PiP mode — when user presses home
         // or switches apps, the video automatically enters PiP
         await _pip.setAutoPipMode(
-          aspectRatio: const AspectRatio(16, 9),
+          aspectRatio: const (16, 9),
           seamlessResize: true,
           autoEnter: true,
         );
@@ -119,7 +118,7 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
       // Only enter PiP for video pages (Newscast)
       if (widget.webPage.title.contains('Newscast')) {
         _pip.enterPipMode(
-          aspectRatio: const AspectRatio(16, 9),
+          aspectRatio: const (16, 9),
         );
       }
     }
