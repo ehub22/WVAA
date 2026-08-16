@@ -3,16 +3,35 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="2dp"> <TextView
+    android:padding="2dp">
+
+    <TextView
         android:id="@+id/period_name"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:text="Current Period"
-        style="@style/TextAppearance.Compat.Notification.Title" /> <Chronometer
+        style="@style/TextAppearance.Compat.Notification.Title" />
+
+    <!-- Teacher / room number, hidden when the student did not enter them
+         (or turned them off in settings). -->
+    <TextView
+        android:id="@+id/period_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:visibility="gone"
+        style="@style/TextAppearance.Compat.Notification.Info" />
+
+    <Chronometer
         android:id="@+id/period_countdown"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp" android:textSize="20sp" android:textStyle="bold"
+        android:layout_marginTop="2dp"
+        android:textSize="20sp"
+        android:textStyle="bold"
         android:textColor="@color/countdown_blue"
         android:countDown="true" />
 </LinearLayout>

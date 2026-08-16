@@ -44,8 +44,19 @@ object ScheduleWidgetRenderer {
     private const val KEY_TUE_THU = "schedule_tuethu"
     private const val KEY_WED = "schedule_wed"
 
-    /** A single period of the school day, times in minutes since midnight. */
-    data class Period(val name: String, val startMinutes: Int, val endMinutes: Int) {
+    /**
+     * A single period of the school day, times in minutes since midnight.
+     *
+     * [name] is the name the student sees (a custom class name such as
+     * "Human Body Systems" when one was set in the app's settings) and
+     * [detail] is the optional teacher / room line ("Mr. Smith · Rm 402").
+     */
+    data class Period(
+        val name: String,
+        val startMinutes: Int,
+        val endMinutes: Int,
+        val detail: String = "",
+    ) {
         fun startsAt(day: LocalDate): LocalDateTime = day.atTime(startMinutes / 60, startMinutes % 60)
         fun endsAt(day: LocalDate): LocalDateTime = day.atTime(endMinutes / 60, endMinutes % 60)
     }
@@ -155,10 +166,11 @@ object ScheduleWidgetRenderer {
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
                     val name = obj.optString("name")
+                    val detail = obj.optString("detail")
                     val start = obj.optInt("start", -1)
                     val end = obj.optInt("end", -1)
                     if (name.isNotBlank() && start >= 0 && end > start) {
-                        add(Period(name, start, end))
+                        add(Period(name, start, end, detail))
                     }
                 }
             }.takeIf { it.isNotEmpty() }
@@ -227,6 +239,7 @@ object ScheduleWidgetRenderer {
         when (state) {
             is WidgetState.Current -> {
                 views.setTextViewText(R.id.widget_period, state.period.name)
+                showDetail(views, state.period.detail)
                 views.setTextViewText(R.id.widget_timer_label, "Ends in")
                 showCountdown(views, state.targetMillis)
                 views.setTextViewText(
@@ -238,6 +251,7 @@ object ScheduleWidgetRenderer {
 
             is WidgetState.Upcoming -> {
                 views.setTextViewText(R.id.widget_period, state.period.name)
+                showDetail(views, state.period.detail)
                 views.setTextViewText(R.id.widget_timer_label, "Starts in")
                 showCountdown(views, state.targetMillis)
                 views.setTextViewText(
@@ -248,6 +262,7 @@ object ScheduleWidgetRenderer {
 
             is WidgetState.Done -> {
                 views.setTextViewText(R.id.widget_period, "School's out")
+                showDetail(views, "")
                 hideCountdown(views)
                 views.setTextViewText(
                     R.id.widget_subtitle,
@@ -257,16 +272,27 @@ object ScheduleWidgetRenderer {
 
             is WidgetState.NoSchool -> {
                 views.setTextViewText(R.id.widget_period, "No school today")
+                showDetail(views, "")
                 hideCountdown(views)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    "${dayName(state.nextSchoolDay)} · Period 1 at " +
+                    "${dayName(state.nextSchoolDay)} · ${state.firstPeriod.name} at " +
                         formatTime(state.firstPeriod.startMinutes),
                 )
             }
         }
 
         return views
+    }
+
+    /** Shows the teacher / room line, or hides it when there is nothing to show. */
+    private fun showDetail(views: RemoteViews, detail: String) {
+        if (detail.isBlank()) {
+            views.setViewVisibility(R.id.widget_detail, View.GONE)
+        } else {
+            views.setTextViewText(R.id.widget_detail, detail)
+            views.setViewVisibility(R.id.widget_detail, View.VISIBLE)
+        }
     }
 
     private fun showCountdown(views: RemoteViews, targetMillis: Long) {
