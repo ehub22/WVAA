@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rounded card background for the home screen widget.
+     The fill color switches automatically with the system light/dark mode
+     (see values/colors.xml and values-night/colors.xml). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="@color/widget_background" />
+</shape>

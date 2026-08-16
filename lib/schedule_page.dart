@@ -5,6 +5,7 @@ import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:live_activities/live_activities.dart';
 import 'data.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'widget_sync.dart';
 
 
 // Schedule page
@@ -27,6 +28,9 @@ class _SchedulePageState extends State<SchedulePage> {
   DateTime? _lastTrackedPeriodEndTime;
   bool _isActivityActive = false;
 
+  /// End time of the period the home screen widget was last synced for.
+  DateTime? _lastWidgetPeriodEnd;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +39,13 @@ class _SchedulePageState extends State<SchedulePage> {
     // rebuild the widget every second to update
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
+        // Keep the Android home screen widget in sync whenever the current
+        // period changes (including "no active period").
+        final currentPeriodEnd = _getCurrentPeriodEndTime();
+        if (currentPeriodEnd != _lastWidgetPeriodEnd) {
+          _lastWidgetPeriodEnd = currentPeriodEnd;
+          unawaited(syncHomeWidget());
+        }
         setState(() {
           _updateLiveActivity();
         });

@@ -8,8 +8,15 @@ import 'newsletter_page.dart';
 import 'schedule_page.dart';
 import 'theme/theme.dart';
 import 'vimeo_pip.dart';
+import 'widget_sync.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Push the schedule data to the Android home screen widget so it can show
+  // the current period even before the schedule page is opened.
+  await syncHomeWidget();
+
   runApp(const WestviewApp());
 }
 

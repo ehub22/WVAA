@@ -20,7 +20,8 @@ android {
         applicationId = "com.example.westview_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // API 24+ is required by the home screen widget (RemoteViews countdown Chronometer).
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
