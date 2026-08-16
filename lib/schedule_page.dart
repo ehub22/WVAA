@@ -188,15 +188,17 @@ class _SchedulePageState extends State<SchedulePage> {
     return ListenableBuilder(
       listenable: _settings,
       builder: (context, _) {
-        return Stack(
-          children: [
-            SafeArea(
-              child: Padding(
-                padding: EdgeInsetsGeometry.directional(start: 10, end: 10),
-                child: SingleChildScrollView(
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Column(
+        return SafeArea(
+          child: Column(
+            children: [
+              // Scrolling schedule.
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsetsGeometry.directional(start: 10, end: 10),
+                  child: SingleChildScrollView(
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Column(
                       mainAxisAlignment: MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -255,29 +257,31 @@ class _SchedulePageState extends State<SchedulePage> {
                         for (var period in selectedDaySchedule ?? [])
                           _buildPeriodCard(context, period),
 
-                        // Keep the last card clear of the settings button.
-                        const SizedBox(height: 72),
+                        const SizedBox(height: 8),
                       ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-            // Settings button, bottom right of the home page.
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: SafeArea(
-                child: FloatingActionButton(
-                  heroTag: 'home_settings_button',
-                  tooltip: 'Settings',
-                  onPressed: _openSettings,
-                  child: const Icon(Icons.settings),
+              // Settings button, locked to the bottom right of the home page.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'home_settings_button',
+                      tooltip: 'Settings',
+                      onPressed: _openSettings,
+                      child: const Icon(Icons.settings),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

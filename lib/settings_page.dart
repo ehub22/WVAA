@@ -69,14 +69,6 @@ class SettingsPage extends StatelessWidget {
                 const Divider(height: 32),
 
                 _SectionHeader('My classes'),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    'Rename a period to your class name, for example '
-                    '"Human Body Systems" instead of "Period 1".',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
                 for (final name in customizablePeriodNames)
                   _PeriodTile(canonicalName: name),
                 Padding(
@@ -226,7 +218,6 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: 'Class name',
-                hintText: 'e.g. Human Body Systems',
                 helperText: 'Leave empty to keep "${widget.canonicalName}"',
               ),
             ),
@@ -234,19 +225,13 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
             TextField(
               controller: _teacherController,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Teacher',
-                hintText: 'e.g. Mr. Smith',
-              ),
+              decoration: const InputDecoration(labelText: 'Teacher'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _roomController,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Room number',
-                hintText: 'e.g. 402',
-              ),
+              decoration: const InputDecoration(labelText: 'Room number'),
             ),
           ],
         ),

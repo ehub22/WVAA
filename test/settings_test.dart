@@ -18,10 +18,13 @@ void main() {
     await settings.setShowRoom(true);
   });
 
-  test('every period except passing periods can be renamed', () {
+  test('only actual classes can be renamed', () {
     expect(customizablePeriodNames, contains('Period 1'));
     expect(customizablePeriodNames, contains('Period 4'));
     expect(customizablePeriodNames, isNot(contains('Passing')));
+    expect(customizablePeriodNames, isNot(contains('Lunch')));
+    expect(customizablePeriodNames, isNot(contains('Wolverine Time')));
+    expect(customizablePeriodNames, isNot(contains('SSH')));
   });
 
   test('periods keep their default name until renamed', () async {

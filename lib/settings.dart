@@ -48,7 +48,16 @@ class PeriodSettings {
   }
 }
 
-/// Every period name a student can rename (everything except passing periods).
+/// Parts of the school day that are not a class, so there is nothing to
+/// rename and no teacher or room to enter.
+const Set<String> _nonClassPeriods = {
+  'Passing',
+  'Lunch',
+  'Wolverine Time',
+  'SSH',
+};
+
+/// Every period name a student can rename (the actual classes).
 ///
 /// The order follows the school day so the settings page reads naturally.
 final List<String> customizablePeriodNames = () {
@@ -56,7 +65,7 @@ final List<String> customizablePeriodNames = () {
   for (final schedule in [monFriSchedule, tueThursSchedule, wedSchedule]) {
     for (final period in schedule) {
       final name = period['Period'] as String;
-      if (name != 'Passing' && !names.contains(name)) {
+      if (!_nonClassPeriods.contains(name) && !names.contains(name)) {
         names.add(name);
       }
     }
