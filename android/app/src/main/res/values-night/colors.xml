@@ -1,3 +1,10 @@
 <resources>
     <color name="countdown_blue">#FFEADAA3</color>
+
+    <!-- Home screen widget colors (dark mode). Matches lib/theme/colors.dart. -->
+    <color name="widget_background">#141312</color>
+    <color name="widget_title_text">#E6E2E0</color>
+    <color name="widget_countdown_text">#EADAA3</color>
+    <color name="widget_subtitle_text">#939187</color>
+    <color name="widget_accent">#EADAA3</color>
 </resources>

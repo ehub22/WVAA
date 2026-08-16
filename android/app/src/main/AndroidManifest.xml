@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Home screen widget: re-render after device reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Home screen widget: precise alarms for period transitions (Android 12+;
+         the widget falls back to inexact alarms if this is not granted). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <application
         android:label="Westview HS"
         android:name="${applicationName}"
@@ -34,6 +39,31 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Home screen widget: current period + time left (see ScheduleWidgetProvider.kt). -->
+        <receiver
+            android:name=".ScheduleWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/schedule_widget_info" />
+        </receiver>
+
+        <!-- Re-renders the widget on period transitions and system time changes. -->
+        <receiver
+            android:name=".ScheduleWidgetAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.westview_app.action.WIDGET_PERIOD_TICK" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
