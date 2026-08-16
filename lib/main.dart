@@ -6,12 +6,20 @@ import 'package:westview_app/publications.dart';
 import 'calendars.dart';
 import 'newsletter_page.dart';
 import 'schedule_page.dart';
+import 'settings.dart';
 import 'theme/theme.dart';
 import 'vimeo_pip.dart';
 import 'widget_sync.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load the user settings (custom class names, teacher/room, notification
+  // preferences) before the first frame so nothing flashes the defaults.
+  await AppSettings.instance.load();
+
+  // Any settings change must also reach the Android home screen widget.
+  AppSettings.instance.onSaved = syncHomeWidget;
 
   // Push the schedule data to the Android home screen widget so it can show
   // the current period even before the schedule page is opened.

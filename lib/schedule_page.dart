@@ -5,6 +5,8 @@ import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:live_activities/live_activities.dart';
 import 'data.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'settings.dart';
+import 'settings_page.dart';
 import 'widget_sync.dart';
 
 
@@ -23,10 +25,17 @@ class _SchedulePageState extends State<SchedulePage> {
   int selectedDayScheduleIndex = getCurrentDayOfWeek();
 
   final _liveActivitiesPlugin = LiveActivities();
-  
+
   final String _activityId = 'schedule_countdown_activity';
-  DateTime? _lastTrackedPeriodEndTime;
+
+  /// Identifies the content currently shown by the live activity, so it is
+  /// only rewritten when the period *or* its user settings actually change.
+  String? _lastActivitySignature;
   bool _isActivityActive = false;
+  bool _liveActivitiesReady = false;
+  bool _notificationPermissionRequested = false;
+
+  final AppSettings _settings = AppSettings.instance;
 
   /// End time of the period the home screen widget was last synced for.
   DateTime? _lastWidgetPeriodEnd;
@@ -35,7 +44,8 @@ class _SchedulePageState extends State<SchedulePage> {
   void initState() {
     super.initState();
     _initLiveActivities();
-    
+    _settings.addListener(_onSettingsChanged);
+
     // rebuild the widget every second to update
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -52,26 +62,60 @@ class _SchedulePageState extends State<SchedulePage> {
       }
     });
   }
-  
+
   Future<void> _initLiveActivities() async {
-    await Permission.notification.request();
     await _liveActivitiesPlugin.init(appGroupId: 'group.com.your.app');
-    await _liveActivitiesPlugin.endAllActivities(); 
+    await _liveActivitiesPlugin.endAllActivities();
+    _liveActivitiesReady = true;
+    // Only ask for the notification permission when the student actually
+    // wants notifications (see the settings page).
+    await _ensureNotificationPermission();
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    if (!_settings.liveActivityActive) return;
+    if (_notificationPermissionRequested) return;
+    _notificationPermissionRequested = true;
+    try {
+      await Permission.notification.request();
+    } catch (_) {
+      // Permission plugin unavailable (e.g. desktop): ignore.
+    }
+  }
+
+  /// Settings changed: refresh the notification immediately (turn it off,
+  /// turn it back on, or rewrite it with the new name/teacher/room).
+  void _onSettingsChanged() {
+    unawaited(_ensureNotificationPermission());
+    _lastActivitySignature = null;
+    _updateLiveActivity();
+    if (mounted) setState(() {});
   }
 
   void _updateLiveActivity() async {
+    if (!_liveActivitiesReady) return;
+
     DateTime? currentEndTime = _getCurrentPeriodEndTime();
     String? currentPeriodName = _getCurrentPeriodName();
 
-    // If there is an active period running
-    if (currentEndTime != null && currentPeriodName != null) {
-      // Create or update only if we moved to a NEW period
-      if (_lastTrackedPeriodEndTime != currentEndTime) {
-        _lastTrackedPeriodEndTime = currentEndTime;
-        
+    // Notifications (or just the live activity) can be turned off in settings.
+    final enabled = _settings.liveActivityActive;
+
+    // If there is an active period running and notifications are allowed
+    if (enabled && currentEndTime != null && currentPeriodName != null) {
+      final displayName = _settings.displayName(currentPeriodName);
+      final details = _settings.detailsFor(currentPeriodName);
+      final signature =
+          '$displayName|$details|${currentEndTime.millisecondsSinceEpoch}';
+
+      // Create or update only if the displayed content changed
+      if (_lastActivitySignature != signature) {
+        _lastActivitySignature = signature;
+
         final data = {
-          'periodName': currentPeriodName,
-          'endTime': currentEndTime.millisecondsSinceEpoch.toString(), 
+          'periodName': displayName,
+          'periodDetail': details,
+          'endTime': currentEndTime.millisecondsSinceEpoch.toString(),
         };
 
         // 2. Use positional arguments! No "activityId:" or "data:"
@@ -79,12 +123,12 @@ class _SchedulePageState extends State<SchedulePage> {
         _isActivityActive = true;
       }
     } else {
-      // No active period, end activity if exists
+      // No active period (or notifications disabled): end activity if it exists
       if (_isActivityActive) {
         // 3. Use positional argument here as well
         await _liveActivitiesPlugin.endActivity(_activityId);
         _isActivityActive = false;
-        _lastTrackedPeriodEndTime = null;
+        _lastActivitySignature = null;
       }
     }
   }
@@ -93,6 +137,7 @@ class _SchedulePageState extends State<SchedulePage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _settings.removeListener(_onSettingsChanged);
     if (_isActivityActive) {
       _liveActivitiesPlugin.endActivity(_activityId);
     }
@@ -130,111 +175,171 @@ class _SchedulePageState extends State<SchedulePage> {
     return null;
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => const SettingsPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    DateTime? currentPeriodEndTime = _getCurrentPeriodEndTime();
+    final DateTime? currentPeriodEndTime = _getCurrentPeriodEndTime();
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsetsGeometry.directional(start: 10, end: 10),
-        child: SingleChildScrollView(
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Selector bar for the day at the top
-                AdaptiveSegmentedControl(
-                    labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
-                    selectedIndex: selectedDayScheduleIndex,
-                    onValueChanged: (index) {
-                      selectedDaySchedule=[monFriSchedule, tueThursSchedule, wedSchedule][index];
-                      selectedDayScheduleIndex = index;
-                      if (mounted) {
-                        setState(() {});
-                      }
-                    }),
+    return ListenableBuilder(
+      listenable: _settings,
+      builder: (context, _) {
+        return Stack(
+          children: [
+            SafeArea(
+              child: Padding(
+                padding: EdgeInsetsGeometry.directional(start: 10, end: 10),
+                child: SingleChildScrollView(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Selector bar for the day at the top
+                        AdaptiveSegmentedControl(
+                            labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
+                            selectedIndex: selectedDayScheduleIndex,
+                            onValueChanged: (index) {
+                              selectedDaySchedule = [
+                                monFriSchedule,
+                                tueThursSchedule,
+                                wedSchedule
+                              ][index];
+                              selectedDayScheduleIndex = index;
+                              if (mounted) {
+                                setState(() {});
+                              }
+                            }),
 
-                // Countdown
-                Card(
-                  color: Theme.of(context).cardColor,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 16, left: 8, right: 8, bottom: 8),
-                    child: Center(
-                      // Check if a period is active
-                      child: currentPeriodEndTime != null
-                          ? TimerCountdown(
-                              format: CountDownTimerFormat.hoursMinutesSeconds,
-                              // Set the endTime to the end of the current period
-                              endTime: currentPeriodEndTime,
-                              timeTextStyle: TextStyle(fontSize: 20),
-                              onEnd: () {
-                                // When the timer ends, force update
-                                if (mounted) {
-                                  setState(() {});
-                                }
-                                currentPeriodEndTime = _getCurrentPeriodEndTime();
-                              },
-                            )
-                          : Text(
-                              "No active period",
-                              style: TextStyle(
-                                  fontSize: 20,
-                                  color: Theme.of(context).colorScheme.outline),
+                        // Countdown
+                        Card(
+                          color: Theme.of(context).cardColor,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                                top: 16, left: 8, right: 8, bottom: 8),
+                            child: Center(
+                              // Check if a period is active
+                              child: currentPeriodEndTime != null
+                                  ? TimerCountdown(
+                                      format: CountDownTimerFormat
+                                          .hoursMinutesSeconds,
+                                      // Set the endTime to the end of the current period
+                                      endTime: currentPeriodEndTime,
+                                      timeTextStyle: TextStyle(fontSize: 20),
+                                      onEnd: () {
+                                        // When the timer ends, force a rebuild
+                                        // so the next period is picked up.
+                                        if (mounted) {
+                                          setState(() {});
+                                        }
+                                      },
+                                    )
+                                  : Text(
+                                      "No active period",
+                                      style: TextStyle(
+                                          fontSize: 20,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline),
+                                    ),
                             ),
+                          ),
+                        ),
+
+                        // Schedule
+                        for (var period in selectedDaySchedule ?? [])
+                          _buildPeriodCard(context, period),
+
+                        // Keep the last card clear of the settings button.
+                        const SizedBox(height: 72),
+                      ],
                     ),
                   ),
                 ),
-
-                // Schedule
-                for (var period in selectedDaySchedule ?? [])
-                  Card(
-                      elevation: isCurrentTimeInPeriod(
-                              period['startTime'], period['endTime']) && selectedDaySchedule==currentDaySchedule
-                          ? 5
-                          : 0,
-                      color: isCurrentTimeInPeriod(
-                              period['startTime'], period['endTime']) && selectedDaySchedule==currentDaySchedule
-                          ? Theme.of(context).appBarTheme.backgroundColor
-                          : Theme.of(context).cardColor,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 5, 
-                              child: Text(
-                                period['Period'], 
-                                style: isCurrentTimeInPeriod(period['startTime'], period['endTime']) && selectedDaySchedule==currentDaySchedule
-                                  ? Theme.of(context).appBarTheme.titleTextStyle
-                                  : null,
-                              )
-                            ),
-                            Expanded(
-                              flex: 2, 
-                              child: Text(
-                                period['startTime'].format(context), 
-                                style: isCurrentTimeInPeriod(period['startTime'], period['endTime']) && selectedDaySchedule==currentDaySchedule
-                                  ? Theme.of(context).appBarTheme.titleTextStyle
-                                  : null,
-                              )
-                            ),
-                            Expanded(
-                              flex: 2, 
-                              child: Text(
-                                period['endTime'].format(context), 
-                                style: isCurrentTimeInPeriod(period['startTime'], period['endTime']) && selectedDaySchedule==currentDaySchedule
-                                  ? Theme.of(context).appBarTheme.titleTextStyle
-                                  : null,
-                              )
-                            ),
-                          ],
-                        ),
-                      ))
-              ],
+              ),
             ),
-          ),
+
+            // Settings button, bottom right of the home page.
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: SafeArea(
+                child: FloatingActionButton(
+                  heroTag: 'home_settings_button',
+                  tooltip: 'Settings',
+                  onPressed: _openSettings,
+                  child: const Icon(Icons.settings),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPeriodCard(BuildContext context, dynamic period) {
+    final canonicalName = period['Period'] as String;
+    final displayName = _settings.displayName(canonicalName);
+    final details = _settings.detailsFor(canonicalName);
+    final isNow = isCurrentTimeInPeriod(
+            period['startTime'], period['endTime']) &&
+        selectedDaySchedule == currentDaySchedule;
+
+    final highlightStyle =
+        isNow ? Theme.of(context).appBarTheme.titleTextStyle : null;
+    final detailStyle = (highlightStyle ??
+            Theme.of(context).textTheme.bodyMedium ??
+            const TextStyle())
+        .copyWith(
+      fontSize: 12,
+      color: isNow
+          ? Theme.of(context).appBarTheme.titleTextStyle?.color
+          : Theme.of(context).colorScheme.outline,
+    );
+
+    return Card(
+      elevation: isNow ? 5 : 0,
+      color: isNow
+          ? Theme.of(context).appBarTheme.backgroundColor
+          : Theme.of(context).cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(displayName, style: highlightStyle),
+                  // Teacher and/or room number, when entered and enabled.
+                  if (details.isNotEmpty)
+                    Text(details, style: detailStyle),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                period['startTime'].format(context),
+                style: highlightStyle,
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                period['endTime'].format(context),
+                style: highlightStyle,
+              ),
+            ),
+          ],
         ),
       ),
     );

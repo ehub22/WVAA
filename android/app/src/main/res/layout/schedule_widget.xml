@@ -38,6 +38,19 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <!-- Teacher / room number for the current period. Hidden unless the
+         student entered them and enabled them in the app's settings. -->
+    <TextView
+        android:id="@+id/widget_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="Mr. Smith · Rm 402"
+        android:textColor="@color/widget_subtitle_text"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

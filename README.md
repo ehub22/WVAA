@@ -33,6 +33,23 @@ drag "Current Period" onto the home screen.
 
 Used flutter in case we want to make this multiplatform later, but right now, I believe only android works.
 
+## Settings (Android)
+
+A settings button sits in the bottom right corner of the home page. It opens a
+settings page with:
+
+- **Notifications** – master switch for every notification the app posts.
+- **Live activity** – the ongoing notification with the countdown timer to the
+  end of the current period. It only runs while notifications are on.
+- **Show teacher / Show room number** – whether the teacher and room number
+  are displayed.
+- **My classes** – rename any period (e.g. "Human Body Systems" instead of
+  "Period 1") and enter the teacher and room number for it.
+
+Custom names, teachers and room numbers appear in the schedule list, in the
+live activity notification with the countdown timer, and on the home screen
+widget. Settings are saved on the device and applied immediately.
+
 ## Building the APK with GitHub Actions
 
 This repo includes a GitHub Actions workflow (`.github/workflows/build-apk.yml`) that

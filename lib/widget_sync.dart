@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'data.dart';
+import 'settings.dart';
 
 /// Fully qualified class name of the Android home screen widget provider
 /// (see `ScheduleWidgetProvider.kt`).
@@ -22,11 +23,17 @@ int _minutesOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
 
 /// Converts a schedule (list of `data.dart` period maps) into the compact
 /// JSON the native widget parses.
+///
+/// The names are the ones the student configured in settings (e.g. "Human
+/// Body Systems" instead of "Period 1") and `detail` carries the teacher and
+/// room number, so the home screen widget shows exactly what the app shows.
 List<Map<String, dynamic>> _periodsToJson(List<Map<String, dynamic>> schedule) {
+  final settings = AppSettings.instance;
   return [
     for (final period in schedule)
       {
-        'name': period['Period'] as String,
+        'name': settings.displayName(period['Period'] as String),
+        'detail': settings.detailsFor(period['Period'] as String),
         'start': _minutesOfDay(period['startTime'] as TimeOfDay),
         'end': _minutesOfDay(period['endTime'] as TimeOfDay),
       },
