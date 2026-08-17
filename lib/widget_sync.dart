@@ -51,12 +51,17 @@ Future<void> syncHomeWidget() async {
   if (kIsWeb) return;
   if (defaultTargetPlatform != TargetPlatform.android) return;
   try {
+    final settings = AppSettings.instance;
     await HomeWidget.saveWidgetData(
         _keyMonFri, jsonEncode(_periodsToJson(monFriSchedule)));
     await HomeWidget.saveWidgetData(
         _keyTueThu, jsonEncode(_periodsToJson(tueThursSchedule)));
     await HomeWidget.saveWidgetData(
         _keyWed, jsonEncode(_periodsToJson(wedSchedule)));
+    await HomeWidget.saveWidgetData(
+        'notifications_enabled', settings.notificationsEnabled);
+    await HomeWidget.saveWidgetData(
+        'live_activity_enabled', settings.liveActivityEnabled);
     await HomeWidget.updateWidget(qualifiedAndroidName: _scheduleWidgetProvider);
   } on MissingPluginException {
     // No plugin on this platform (e.g. widget tests) — nothing to sync.
