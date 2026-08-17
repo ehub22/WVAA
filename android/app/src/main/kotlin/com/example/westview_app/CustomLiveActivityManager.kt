@@ -21,13 +21,13 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
         data: Map<String, Any>
     ): Notification {
         
-        // Ensure the notification channel exists with lockscreen visibility PUBLIC
+        // Ensure channels allow lockscreen display
+        ScheduleNotificationManager.ensureChannel(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channelId = notification.channelId
-            if (channelId != null) {
-                val channel = notificationManager.getNotificationChannel(channelId)
-                if (channel != null && channel.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
+            val channels = notificationManager.notificationChannels
+            for (channel in channels) {
+                if (channel.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
                     channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     channel.setShowBadge(true)
                     notificationManager.createNotificationChannel(channel)
@@ -106,7 +106,7 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
         // Set public version fallback for secure lockscreens
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val publicBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Notification.Builder(context, notification.channelId)
+                Notification.Builder(context, ScheduleNotificationManager.CHANNEL_ID)
             } else {
                 @Suppress("DEPRECATION")
                 Notification.Builder(context)
