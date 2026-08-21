@@ -7,6 +7,7 @@ import 'calendars.dart';
 import 'newsletter_page.dart';
 import 'schedule_page.dart';
 import 'settings.dart';
+import 'special_schedule.dart';
 import 'theme/theme.dart';
 import 'vimeo_pip.dart';
 import 'widget_sync.dart';
@@ -18,11 +19,17 @@ Future<void> main() async {
   // preferences) before the first frame so nothing flashes the defaults.
   await AppSettings.instance.load();
 
+  // Load any cached special (modified) schedules before the first frame.
+  // This only reads local storage; the network refresh happens later on the
+  // schedule page.
+  await SpecialScheduleService.instance.init();
+
   // Any settings change must also reach the Android home screen widget.
   AppSettings.instance.onSaved = syncHomeWidget;
 
-  // Push the schedule data to the Android home screen widget so it can show
-  // the current period even before the schedule page is opened.
+  // Push the schedule data (including today's special schedule, when cached)
+  // to the Android home screen widget so it can show the current period even
+  // before the schedule page is opened.
   await syncHomeWidget();
 
   runApp(const WestviewApp());
