@@ -20,13 +20,14 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * Shared rendering + scheduling logic for the "Current period" home screen widget.
+ * Shared rendering + scheduling logic for the "Current period" home screen widget
+ * and lock screen countdown notification.
  *
- * The widget shows the current school period and a live countdown (a RemoteViews
- * [android.widget.Chronometer] that ticks every second inside the launcher without
- * waking the device). Precise [AlarmManager] alarms re-render the widget right
- * after each period transition so the next period is picked up immediately,
- * even when the app is closed.
+ * The widget and notification show the current school period and a live countdown
+ * (a RemoteViews [android.widget.Chronometer] that ticks every second without
+ * waking the device). Precise [AlarmManager] alarms re-render the widget and update
+ * the notification right when each period ends, automatically starting the next
+ * period countdown even when the phone is locked or the app is closed.
  *
  * Schedule data is written by the Flutter app (see lib/widget_sync.dart) into
  * the SharedPreferences provided by the home_widget plugin; until the app has
@@ -78,7 +79,7 @@ object ScheduleWidgetRenderer {
 
     // Default schedules, used until the Flutter app has synced its data once.
     // Keep these in sync with lib/data.dart.
-    private val defaultMonFri = listOf(
+    val defaultMonFri = listOf(
         Period("Period 1", 8 * 60 + 35, 10 * 60),
         Period("Passing", 10 * 60, 10 * 60 + 6),
         Period("The DEN", 10 * 60 + 6, 10 * 60 + 27),
@@ -91,7 +92,7 @@ object ScheduleWidgetRenderer {
         Period("Period 4", 14 * 60 + 10, 15 * 60 + 35),
     )
 
-    private val defaultTueThu = listOf(
+    val defaultTueThu = listOf(
         Period("Period 1", 8 * 60 + 35, 9 * 60 + 56),
         Period("Wolverine Time", 9 * 60 + 56, 10 * 60 + 26),
         Period("Passing", 10 * 60 + 26, 10 * 60 + 32),
@@ -104,7 +105,7 @@ object ScheduleWidgetRenderer {
         Period("Period 4", 14 * 60 + 14, 15 * 60 + 35),
     )
 
-    private val defaultWed = listOf(
+    val defaultWed = listOf(
         Period("Period 1", 9 * 60 + 35, 10 * 60 + 44),
         Period("Passing", 10 * 60 + 44, 10 * 60 + 50),
         Period("Period 2", 10 * 60 + 50, 11 * 60 + 59),
@@ -116,19 +117,28 @@ object ScheduleWidgetRenderer {
         Period("Period 4", 14 * 60 + 26, 15 * 60 + 35),
     )
 
-    /** Re-renders every installed widget instance and schedules the next transition alarm. */
+    /** Re-renders widgets, updates the ongoing notification, and schedules the next transition alarm. */
     fun renderAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(ComponentName(context, ScheduleWidgetProvider::class.java))
-        if (ids.isEmpty()) {
-            // No widgets on any home screen; nothing to keep alive.
+        val hasWidgets = ids.isNotEmpty()
+
+        if (hasWidgets) {
+            val state = computeState(context, LocalDateTime.now())
+            val views = buildViews(context, state)
+            ids.forEach { manager.updateAppWidget(it, views) }
+        }
+
+        // Keep the ongoing notification in sync with the current period
+        ScheduleNotificationManager.updateNotification(context)
+
+        val notificationsActive = ScheduleNotificationManager.isNotificationEnabled(context)
+        if (!hasWidgets && !notificationsActive) {
+            // Neither widget nor notifications are active; no alarms needed.
             cancelAlarm(context)
             return
         }
 
-        val state = computeState(context, LocalDateTime.now())
-        val views = buildViews(context, state)
-        ids.forEach { manager.updateAppWidget(it, views) }
         scheduleNextTransition(context, LocalDateTime.now())
     }
 
@@ -139,7 +149,7 @@ object ScheduleWidgetRenderer {
 
     // ------------------------------------------------------------------ data
 
-    private fun scheduleKeyFor(day: DayOfWeek): String? = when (day) {
+    fun scheduleKeyFor(day: DayOfWeek): String? = when (day) {
         DayOfWeek.MONDAY, DayOfWeek.FRIDAY -> KEY_MON_FRI
         DayOfWeek.TUESDAY, DayOfWeek.THURSDAY -> KEY_TUE_THU
         DayOfWeek.WEDNESDAY -> KEY_WED
@@ -147,7 +157,7 @@ object ScheduleWidgetRenderer {
     }
 
     /** Returns the schedule for [day], or null on weekends. */
-    private fun scheduleFor(context: Context, day: LocalDate): List<Period>? {
+    fun scheduleFor(context: Context, day: LocalDate): List<Period>? {
         val key = scheduleKeyFor(day.dayOfWeek) ?: return null
         val json = HomeWidgetPlugin.getData(context).getString(key, null)
         parsePeriods(json)?.let { return it }
@@ -179,7 +189,7 @@ object ScheduleWidgetRenderer {
         }
     }
 
-    private fun nextSchoolDayAfter(today: LocalDate): LocalDate {
+    fun nextSchoolDayAfter(today: LocalDate): LocalDate {
         var day = today.plusDays(1)
         while (scheduleKeyFor(day.dayOfWeek) == null) {
             day = day.plusDays(1)
@@ -189,7 +199,7 @@ object ScheduleWidgetRenderer {
 
     // ----------------------------------------------------------------- state
 
-    private fun computeState(context: Context, now: LocalDateTime): WidgetState {
+    fun computeState(context: Context, now: LocalDateTime): WidgetState {
         val today = now.toLocalDate()
         val periods = scheduleFor(context, today)
 
@@ -215,7 +225,7 @@ object ScheduleWidgetRenderer {
         return WidgetState.Done(nextSchoolDayAfter(today))
     }
 
-    private fun toEpochMillis(dateTime: LocalDateTime): Long =
+    fun toEpochMillis(dateTime: LocalDateTime): Long =
         dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     // ---------------------------------------------------------------- render
@@ -332,9 +342,9 @@ object ScheduleWidgetRenderer {
 
     /**
      * Schedules a single exact alarm for the next moment the widget content
-     * changes: the next period start/end today, or the next school day.
+     * or notification changes: the next period start/end today, or the next school day.
      */
-    private fun scheduleNextTransition(context: Context, now: LocalDateTime) {
+    fun scheduleNextTransition(context: Context, now: LocalDateTime) {
         val today = now.toLocalDate()
         val candidates = mutableListOf<LocalDateTime>()
 

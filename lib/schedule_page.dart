@@ -49,6 +49,7 @@ class _SchedulePageState extends State<SchedulePage> {
     // rebuild the widget every second to update
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
+        currentDaySchedule = getCurrentSchedule();
         // Keep the Android home screen widget in sync whenever the current
         // period changes (including "no active period").
         final currentPeriodEnd = _getCurrentPeriodEndTime();
@@ -70,6 +71,7 @@ class _SchedulePageState extends State<SchedulePage> {
     // Only ask for the notification permission when the student actually
     // wants notifications (see the settings page).
     await _ensureNotificationPermission();
+    _updateLiveActivity();
   }
 
   Future<void> _ensureNotificationPermission() async {
@@ -118,14 +120,13 @@ class _SchedulePageState extends State<SchedulePage> {
           'endTime': currentEndTime.millisecondsSinceEpoch.toString(),
         };
 
-        // 2. Use positional arguments! No "activityId:" or "data:"
+        // Use positional arguments
         await _liveActivitiesPlugin.createOrUpdateActivity(_activityId, data);
         _isActivityActive = true;
       }
     } else {
       // No active period (or notifications disabled): end activity if it exists
       if (_isActivityActive) {
-        // 3. Use positional argument here as well
         await _liveActivitiesPlugin.endActivity(_activityId);
         _isActivityActive = false;
         _lastActivitySignature = null;
@@ -144,14 +145,15 @@ class _SchedulePageState extends State<SchedulePage> {
     super.dispose();
   }
 
-  DateTime? _getCurrentPeriodEndTime() {
-    final now = DateTime.now();
-    if (currentDaySchedule != null) {
-      for (var period in currentDaySchedule ?? []) {
+  DateTime? _getCurrentPeriodEndTime([DateTime? customNow]) {
+    final now = customNow ?? DateTime.now();
+    final schedule = getCurrentSchedule(now);
+    if (schedule != null) {
+      for (var period in schedule) {
         final startTime = period['startTime'] as TimeOfDay;
         final endTime = period['endTime'] as TimeOfDay;
 
-        if (isCurrentTimeInPeriod(startTime, endTime)) {
+        if (isCurrentTimeInPeriod(startTime, endTime, now)) {
           return DateTime(
               now.year, now.month, now.day, endTime.hour, endTime.minute);
         }
@@ -161,13 +163,15 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   // Helper to extract the string name of the period
-  String? _getCurrentPeriodName() {
-    if (currentDaySchedule != null) {
-      for (var period in currentDaySchedule ?? []) {
+  String? _getCurrentPeriodName([DateTime? customNow]) {
+    final now = customNow ?? DateTime.now();
+    final schedule = getCurrentSchedule(now);
+    if (schedule != null) {
+      for (var period in schedule) {
         final startTime = period['startTime'] as TimeOfDay;
         final endTime = period['endTime'] as TimeOfDay;
 
-        if (isCurrentTimeInPeriod(startTime, endTime)) {
+        if (isCurrentTimeInPeriod(startTime, endTime, now)) {
           return period['Period'] as String;
         }
       }
@@ -232,12 +236,14 @@ class _SchedulePageState extends State<SchedulePage> {
                                           .hoursMinutesSeconds,
                                       // Set the endTime to the end of the current period
                                       endTime: currentPeriodEndTime,
-                                      timeTextStyle: TextStyle(fontSize: 20),
+                                      timeTextStyle: const TextStyle(fontSize: 20),
                                       onEnd: () {
-                                        // When the timer ends, force a rebuild
-                                        // so the next period is picked up.
+                                        // When the timer ends, immediately refresh
+                                        // so the next period countdown starts seamlessly.
                                         if (mounted) {
-                                          setState(() {});
+                                          setState(() {
+                                            _updateLiveActivity();
+                                          });
                                         }
                                       },
                                     )
@@ -351,23 +357,23 @@ class _SchedulePageState extends State<SchedulePage> {
 }
 
 // check if current time is in the period
-bool isCurrentTimeInPeriod(TimeOfDay startTime, TimeOfDay endTime) {
-  final now = DateTime.now();
+bool isCurrentTimeInPeriod(TimeOfDay startTime, TimeOfDay endTime, [DateTime? nowTime]) {
+  final now = nowTime ?? DateTime.now();
   final startDateTime =
       DateTime(now.year, now.month, now.day, startTime.hour, startTime.minute);
   final endDateTime =
       DateTime(now.year, now.month, now.day, endTime.hour, endTime.minute);
   
-  return now.isAfter(startDateTime) && now.isBefore(endDateTime);
+  return (now.isAfter(startDateTime) || now.isAtSameMomentAs(startDateTime)) && now.isBefore(endDateTime);
 }
 
-List? getCurrentSchedule(){
-  final day = DateTime.now().weekday;
-  if (day==1 || day==5) {
+List? getCurrentSchedule([DateTime? customNow]) {
+  final day = (customNow ?? DateTime.now()).weekday;
+  if (day == 1 || day == 5) {
     return monFriSchedule;
-  } else if (day==2 || day==4){
+  } else if (day == 2 || day == 4) {
     return tueThursSchedule;
-  } else if (day==3) {
+  } else if (day == 3) {
     return wedSchedule;
   } else {
     return null;
@@ -375,10 +381,10 @@ List? getCurrentSchedule(){
 }
 
 // function to get current day of week for the segmented control
-int getCurrentDayOfWeek() {
-  final day = DateTime.now().weekday;
+int getCurrentDayOfWeek([DateTime? customNow]) {
+  final day = (customNow ?? DateTime.now()).weekday;
   // returns day=0
-  if (day==0 || day == 1 || day == 5 || day == 6) {
+  if (day == 0 || day == 1 || day == 5 || day == 6) {
     return 0;
   } else if (day == 2 || day == 4) {
     return 1;

@@ -17,6 +17,9 @@ class MainActivity: FlutterActivity() {
 
         // Let the live_activities package know you have a custom manager configured
         LiveActivityManagerHolder.instance = CustomLiveActivityManager(this)
+
+        // Ensure schedule countdown notification channel is initialized with lockscreen visibility
+        ScheduleNotificationManager.ensureChannel(this)
     }
 
     override fun onPictureInPictureModeChanged(
