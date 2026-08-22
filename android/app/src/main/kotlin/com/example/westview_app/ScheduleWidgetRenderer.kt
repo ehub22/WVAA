@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
 import org.json.JSONArray
+import org.json.JSONObject
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -44,6 +45,13 @@ object ScheduleWidgetRenderer {
     private const val KEY_MON_FRI = "schedule_monfri"
     private const val KEY_TUE_THU = "schedule_tuethu"
     private const val KEY_WED = "schedule_wed"
+
+    /**
+     * Special (modified) schedule override written by the Flutter app as
+     * `{"date": "2026-08-21", "periods": [...]}`. Only used while `date`
+     * matches the day being rendered; otherwise the regular schedules apply.
+     */
+    private const val KEY_SPECIAL = "schedule_special"
 
     /**
      * A single period of the school day, times in minutes since midnight.
@@ -156,8 +164,10 @@ object ScheduleWidgetRenderer {
         else -> null
     }
 
-    /** Returns the schedule for [day], or null on weekends. */
+    /** Returns today's special schedule when one applies, otherwise the regular schedule. */
     fun scheduleFor(context: Context, day: LocalDate): List<Period>? {
+        specialScheduleFor(context, day)?.let { return it }
+
         val key = scheduleKeyFor(day.dayOfWeek) ?: return null
         val json = HomeWidgetPlugin.getData(context).getString(key, null)
         parsePeriods(json)?.let { return it }
@@ -168,10 +178,34 @@ object ScheduleWidgetRenderer {
         }
     }
 
+    /** Returns the special (modified) schedule for [day], or null when none applies. */
+    private fun specialScheduleFor(context: Context, day: LocalDate): List<Period>? {
+        val json = HomeWidgetPlugin.getData(context).getString(KEY_SPECIAL, null)
+            ?: return null
+        return try {
+            val obj = JSONObject(json)
+            // The Flutter app also writes "no special schedule" days as an
+            // empty string; stale entries for other dates are ignored so the
+            // widget falls back to the regular schedule automatically.
+            if (obj.optString("date") != day.toString()) return null
+            parsePeriodsFrom(obj.optJSONArray("periods"))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun parsePeriods(json: String?): List<Period>? {
         if (json.isNullOrBlank()) return null
         return try {
-            val array = JSONArray(json)
+            parsePeriodsFrom(JSONArray(json))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parsePeriodsFrom(array: JSONArray?): List<Period>? {
+        if (array == null) return null
+        return try {
             buildList {
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)

@@ -3,10 +3,52 @@ Westview Android App
 
 Functions implemented so far:
   Calendars (Athletics, school calendar, and school lunch)
-  Schedules by day (Modified schedules still don't work)
+  Schedules by day, including special (modified) schedules fetched from the school's server
   Newsletters (Weekly newsletter, counseling newsletters, and den announcements)
   School publications (Nexus and Newscast)
   Home screen widget (current period + time left, Android only)
+
+
+## Special (modified) schedules
+
+On days with a special schedule (early release, Link Crew, assemblies, …) the
+app replaces the regular weekday schedule with the special one, in the app and
+on the home screen widget, and shows a dismissable banner saying a special
+schedule is in effect.
+
+The schedule comes from the school's server:
+
+```
+GET https://studycs.org/westview/special_schedule2/{month}/{day}
+```
+
+- `HTTP 200` with a plain-text path containing `.json` → the app downloads
+  `https://studycs.org/{path}` and parses it (a JSON list of
+  `{hour, minute, duration, title, isPM}` entries).
+- `HTTP 200` with an empty body (or any response without `.json`) → no special
+  schedule that day, and the regular schedule is shown.
+
+### Caching
+
+Every answer (schedule or "none") is cached on the device for **at least 2
+days** (3 days, to be safe), so the server is never asked more than once per
+date within that window. If the server cannot be reached, the last known
+answer — even a stale one — is still used, and a dismissable banner warns
+that "today's schedule may not be accurate". The cache also survives app
+restarts.
+
+### Backup sources
+
+If the primary server is down, the app tries each URL in the
+`fallbackUrls` list in `lib/special_schedule.dart` (empty by default). To add
+a backup, put the same JSON in a public Google Drive file (or any static
+host) and add its direct-download URL there, e.g.:
+
+```dart
+fallbackUrls.add('https://drive.google.com/uc?export=download&id=YOUR_PUBLIC_FILE_ID');
+```
+
+URLs may use `{month}` and `{day}` placeholders for per-date hosts.
 
 
 ## Home Screen Widget (Android)

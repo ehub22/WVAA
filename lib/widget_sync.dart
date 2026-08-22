@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'data.dart';
 import 'settings.dart';
+import 'special_schedule.dart';
 
 /// Fully qualified class name of the Android home screen widget provider
 /// (see `ScheduleWidgetProvider.kt`).
@@ -18,6 +19,7 @@ const String _scheduleWidgetProvider =
 const String _keyMonFri = 'schedule_monfri';
 const String _keyTueThu = 'schedule_tuethu';
 const String _keyWed = 'schedule_wed';
+const String _keySpecial = 'schedule_special';
 
 int _minutesOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
 
@@ -58,6 +60,24 @@ Future<void> syncHomeWidget() async {
         _keyTueThu, jsonEncode(_periodsToJson(tueThursSchedule)));
     await HomeWidget.saveWidgetData(
         _keyWed, jsonEncode(_periodsToJson(wedSchedule)));
+
+    // The native renderer uses this override only while its date matches today.
+    // Always overwrite it so a previous day's special schedule cannot linger.
+    await SpecialScheduleService.instance.init();
+    final special = SpecialScheduleService.instance.todaySchedule;
+    if (special != null && special.isNotEmpty) {
+      final now = DateTime.now();
+      final date = '${now.year}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      await HomeWidget.saveWidgetData(
+        _keySpecial,
+        jsonEncode({'date': date, 'periods': _periodsToJson(special)}),
+      );
+    } else {
+      await HomeWidget.saveWidgetData(_keySpecial, '');
+    }
+
     await HomeWidget.saveWidgetData(
         'notifications_enabled', settings.notificationsEnabled);
     await HomeWidget.saveWidgetData(
