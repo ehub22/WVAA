@@ -53,30 +53,17 @@ Future<void> syncHomeWidget() async {
   if (kIsWeb) return;
   if (defaultTargetPlatform != TargetPlatform.android) return;
   try {
-    await SpecialScheduleService.instance.init();
+    final settings = AppSettings.instance;
     await HomeWidget.saveWidgetData(
         _keyMonFri, jsonEncode(_periodsToJson(monFriSchedule)));
     await HomeWidget.saveWidgetData(
         _keyTueThu, jsonEncode(_periodsToJson(tueThursSchedule)));
     await HomeWidget.saveWidgetData(
         _keyWed, jsonEncode(_periodsToJson(wedSchedule)));
-
-    // Special (modified) schedule override for today, when one applies. The
-    // native widget compares the date to today and ignores stale entries.
-    final special = SpecialScheduleService.instance.todaySchedule;
-    if (special != null && special.isNotEmpty) {
-      final now = DateTime.now();
-      final date = '${now.year}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
-      await HomeWidget.saveWidgetData(
-        _keySpecial,
-        jsonEncode({'date': date, 'periods': _periodsToJson(special)}),
-      );
-    } else {
-      await HomeWidget.saveWidgetData(_keySpecial, '');
-    }
-
+    await HomeWidget.saveWidgetData(
+        'notifications_enabled', settings.notificationsEnabled);
+    await HomeWidget.saveWidgetData(
+        'live_activity_enabled', settings.liveActivityEnabled);
     await HomeWidget.updateWidget(qualifiedAndroidName: _scheduleWidgetProvider);
   } on MissingPluginException {
     // No plugin on this platform (e.g. widget tests) — nothing to sync.
