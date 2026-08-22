@@ -7,6 +7,7 @@ import 'data.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'settings.dart';
 import 'settings_page.dart';
+import 'special_schedule.dart';
 import 'widget_sync.dart';
 
 
@@ -18,11 +19,24 @@ class SchedulePage extends StatefulWidget {
   State<SchedulePage> createState() => _SchedulePageState();
 }
 
-class _SchedulePageState extends State<SchedulePage> {
+class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver {
   Timer? _timer;
-  List? currentDaySchedule = getCurrentSchedule();
   List? selectedDaySchedule = getCurrentSchedule();
   int selectedDayScheduleIndex = getCurrentDayOfWeek();
+
+  /// Today's special (modified) schedule when the server/cache provides one.
+  List<Map<String, dynamic>>? _todaySpecialSchedule;
+
+  /// Whether the last special-schedule refresh could not reach any source.
+  bool _specialScheduleFetchFailed = false;
+
+  /// Banner dismissal flags; banners reappear on a new day (or after a fresh
+  /// failure, for the error banner).
+  bool _specialScheduleBannerDismissed = false;
+  bool _fetchFailedBannerDismissed = false;
+
+  /// The day the page was last (re)initialized for; detects midnight rollover.
+  int _loadedDayOfYear = DateTime.now().day;
 
   final _liveActivitiesPlugin = LiveActivities();
 
@@ -43,7 +57,9 @@ class _SchedulePageState extends State<SchedulePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initLiveActivities();
+    _initSpecialSchedules();
     _settings.addListener(_onSettingsChanged);
 
     // rebuild the widget every second to update
@@ -62,6 +78,65 @@ class _SchedulePageState extends State<SchedulePage> {
         });
       }
     });
+  }
+
+  /// Today's effective schedule: the special schedule when one applies,
+  /// otherwise the regular weekday schedule.
+  List? get _todaySchedule => _todaySpecialSchedule ?? getCurrentSchedule();
+
+  /// Starts loading today's special schedule: applies whatever the cache
+  /// already knows and then refreshes in the background. The network is only
+  /// touched when the cached answer is missing or older than the 2+ day TTL.
+  void _initSpecialSchedules() {
+    SpecialScheduleService.instance.addListener(_onSpecialSchedulesChanged);
+    _onSpecialSchedulesChanged();
+    unawaited(SpecialScheduleService.instance.refreshToday());
+  }
+
+  void _onSpecialSchedulesChanged() {
+    if (!mounted) return;
+    final service = SpecialScheduleService.instance;
+    final special = service.todaySchedule;
+
+    // A fresh failure re-shows the "may not be accurate" banner.
+    if (service.lastFetchFailed && !_specialScheduleFetchFailed) {
+      _fetchFailedBannerDismissed = false;
+    }
+    _specialScheduleFetchFailed = service.lastFetchFailed;
+
+    final scheduleChanged = special != _todaySpecialSchedule;
+    _todaySpecialSchedule = special;
+
+    // Point today's tab at the special schedule (or back at the regular one).
+    if (selectedDayScheduleIndex == getCurrentDayOfWeek()) {
+      selectedDaySchedule = _todaySchedule;
+    }
+
+    setState(() {});
+    if (scheduleChanged) {
+      // Keep the Android home-screen widget on the special schedule too.
+      unawaited(syncHomeWidget());
+    }
+  }
+
+  /// Detects the midnight rollover and reloads the schedule for the new day.
+  void _checkForNewDay() {
+    final now = DateTime.now();
+    if (now.day == _loadedDayOfYear) return;
+    _loadedDayOfYear = now.day;
+    _specialScheduleBannerDismissed = false;
+    _fetchFailedBannerDismissed = false;
+    _onSpecialSchedulesChanged();
+    unawaited(SpecialScheduleService.instance.refreshToday());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-check after a new day and refresh if the cache is stale.
+      _checkForNewDay();
+      unawaited(SpecialScheduleService.instance.refreshToday());
+    }
   }
 
   Future<void> _initLiveActivities() async {
@@ -139,6 +214,8 @@ class _SchedulePageState extends State<SchedulePage> {
   void dispose() {
     _timer?.cancel();
     _settings.removeListener(_onSettingsChanged);
+    SpecialScheduleService.instance.removeListener(_onSpecialSchedulesChanged);
+    WidgetsBinding.instance.removeObserver(this);
     if (_isActivityActive) {
       _liveActivitiesPlugin.endActivity(_activityId);
     }
@@ -206,17 +283,54 @@ class _SchedulePageState extends State<SchedulePage> {
                       mainAxisAlignment: MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // Warning banner when the special-schedule server
+                        // could not be reached (dismissable).
+                        if (!_fetchFailedBannerDismissed &&
+                            _specialScheduleFetchFailed)
+                          _ScheduleNotice(
+                            icon: Icons.cloud_off,
+                            message:
+                                "Couldn't reach the special-schedule server, "
+                                "so today's schedule may not be accurate.",
+                            background:
+                                Theme.of(context).colorScheme.error,
+                            foreground:
+                                Theme.of(context).colorScheme.onError,
+                            onDismiss: () => setState(
+                                () => _fetchFailedBannerDismissed = true),
+                          ),
+
+                        // Info banner while a special schedule is active.
+                        if (!_specialScheduleBannerDismissed &&
+                            _todaySpecialSchedule != null)
+                          _ScheduleNotice(
+                            icon: Icons.event_note,
+                            message:
+                                'A special schedule is in effect today.',
+                            background: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer,
+                            foreground: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                            onDismiss: () => setState(
+                                () => _specialScheduleBannerDismissed = true),
+                          ),
+
                         // Selector bar for the day at the top
                         AdaptiveSegmentedControl(
                             labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
                             selectedIndex: selectedDayScheduleIndex,
                             onValueChanged: (index) {
-                              selectedDaySchedule = [
-                                monFriSchedule,
-                                tueThursSchedule,
-                                wedSchedule
-                              ][index];
                               selectedDayScheduleIndex = index;
+                              selectedDaySchedule =
+                                  index == getCurrentDayOfWeek()
+                                      ? _todaySchedule
+                                      : [
+                                          monFriSchedule,
+                                          tueThursSchedule,
+                                          wedSchedule
+                                        ][index];
                               if (mounted) {
                                 setState(() {});
                               }
@@ -299,7 +413,7 @@ class _SchedulePageState extends State<SchedulePage> {
     final details = _settings.detailsFor(canonicalName);
     final isNow = isCurrentTimeInPeriod(
             period['startTime'], period['endTime']) &&
-        selectedDaySchedule == currentDaySchedule;
+        identical(selectedDaySchedule, _todaySchedule);
 
     final highlightStyle =
         isNow ? Theme.of(context).appBarTheme.titleTextStyle : null;
@@ -390,5 +504,58 @@ int getCurrentDayOfWeek([DateTime? customNow]) {
     return 1;
   } else {
     return 2;
+  }
+}
+
+/// A small, dismissable notice banner shown above the schedule.
+class _ScheduleNotice extends StatelessWidget {
+  const _ScheduleNotice({
+    super.key,
+    required this.icon,
+    required this.message,
+    required this.background,
+    required this.foreground,
+    required this.onDismiss,
+  });
+
+  final IconData icon;
+  final String message;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: foreground),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, size: 18, color: foreground),
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
+    );
   }
 }

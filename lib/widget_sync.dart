@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'data.dart';
 import 'settings.dart';
+import 'special_schedule.dart';
 
 /// Fully qualified class name of the Android home screen widget provider
 /// (see `ScheduleWidgetProvider.kt`).
@@ -18,6 +19,7 @@ const String _scheduleWidgetProvider =
 const String _keyMonFri = 'schedule_monfri';
 const String _keyTueThu = 'schedule_tuethu';
 const String _keyWed = 'schedule_wed';
+const String _keySpecial = 'schedule_special';
 
 int _minutesOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
 
