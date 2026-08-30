@@ -82,7 +82,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     try {
       cache = await NetworkCache.instance.read(widget.apiUrl);
       if (_events == null && cache != null) {
-        final cached = _parseEvents(cache.body);
+        final cached = parseEvents(cache.body);
         if (cached.isNotEmpty) {
           _events = cached;
           _cachedAt = cache.cachedAt;
@@ -107,7 +107,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
 
     try {
       final body = await _fetchEventsBody();
-      final events = _parseEvents(body);
+      final events = parseEvents(body);
       await NetworkCache.instance.write(widget.apiUrl, body);
       Telemetry.instance
           .logEvent('calendar_refresh', {'calendar': widget.calendarName});

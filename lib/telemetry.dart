@@ -34,7 +34,7 @@ class Telemetry {
   Telemetry._({http.Client? client}) : _client = client ?? http.Client();
 
   /// Singleton used by the app.
-  static final Telemetry instance = Telemetry();
+  static final Telemetry instance = Telemetry._();
 
   static const String _queueKey = 'telemetry_queue_v1';
   static const int _maxQueuedEvents = 50;
