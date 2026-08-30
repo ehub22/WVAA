@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -6,12 +6,8 @@ import android.content.SharedPreferences
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
- * Home screen widget provider for the "Current period" widget.
- *
- * Extends [HomeWidgetProvider] so data saved from Flutter via
- * `HomeWidget.saveWidgetData(...)` is available in `widgetData` (the
- * schedule is also read directly through `HomeWidgetPlugin.getData`
- * in [ScheduleWidgetRenderer] so the alarm receiver can access it too).
+ * Home screen widget provider. Extends HomeWidgetProvider so data written
+ * from Flutter via HomeWidget.saveWidgetData(...) is available here.
  */
 class ScheduleWidgetProvider : HomeWidgetProvider() {
 
@@ -25,7 +21,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) {
-        // Last widget instance was removed: stop the transition alarms.
         ScheduleWidgetRenderer.cancelAlarm(context)
     }
 }

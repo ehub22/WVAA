@@ -17,7 +17,7 @@ class WebPage extends StatefulWidget {
 
 class _WebPageState extends State<WebPage> {
   late final WebViewController controller;
-  int loadingPercentage = 0; 
+  int loadingPercentage = 0;
 
   @override
   void initState() {
@@ -26,21 +26,9 @@ class _WebPageState extends State<WebPage> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) {
-            setState(() {
-              loadingPercentage = 0;
-            });
-          },
-          onProgress: (progress) {
-            setState(() {
-              loadingPercentage = progress;
-            });
-          },
-          onPageFinished: (url) {
-            setState(() {
-              loadingPercentage = 100;
-            });
-          },
+          onPageStarted: (_) => setState(() => loadingPercentage = 0),
+          onProgress: (progress) => setState(() => loadingPercentage = progress),
+          onPageFinished: (_) => setState(() => loadingPercentage = 100),
         ),
       )
       ..loadRequest(Uri.parse(widget.webPage.webPageURL));
@@ -50,13 +38,10 @@ class _WebPageState extends State<WebPage> {
   void didUpdateWidget(WebPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.webPage.webPageURL != widget.webPage.webPageURL) {
-      setState(() {
-        loadingPercentage = 0;
-      });
+      setState(() => loadingPercentage = 0);
       controller.loadRequest(Uri.parse(widget.webPage.webPageURL));
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +68,6 @@ class NewsletterPage extends StatefulWidget {
 class _NewsletterPageState extends State<NewsletterPage> {
   int selectedIndex = 0;
   late PageController _carouselController;
-  
 
   final List<WebPageInfo> newsletters = const [
     WebPageInfo('Weekly Newsletter', 'https://www.canva.com/design/DAHAfg0kzy4/j0rtuhnsLlGu4XMtz5mqRA/view?utm_content=DAHAfg0kzy4&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=hf1baa97a03'),
@@ -124,52 +108,45 @@ class _NewsletterPageState extends State<NewsletterPage> {
               onPageChanged: (index) => setState(() => selectedIndex = index),
               itemBuilder: (context, index) {
                 bool isSelected = selectedIndex == index;
-                
                 return GestureDetector(
-                    onTap: () => _onItemTapped(index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected 
-                            ? Theme.of(context).appBarTheme.backgroundColor 
-                            : Theme.of(context).appBarTheme.foregroundColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected 
-                              ? Colors.transparent 
-                              : Colors.grey.withOpacity(0.3),
-                          width: 2,
-                        ),
-                        boxShadow: isSelected 
-                            ? [BoxShadow(
-                                color: Theme.of(context).primaryColor.withOpacity(0.3), 
-                                blurRadius: 8, 
-                                offset: const Offset(0, 4)
-                              )] 
-                            : [],
+                  onTap: () => _onItemTapped(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Theme.of(context).appBarTheme.backgroundColor
+                          : Theme.of(context).appBarTheme.foregroundColor,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? Colors.transparent : Colors.grey.withOpacity(0.3),
+                        width: 2,
                       ),
-                      child: Center(
-                        child: Text(
-                          newsletters[index].title,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black87,
-                            fontSize: isSelected ? 16 : 14,
-                          ),
+                      boxShadow: isSelected
+                          ? [BoxShadow(
+                              color: Theme.of(context).primaryColor.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )]
+                          : [],
+                    ),
+                    child: Center(
+                      child: Text(
+                        newsletters[index].title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontSize: isSelected ? 16 : 14,
                         ),
                       ),
                     ),
-                  );
+                  ),
+                );
               },
             ),
           ),
-          
-          const Divider(height: 1), 
-
-          Expanded(
-            child: WebPage(webPage: newsletters[selectedIndex]),
-          ),
+          const Divider(height: 1),
+          Expanded(child: WebPage(webPage: newsletters[selectedIndex])),
         ],
       ),
     );

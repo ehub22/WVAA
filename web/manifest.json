@@ -1,11 +1,11 @@
 {
-    "name": "westview_app",
-    "short_name": "westview_app",
+    "name": "Westview HS",
+    "short_name": "Westview",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FEF8F2",
+    "theme_color": "#CFC08B",
+    "description": "Westview High School companion app — schedules, newsletters, and more.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

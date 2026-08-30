@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -16,15 +16,12 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * Manages the ongoing school period countdown notification on Android.
+ * Manages the ongoing school-period countdown notification on Android.
  *
- * Ensures the notification displays with the correct transparent monochrome
- * Wolverine icon ([R.drawable.ic_notification]), full lock screen visibility
- * ([Notification.VISIBILITY_PUBLIC]), and live Chronometer countdown.
- *
- * When each period ends, AlarmManager wakes up the broadcast receiver so the
- * next period notification automatically starts immediately, even when the phone
- * is locked and the app is in the background.
+ * The notification shows the current period name, optional teacher/room detail,
+ * and a live Chronometer countdown. Each period end triggers an AlarmManager
+ * wakeup so the next period's notification starts automatically, even on the
+ * lock screen.
  */
 object ScheduleNotificationManager {
 
@@ -33,7 +30,8 @@ object ScheduleNotificationManager {
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val existing = notificationManager.getNotificationChannel(CHANNEL_ID)
             if (existing == null) {
                 val channel = NotificationChannel(
@@ -57,16 +55,16 @@ object ScheduleNotificationManager {
     fun isNotificationEnabled(context: Context): Boolean {
         return try {
             val prefs = HomeWidgetPlugin.getData(context)
-            val notifEnabled = prefs.getBoolean("notifications_enabled", true)
-            val liveEnabled = prefs.getBoolean("live_activity_enabled", true)
-            notifEnabled && liveEnabled
+            prefs.getBoolean("notifications_enabled", true) &&
+                prefs.getBoolean("live_activity_enabled", true)
         } catch (_: Exception) {
             true
         }
     }
 
     fun updateNotification(context: Context) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (!isNotificationEnabled(context)) {
             notificationManager.cancel(NOTIFICATION_ID)
@@ -77,10 +75,11 @@ object ScheduleNotificationManager {
         val today = now.toLocalDate()
         val periods = ScheduleWidgetRenderer.scheduleFor(context, today)
 
-        val currentPeriod = periods?.firstOrNull { now >= it.startsAt(today) && now < it.endsAt(today) }
+        val currentPeriod = periods?.firstOrNull {
+            now >= it.startsAt(today) && now < it.endsAt(today)
+        }
 
         if (currentPeriod == null) {
-            // No active period right now (school's out or before first period)
             notificationManager.cancel(NOTIFICATION_ID)
             return
         }
@@ -97,16 +96,12 @@ object ScheduleNotificationManager {
             remoteViews.setViewVisibility(R.id.period_detail, View.VISIBLE)
         }
 
-        val endTimeMillis = currentPeriod.endsAt(today).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val endTimeMillis = currentPeriod.endsAt(today)
+            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val diff = endTimeMillis - System.currentTimeMillis()
         val baseTime = SystemClock.elapsedRealtime() + diff.coerceAtLeast(0L)
 
-        remoteViews.setChronometer(
-            R.id.period_countdown,
-            baseTime,
-            "%s",
-            true
-        )
+        remoteViews.setChronometer(R.id.period_countdown, baseTime, "%s", true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             remoteViews.setChronometerCountDown(R.id.period_countdown, true)
         }
@@ -114,9 +109,7 @@ object ScheduleNotificationManager {
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?: Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            launchIntent,
+            context, 0, launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -136,7 +129,7 @@ object ScheduleNotificationManager {
             .setOngoing(true)
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setCategory(Notification.CATEGORY_STATUS)
+            .setCategory(Notification.CATEGORY_PROGRESS)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             builder.setCustomHeadsUpContentView(remoteViews)
@@ -151,7 +144,9 @@ object ScheduleNotificationManager {
                 .setSmallIcon(R.drawable.ic_notification)
                 .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.launcher_icon))
                 .setContentTitle(currentPeriod.name)
-                .setContentText(if (currentPeriod.detail.isNotBlank()) currentPeriod.detail else "In progress")
+                .setContentText(
+                    if (currentPeriod.detail.isNotBlank()) currentPeriod.detail else "In progress"
+                )
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -167,7 +162,8 @@ object ScheduleNotificationManager {
     }
 
     fun cancelNotification(context: Context) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID)
     }
 }

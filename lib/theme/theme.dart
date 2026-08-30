@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:westview_app/theme/colors.dart';
 
-
 final _lightColorScheme = ColorScheme(
   brightness: Brightness.light,
   primary: primaryLight,
@@ -59,7 +58,6 @@ final _baseTextTheme = Typography.material2018().black.apply(
       displayColor: null,
     );
 
-
 final ThemeData lightTheme = ThemeData(
   brightness: Brightness.light,
   colorScheme: _lightColorScheme,
@@ -112,10 +110,7 @@ final ThemeData lightTheme = ThemeData(
     hintStyle: TextStyle(color: onSurfaceVariantLight.withValues()),
   ),
   iconTheme: IconThemeData(color: onBackgroundLight),
-  textTheme: _baseTextTheme.apply(
-    bodyColor: onBackgroundLight,
-    displayColor: onBackgroundLight,
-  ),
+  textTheme: _baseTextTheme.apply(bodyColor: onBackgroundLight, displayColor: onBackgroundLight),
   bottomNavigationBarTheme: BottomNavigationBarThemeData(
     backgroundColor: surfaceContainerLowLight,
     selectedItemColor: primaryLight,
@@ -123,7 +118,6 @@ final ThemeData lightTheme = ThemeData(
   ),
 );
 
-// ---- Dark ThemeData ----
 final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   colorScheme: _darkColorScheme,
@@ -176,10 +170,7 @@ final ThemeData darkTheme = ThemeData(
     hintStyle: TextStyle(color: onSurfaceVariantDark.withValues()),
   ),
   iconTheme: IconThemeData(color: onBackgroundDark),
-  textTheme: _baseTextTheme.apply(
-    bodyColor: onBackgroundDark,
-    displayColor: onBackgroundDark,
-  ),
+  textTheme: _baseTextTheme.apply(bodyColor: onBackgroundDark, displayColor: onBackgroundDark),
   bottomNavigationBarTheme: BottomNavigationBarThemeData(
     backgroundColor: surfaceContainerLowDark,
     selectedItemColor: primaryDark,

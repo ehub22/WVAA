@@ -43,24 +43,17 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
 
     late final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
-      params = WebKitWebViewControllerCreationParams(
-        allowsInlineMediaPlayback: true,
-      );
+      params = WebKitWebViewControllerCreationParams(allowsInlineMediaPlayback: true);
     } else {
       params = const PlatformWebViewControllerCreationParams();
     }
 
     controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'PiPChannel',
-        onMessageReceived: (JavaScriptMessage message) {
-          _handlePipMessage(message.message);
-        },
-      )
+      ..addJavaScriptChannel('PiPChannel', onMessageReceived: _handlePipMessage)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) {
+          onPageStarted: (_) {
             if (!mounted) return;
             setState(() => loadingPercentage = 0);
             if (_isVideoPlaying) {
@@ -71,10 +64,9 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
           onProgress: (progress) {
             if (mounted) setState(() => loadingPercentage = progress);
           },
-          onPageFinished: (url) {
+          onPageFinished: (_) {
             if (!mounted) return;
             setState(() => loadingPercentage = 100);
-
             if (_isVimeoPage) {
               _installVimeoPipBridge();
               _setupPipMode();
@@ -93,12 +85,9 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     }
   }
 
-  /// Checks Android PiP support and applies any playback state that arrived
-  /// while the asynchronous platform checks were running.
   Future<void> _setupPipMode() async {
     if (_pipInitialized || !_isVimeoPage) return;
     _pipInitialized = true;
-
     try {
       _pipAvailable = await SimplePip.isPipAvailable;
       _autoPipSupported = await SimplePip.isAutoPipAvailable;
@@ -108,26 +97,19 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     }
   }
 
-  /// Handles play/pause messages from direct HTML video elements and Vimeo's
-  /// cross-origin player iframe.
-  void _handlePipMessage(String message) {
+  void _handlePipMessage(JavaScriptMessage message) {
     if (!mounted || !_isVimeoPage) return;
-
-    final String state = message.trim();
+    final state = message.message.trim();
     if (state != 'playing' && state != 'paused') return;
-
-    final bool isPlaying = state == 'playing';
+    final isPlaying = state == 'playing';
     if (isPlaying == _isVideoPlaying) return;
-
     _isVideoPlaying = isPlaying;
     _syncPipMode();
   }
 
-  /// Enables Android 12+ auto-PiP only for an actively playing Vimeo video.
   Future<void> _syncPipMode() async {
     if (!_pipAvailable || !_autoPipSupported) return;
-
-    final bool shouldAutoEnter = _isVimeoPage && _isVideoPlaying;
+    final shouldAutoEnter = _isVimeoPage && _isVideoPlaying;
     try {
       await _pip.setAutoPipMode(
         aspectRatio: const (16, 9),
@@ -139,30 +121,21 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     }
   }
 
-  /// Removes all Flutter app chrome and expands only the Vimeo player over the
-  /// WebView. Android PiP captures the activity, so both steps are required.
   Future<void> _enterPipVisual() async {
     if (!_isVimeoPage) return;
-
-    // Rebuild the persistent app tree without its tab bars. The WebView is not
-    // moved or recreated, so playback continues uninterrupted.
     vimeoPipActive.value = true;
-
     try {
       await controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.enter();',
-      );
+          'window.__westviewVimeoPip && window.__westviewVimeoPip.enter();');
     } catch (error) {
       debugPrint('PiP visual enter error: $error');
     }
   }
 
-  /// Restores the inline Vimeo watch page before showing the normal app chrome.
   Future<void> _exitPipVisual() async {
     try {
       await controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.exit();',
-      );
+          'window.__westviewVimeoPip && window.__westviewVimeoPip.exit();');
     } catch (error) {
       debugPrint('PiP visual exit error: $error');
     } finally {
@@ -175,15 +148,13 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.webPage.webPageURL == widget.webPage.webPageURL) return;
 
-    final bool wasPlaying = _isVideoPlaying;
+    final wasPlaying = _isVideoPlaying;
     setState(() {
       loadingPercentage = 0;
       _pipInitialized = false;
       _isVideoPlaying = false;
     });
 
-    // Disable an auto-PiP configuration left by the Vimeo page before loading
-    // Nexus (or any future non-Vimeo publication).
     if (wasPlaying || !isVimeoUrl(widget.webPage.webPageURL)) {
       _syncPipMode();
     }
@@ -201,21 +172,15 @@ class _WebPageState extends State<WebPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Android versions before 12 do not support auto-enter. Prepare the video
-  /// presentation first, then manually request PiP as the app is backgrounded.
+  /// Pre-Android 12 fallback: manually enter PiP when the app is backgrounded.
   Future<void> _enterLegacyPip() async {
     await _enterPipVisual();
-
     bool entered = false;
     try {
-      entered = await _pip.enterPipMode(
-        aspectRatio: const (16, 9),
-        seamlessResize: true,
-      );
+      entered = await _pip.enterPipMode(aspectRatio: const (16, 9), seamlessResize: true);
     } catch (error) {
       debugPrint('Legacy PiP entry error: $error');
     }
-
     if (!entered) await _exitPipVisual();
   }
 
@@ -299,8 +264,6 @@ class _PublicationsPageState extends State<PublicationsPage> {
             right: !isPipActive,
             child: Column(
               children: [
-                // Keep the same widget structure while changing the height so
-                // the platform WebView is never detached during PiP entry.
                 SizedBox(
                   height: isPipActive ? 0 : 90,
                   child: Offstage(
@@ -308,40 +271,29 @@ class _PublicationsPageState extends State<PublicationsPage> {
                     child: PageView.builder(
                       controller: _carouselController,
                       itemCount: publications.length,
-                      onPageChanged: (index) =>
-                          setState(() => selectedIndex = index),
+                      onPageChanged: (index) => setState(() => selectedIndex = index),
                       itemBuilder: (context, index) {
-                        final bool isSelected = selectedIndex == index;
-
+                        final isSelected = selectedIndex == index;
                         return GestureDetector(
                           onTap: () => _onItemTapped(index),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 12,
-                            ),
+                            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? Theme.of(context).appBarTheme.backgroundColor
                                   : Theme.of(context).appBarTheme.foregroundColor,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSelected
-                                    ? Colors.transparent
-                                    : Colors.grey.withOpacity(0.3),
+                                color: isSelected ? Colors.transparent : Colors.grey.withOpacity(0.3),
                                 width: 2,
                               ),
                               boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ]
+                                  ? [BoxShadow(
+                                      color: Theme.of(context).primaryColor.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    )]
                                   : [],
                             ),
                             child: Center(
@@ -349,9 +301,7 @@ class _PublicationsPageState extends State<PublicationsPage> {
                                 publications[index].title,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.black87,
+                                  color: isSelected ? Colors.white : Colors.black87,
                                   fontSize: isSelected ? 16 : 14,
                                 ),
                               ),
@@ -366,9 +316,7 @@ class _PublicationsPageState extends State<PublicationsPage> {
                   height: isPipActive ? 0 : 1,
                   child: const Divider(height: 1),
                 ),
-                Expanded(
-                  child: WebPage(webPage: publications[selectedIndex]),
-                ),
+                Expanded(child: WebPage(webPage: publications[selectedIndex])),
               ],
             ),
           ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'settings.dart';
 
-/// Settings page, opened from the button in the bottom right of the home page.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -24,9 +23,7 @@ class SettingsPage extends StatelessWidget {
                   value: settings.notificationsEnabled,
                   onChanged: (value) => settings.setNotificationsEnabled(value),
                   title: const Text('Notifications'),
-                  subtitle: const Text(
-                    'Allow Westview HS to send notifications',
-                  ),
+                  subtitle: const Text('Allow Westview HS to send notifications'),
                   secondary: const Icon(Icons.notifications_outlined),
                 ),
                 SwitchListTile.adaptive(
@@ -43,34 +40,25 @@ class SettingsPage extends StatelessWidget {
                   ),
                   secondary: const Icon(Icons.timer_outlined),
                 ),
-
                 const Divider(height: 32),
-
                 _SectionHeader('Class details'),
                 SwitchListTile.adaptive(
                   value: settings.showTeacher,
                   onChanged: (value) => settings.setShowTeacher(value),
                   title: const Text('Show teacher'),
-                  subtitle: const Text(
-                    'Show the teacher in the schedule, notification and widget',
-                  ),
+                  subtitle: const Text('Show the teacher in the schedule, notification and widget'),
                   secondary: const Icon(Icons.person_outline),
                 ),
                 SwitchListTile.adaptive(
                   value: settings.showRoom,
                   onChanged: (value) => settings.setShowRoom(value),
                   title: const Text('Show room number'),
-                  subtitle: const Text(
-                    'Show the room in the schedule, notification and widget',
-                  ),
+                  subtitle: const Text('Show the room in the schedule, notification and widget'),
                   secondary: const Icon(Icons.meeting_room_outlined),
                 ),
-
                 const Divider(height: 32),
-
                 _SectionHeader('My classes'),
-                for (final name in customizablePeriodNames)
-                  _PeriodTile(canonicalName: name),
+                for (final name in customizablePeriodNames) _PeriodTile(canonicalName: name),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                   child: OutlinedButton.icon(
@@ -92,18 +80,10 @@ class SettingsPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reset class names?'),
-        content: const Text(
-          'This removes every custom name, teacher and room you entered.',
-        ),
+        content: const Text('This removes every custom name, teacher and room you entered.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Reset'),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Reset')),
         ],
       ),
     );
@@ -115,7 +95,6 @@ class SettingsPage extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.title);
-
   final String title;
 
   @override
@@ -134,10 +113,8 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// One editable period in the "My classes" list.
 class _PeriodTile extends StatelessWidget {
   const _PeriodTile({required this.canonicalName});
-
   final String canonicalName;
 
   @override
@@ -156,9 +133,7 @@ class _PeriodTile extends StatelessWidget {
 
     return ListTile(
       title: Text(settings.displayName(canonicalName)),
-      subtitle: Text(
-        subtitle.isEmpty ? 'Tap to add a name, teacher or room' : subtitle,
-      ),
+      subtitle: Text(subtitle.isEmpty ? 'Tap to add a name, teacher or room' : subtitle),
       trailing: const Icon(Icons.edit_outlined),
       onTap: () => _editPeriod(context),
     );
@@ -181,7 +156,6 @@ class _PeriodTile extends StatelessWidget {
 
 class _EditPeriodDialog extends StatefulWidget {
   const _EditPeriodDialog({required this.canonicalName, required this.initial});
-
   final String canonicalName;
   final PeriodSettings initial;
 
@@ -241,10 +215,7 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
           onPressed: () => Navigator.of(context).pop(const PeriodSettings()),
           child: const Text('Clear'),
         ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(
             PeriodSettings(

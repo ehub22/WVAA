@@ -5,8 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data.dart';
 
-/// Per-period customization: a student friendly name plus optional teacher and
-/// room number, e.g. "Human Body Systems · Mr. Smith · Rm 402".
+/// Per-period customization: custom name, teacher, and room number.
 @immutable
 class PeriodSettings {
   const PeriodSettings({
@@ -48,8 +47,7 @@ class PeriodSettings {
   }
 }
 
-/// Parts of the school day that are not a class, so there is nothing to
-/// rename and no teacher or room to enter.
+/// Periods that are not classes (nothing to rename).
 const Set<String> _nonClassPeriods = {
   'Passing',
   'Lunch',
@@ -57,9 +55,7 @@ const Set<String> _nonClassPeriods = {
   'SSH',
 };
 
-/// Every period name a student can rename (the actual classes).
-///
-/// The order follows the school day so the settings page reads naturally.
+/// Every period a student can rename, in school-day order.
 final List<String> customizablePeriodNames = () {
   final names = <String>[];
   for (final schedule in [monFriSchedule, tueThursSchedule, wedSchedule]) {
@@ -73,10 +69,7 @@ final List<String> customizablePeriodNames = () {
   return List<String>.unmodifiable(names);
 }();
 
-/// App wide, persisted user settings.
-///
-/// A [ChangeNotifier] singleton so any page can rebuild when a setting
-/// changes: `ListenableBuilder(listenable: AppSettings.instance, ...)`.
+/// Persisted user settings, shared across the app via ChangeNotifier.
 class AppSettings extends ChangeNotifier {
   AppSettings._();
 
@@ -91,44 +84,28 @@ class AppSettings extends ChangeNotifier {
   bool _showRoom = true;
   Map<String, PeriodSettings> _periods = <String, PeriodSettings>{};
 
-  /// Called after settings are persisted (used to refresh the Android home
-  /// screen widget). Set from `main()` to avoid a circular import.
+  /// Set from main() to refresh the Android home screen widget after changes.
   Future<void> Function()? onSaved;
 
   bool get isLoaded => _loaded;
-
-  /// Master switch: when off the app posts no notifications at all.
   bool get notificationsEnabled => _notificationsEnabled;
-
-  /// The ongoing "live activity" notification with the period countdown timer.
   bool get liveActivityEnabled => _liveActivityEnabled;
-
-  /// The live activity only runs when notifications are allowed as well.
   bool get liveActivityActive => _notificationsEnabled && _liveActivityEnabled;
-
-  /// Show the teacher name in the schedule / notification / widget.
   bool get showTeacher => _showTeacher;
-
-  /// Show the room number in the schedule / notification / widget.
   bool get showRoom => _showRoom;
 
   PeriodSettings periodSettings(String canonicalName) =>
       _periods[canonicalName] ?? const PeriodSettings();
 
-  /// The name to display for [canonicalName] ("Period 1" unless renamed).
   String displayName(String canonicalName) {
     final custom = periodSettings(canonicalName).customName;
     return custom.isEmpty ? canonicalName : custom;
   }
 
-  /// Whether [canonicalName] has been renamed by the student.
   bool isRenamed(String canonicalName) =>
       periodSettings(canonicalName).customName.isNotEmpty;
 
-  /// The secondary line for a period, e.g. "Mr. Smith · Rm 402".
-  ///
-  /// Returns an empty string when nothing should be shown (either nothing was
-  /// entered or the matching toggles are off).
+  /// Returns "Mr. Smith · Rm 402" style detail, respecting showTeacher/showRoom.
   String detailsFor(String canonicalName) {
     final settings = periodSettings(canonicalName);
     final parts = <String>[];
@@ -145,16 +122,14 @@ class AppSettings extends ChangeNotifier {
     final trimmed = room.trim();
     if (trimmed.isEmpty) return '';
     final lower = trimmed.toLowerCase();
-    // Don't turn "Room 402" or "Rm 402" into "Rm Room 402".
-    if (lower.startsWith('rm') ||
-        lower.startsWith('room') ||
-        lower.startsWith('#')) {
+    // Avoid double-prefixing "Rm Room 402"
+    if (lower.startsWith('rm') || lower.startsWith('room') || lower.startsWith('#')) {
       return trimmed;
     }
     return 'Rm $trimmed';
   }
 
-  // --------------------------------------------------------------- mutations
+  // -- mutations --
 
   Future<void> setNotificationsEnabled(bool value) async {
     if (_notificationsEnabled == value) return;
@@ -195,9 +170,8 @@ class AppSettings extends ChangeNotifier {
     await _persist();
   }
 
-  // ------------------------------------------------------------- persistence
+  // -- persistence --
 
-  /// Loads the saved settings. Safe to call more than once and never throws.
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -205,9 +179,7 @@ class AppSettings extends ChangeNotifier {
       if (raw != null && raw.isNotEmpty) {
         _applyJson(jsonDecode(raw) as Map<String, dynamic>);
       }
-    } catch (_) {
-      // Corrupt or unavailable storage: keep the defaults.
-    }
+    } catch (_) {}
     _loaded = true;
     notifyListeners();
   }
@@ -223,8 +195,7 @@ class AppSettings extends ChangeNotifier {
     if (periods is Map) {
       periods.forEach((key, value) {
         if (key is String && value is Map) {
-          final settings =
-              PeriodSettings.fromJson(Map<String, dynamic>.from(value));
+          final settings = PeriodSettings.fromJson(Map<String, dynamic>.from(value));
           if (!settings.isEmpty) parsed[key] = settings;
         }
       });
@@ -247,13 +218,9 @@ class AppSettings extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefsKey, jsonEncode(toJson()));
-    } catch (_) {
-      // Never let a failed write break the UI.
-    }
+    } catch (_) {}
     try {
       await onSaved?.call();
-    } catch (_) {
-      // Widget syncing is best effort.
-    }
+    } catch (_) {}
   }
 }

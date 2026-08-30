@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
-
-Map<String, dynamic> createPeriod(String nameOfPeriod, int startHour, int startMinute, int endHour, int endMinute) {
-  
-  return Map.fromEntries([MapEntry('Period', nameOfPeriod), MapEntry('startTime', TimeOfDay(hour: startHour, minute: startMinute)), MapEntry('endTime', TimeOfDay(hour: endHour, minute: endMinute))]);
+/// Creates a period entry for the school schedule.
+Map<String, dynamic> createPeriod(
+    String name, int startHour, int startMinute, int endHour, int endMinute) {
+  return {
+    'Period': name,
+    'startTime': TimeOfDay(hour: startHour, minute: startMinute),
+    'endTime': TimeOfDay(hour: endHour, minute: endMinute),
+  };
 }
-
 
 final List<Map<String, dynamic>> monFriSchedule = [
   createPeriod('Period 1', 8, 35, 10, 0),

@@ -10,8 +10,6 @@ import 'settings_page.dart';
 import 'special_schedule.dart';
 import 'widget_sync.dart';
 
-
-// Schedule page
 class SchedulePage extends StatefulWidget {
   const SchedulePage({super.key});
 
@@ -20,38 +18,25 @@ class SchedulePage extends StatefulWidget {
 }
 
 class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver {
-  Timer? _timer;
+  Timer? _tickTimer;
   List? selectedDaySchedule = getCurrentSchedule();
   int selectedDayScheduleIndex = getCurrentDayOfWeek();
 
-  /// Today's special (modified) schedule when the server/cache provides one.
   List<Map<String, dynamic>>? _todaySpecialSchedule;
-
-  /// Whether the last special-schedule refresh could not reach any source.
   bool _specialScheduleFetchFailed = false;
-
-  /// Banner dismissal flags; banners reappear on a new day (or after a fresh
-  /// failure, for the error banner).
   bool _specialScheduleBannerDismissed = false;
   bool _fetchFailedBannerDismissed = false;
 
-  /// The date the page was last (re)initialized for; detects midnight rollover.
   DateTime _loadedDate = DateTime.now();
 
   final _liveActivitiesPlugin = LiveActivities();
-
   final String _activityId = 'schedule_countdown_activity';
-
-  /// Identifies the content currently shown by the live activity, so it is
-  /// only rewritten when the period *or* its user settings actually change.
   String? _lastActivitySignature;
   bool _isActivityActive = false;
   bool _liveActivitiesReady = false;
   bool _notificationPermissionRequested = false;
 
   final AppSettings _settings = AppSettings.instance;
-
-  /// End time of the period the home screen widget was last synced for.
   DateTime? _lastWidgetPeriodEnd;
 
   @override
@@ -62,31 +47,22 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     _initSpecialSchedules();
     _settings.addListener(_onSettingsChanged);
 
-    // rebuild the widget every second to update
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        _checkForNewDay();
-        // Keep the Android home screen widget in sync whenever the current
-        // period changes (including "no active period").
-        final currentPeriodEnd = _getCurrentPeriodEndTime();
-        if (currentPeriodEnd != _lastWidgetPeriodEnd) {
-          _lastWidgetPeriodEnd = currentPeriodEnd;
-          unawaited(syncHomeWidget());
-        }
-        setState(() {
-          _updateLiveActivity();
-        });
+    // Lightweight tick: only syncs the widget and checks for midnight rollover.
+    // The countdown timer widget rebuilds itself via TimerCountdown.
+    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      _checkForNewDay();
+      final currentPeriodEnd = _getCurrentPeriodEndTime();
+      if (currentPeriodEnd != _lastWidgetPeriodEnd) {
+        _lastWidgetPeriodEnd = currentPeriodEnd;
+        unawaited(syncHomeWidget());
       }
+      _updateLiveActivity();
     });
   }
 
-  /// Today's effective schedule: the special schedule when one applies,
-  /// otherwise the regular weekday schedule.
   List? get _todaySchedule => _todaySpecialSchedule ?? getCurrentSchedule();
 
-  /// Starts loading today's special schedule: applies whatever the cache
-  /// already knows and then refreshes in the background. The network is only
-  /// touched when the cached answer is missing or older than the 2+ day TTL.
   void _initSpecialSchedules() {
     SpecialScheduleService.instance.addListener(_onSpecialSchedulesChanged);
     _onSpecialSchedulesChanged();
@@ -98,7 +74,6 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     final service = SpecialScheduleService.instance;
     final special = service.todaySchedule;
 
-    // A fresh failure re-shows the "may not be accurate" banner.
     if (service.lastFetchFailed && !_specialScheduleFetchFailed) {
       _fetchFailedBannerDismissed = false;
     }
@@ -107,19 +82,16 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     final scheduleChanged = special != _todaySpecialSchedule;
     _todaySpecialSchedule = special;
 
-    // Point today's tab at the special schedule (or back at the regular one).
     if (selectedDayScheduleIndex == getCurrentDayOfWeek()) {
       selectedDaySchedule = _todaySchedule;
     }
 
     setState(() {});
     if (scheduleChanged) {
-      // Keep the Android home-screen widget on the special schedule too.
       unawaited(syncHomeWidget());
     }
   }
 
-  /// Detects the midnight rollover and reloads the schedule for the new day.
   void _checkForNewDay() {
     final now = DateTime.now();
     if (now.year == _loadedDate.year &&
@@ -137,7 +109,6 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Re-check after a new day and refresh if the cache is stale.
       _checkForNewDay();
       unawaited(SpecialScheduleService.instance.refreshToday());
     }
@@ -147,8 +118,6 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     await _liveActivitiesPlugin.init(appGroupId: 'group.com.your.app');
     await _liveActivitiesPlugin.endAllActivities();
     _liveActivitiesReady = true;
-    // Only ask for the notification permission when the student actually
-    // wants notifications (see the settings page).
     await _ensureNotificationPermission();
     _updateLiveActivity();
   }
@@ -159,13 +128,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     _notificationPermissionRequested = true;
     try {
       await Permission.notification.request();
-    } catch (_) {
-      // Permission plugin unavailable (e.g. desktop): ignore.
-    }
+    } catch (_) {}
   }
 
-  /// Settings changed: refresh the notification immediately (turn it off,
-  /// turn it back on, or rewrite it with the new name/teacher/room).
   void _onSettingsChanged() {
     unawaited(_ensureNotificationPermission());
     _lastActivitySignature = null;
@@ -176,20 +141,16 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   void _updateLiveActivity() async {
     if (!_liveActivitiesReady) return;
 
-    DateTime? currentEndTime = _getCurrentPeriodEndTime();
-    String? currentPeriodName = _getCurrentPeriodName();
-
-    // Notifications (or just the live activity) can be turned off in settings.
+    final currentEndTime = _getCurrentPeriodEndTime();
+    final currentPeriodName = _getCurrentPeriodName();
     final enabled = _settings.liveActivityActive;
 
-    // If there is an active period running and notifications are allowed
     if (enabled && currentEndTime != null && currentPeriodName != null) {
       final displayName = _settings.displayName(currentPeriodName);
       final details = _settings.detailsFor(currentPeriodName);
       final signature =
           '$displayName|$details|${currentEndTime.millisecondsSinceEpoch}';
 
-      // Create or update only if the displayed content changed
       if (_lastActivitySignature != signature) {
         _lastActivitySignature = signature;
 
@@ -199,12 +160,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
           'endTime': currentEndTime.millisecondsSinceEpoch.toString(),
         };
 
-        // Use positional arguments
         await _liveActivitiesPlugin.createOrUpdateActivity(_activityId, data);
         _isActivityActive = true;
       }
     } else {
-      // No active period (or notifications disabled): end activity if it exists
       if (_isActivityActive) {
         await _liveActivitiesPlugin.endActivity(_activityId);
         _isActivityActive = false;
@@ -213,10 +172,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     }
   }
 
-  // Cancel the timer and Live Activity when the widget is disposed
   @override
   void dispose() {
-    _timer?.cancel();
+    _tickTimer?.cancel();
     _settings.removeListener(_onSettingsChanged);
     SpecialScheduleService.instance.removeListener(_onSpecialSchedulesChanged);
     WidgetsBinding.instance.removeObserver(this);
@@ -241,17 +199,14 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       for (var period in schedule) {
         final startTime = period['startTime'] as TimeOfDay;
         final endTime = period['endTime'] as TimeOfDay;
-
         if (isCurrentTimeInPeriod(startTime, endTime, now)) {
-          return DateTime(
-              now.year, now.month, now.day, endTime.hour, endTime.minute);
+          return DateTime(now.year, now.month, now.day, endTime.hour, endTime.minute);
         }
       }
     }
     return null;
   }
 
-  // Helper to extract the string name of the period
   String? _getCurrentPeriodName([DateTime? customNow]) {
     final now = customNow ?? DateTime.now();
     final schedule = _scheduleFor(now);
@@ -259,7 +214,6 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       for (var period in schedule) {
         final startTime = period['startTime'] as TimeOfDay;
         final endTime = period['endTime'] as TimeOfDay;
-
         if (isCurrentTimeInPeriod(startTime, endTime, now)) {
           return period['Period'] as String;
         }
@@ -284,120 +238,92 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         return SafeArea(
           child: Column(
             children: [
-              // Scrolling schedule.
               Expanded(
                 child: Padding(
                   padding: EdgeInsetsGeometry.directional(start: 10, end: 10),
-                  child: SingleChildScrollView(
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Warning banner when the special-schedule server
-                        // could not be reached (dismissable).
-                        if (!_fetchFailedBannerDismissed &&
-                            _specialScheduleFetchFailed)
-                          _ScheduleNotice(
-                            icon: Icons.cloud_off,
-                            message:
-                                "Couldn't reach the special-schedule server, "
-                                "so today's schedule may not be accurate.",
-                            background:
-                                Theme.of(context).colorScheme.error,
-                            foreground:
-                                Theme.of(context).colorScheme.onError,
-                            onDismiss: () => setState(
-                                () => _fetchFailedBannerDismissed = true),
-                          ),
-
-                        // Info banner while a special schedule is active.
-                        if (!_specialScheduleBannerDismissed &&
-                            _todaySpecialSchedule != null)
-                          _ScheduleNotice(
-                            icon: Icons.event_note,
-                            message:
-                                'A special schedule is in effect today.',
-                            background: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer,
-                            foreground: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            onDismiss: () => setState(
-                                () => _specialScheduleBannerDismissed = true),
-                          ),
-
-                        // Selector bar for the day at the top
-                        AdaptiveSegmentedControl(
-                            labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
-                            selectedIndex: selectedDayScheduleIndex,
-                            onValueChanged: (index) {
-                              selectedDayScheduleIndex = index;
-                              selectedDaySchedule =
-                                  index == getCurrentDayOfWeek()
-                                      ? _todaySchedule
-                                      : [
-                                          monFriSchedule,
-                                          tueThursSchedule,
-                                          wedSchedule
-                                        ][index];
-                              if (mounted) {
-                                setState(() {});
-                              }
-                            }),
-
-                        // Countdown
-                        Card(
-                          color: Theme.of(context).cardColor,
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                                top: 16, left: 8, right: 8, bottom: 8),
-                            child: Center(
-                              // Check if a period is active
-                              child: currentPeriodEndTime != null
-                                  ? TimerCountdown(
-                                      format: CountDownTimerFormat
-                                          .hoursMinutesSeconds,
-                                      // Set the endTime to the end of the current period
-                                      endTime: currentPeriodEndTime,
-                                      timeTextStyle: const TextStyle(fontSize: 20),
-                                      onEnd: () {
-                                        // When the timer ends, immediately refresh
-                                        // so the next period countdown starts seamlessly.
-                                        if (mounted) {
-                                          setState(() {
-                                            _updateLiveActivity();
-                                          });
-                                        }
-                                      },
-                                    )
-                                  : Text(
-                                      "No active period",
-                                      style: TextStyle(
-                                          fontSize: 20,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .outline),
-                                    ),
-                            ),
-                          ),
+                  child: ListView(
+                    children: [
+                      // Banners
+                      if (!_fetchFailedBannerDismissed &&
+                          _specialScheduleFetchFailed)
+                        _ScheduleNotice(
+                          icon: Icons.cloud_off,
+                          message:
+                              "Couldn't reach the special-schedule server, "
+                              "so today's schedule may not be accurate.",
+                          background: Theme.of(context).colorScheme.error,
+                          foreground: Theme.of(context).colorScheme.onError,
+                          onDismiss: () =>
+                              setState(() => _fetchFailedBannerDismissed = true),
+                        ),
+                      if (!_specialScheduleBannerDismissed &&
+                          _todaySpecialSchedule != null)
+                        _ScheduleNotice(
+                          icon: Icons.event_note,
+                          message: 'A special schedule is in effect today.',
+                          background:
+                              Theme.of(context).colorScheme.primaryContainer,
+                          foreground:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          onDismiss: () => setState(
+                              () => _specialScheduleBannerDismissed = true),
                         ),
 
-                        // Schedule
-                        for (var period in selectedDaySchedule ?? [])
-                          _buildPeriodCard(context, period),
+                      AdaptiveSegmentedControl(
+                          labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
+                          selectedIndex: selectedDayScheduleIndex,
+                          onValueChanged: (index) {
+                            selectedDayScheduleIndex = index;
+                            selectedDaySchedule =
+                                index == getCurrentDayOfWeek()
+                                    ? _todaySchedule
+                                    : [
+                                        monFriSchedule,
+                                        tueThursSchedule,
+                                        wedSchedule
+                                      ][index];
+                            if (mounted) setState(() {});
+                          }),
 
-                        const SizedBox(height: 8),
-                      ],
+                      Card(
+                        color: Theme.of(context).cardColor,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                              top: 16, left: 8, right: 8, bottom: 8),
+                          child: Center(
+                            child: currentPeriodEndTime != null
+                                ? TimerCountdown(
+                                    format: CountDownTimerFormat
+                                        .hoursMinutesSeconds,
+                                    endTime: currentPeriodEndTime,
+                                    timeTextStyle:
+                                        const TextStyle(fontSize: 20),
+                                    onEnd: () {
+                                      if (mounted) {
+                                        _updateLiveActivity();
+                                      }
+                                    },
+                                  )
+                                : Text(
+                                    "No active period",
+                                    style: TextStyle(
+                                        fontSize: 20,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline),
+                                  ),
+                          ),
+                        ),
                       ),
-                    ),
+
+                      for (var period in selectedDaySchedule ?? [])
+                        _buildPeriodCard(context, period),
+                      const SizedBox(height: 8),
+                    ],
                   ),
                 ),
               ),
 
-              // Settings button, locked to the bottom right of the home page.
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
                 child: Row(
@@ -455,25 +381,19 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(displayName, style: highlightStyle),
-                  // Teacher and/or room number, when entered and enabled.
-                  if (details.isNotEmpty)
-                    Text(details, style: detailStyle),
+                  if (details.isNotEmpty) Text(details, style: detailStyle),
                 ],
               ),
             ),
             Expanded(
               flex: 2,
-              child: Text(
-                period['startTime'].format(context),
-                style: highlightStyle,
-              ),
+              child: Text(period['startTime'].format(context),
+                  style: highlightStyle),
             ),
             Expanded(
               flex: 2,
-              child: Text(
-                period['endTime'].format(context),
-                style: highlightStyle,
-              ),
+              child: Text(period['endTime'].format(context),
+                  style: highlightStyle),
             ),
           ],
         ),
@@ -482,44 +402,32 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   }
 }
 
-// check if current time is in the period
-bool isCurrentTimeInPeriod(TimeOfDay startTime, TimeOfDay endTime, [DateTime? nowTime]) {
+bool isCurrentTimeInPeriod(TimeOfDay startTime, TimeOfDay endTime,
+    [DateTime? nowTime]) {
   final now = nowTime ?? DateTime.now();
-  final startDateTime =
+  final start =
       DateTime(now.year, now.month, now.day, startTime.hour, startTime.minute);
-  final endDateTime =
+  final end =
       DateTime(now.year, now.month, now.day, endTime.hour, endTime.minute);
-  
-  return (now.isAfter(startDateTime) || now.isAtSameMomentAs(startDateTime)) && now.isBefore(endDateTime);
+  return (now.isAfter(start) || now.isAtSameMomentAs(start)) &&
+      now.isBefore(end);
 }
 
 List? getCurrentSchedule([DateTime? customNow]) {
   final day = (customNow ?? DateTime.now()).weekday;
-  if (day == 1 || day == 5) {
-    return monFriSchedule;
-  } else if (day == 2 || day == 4) {
-    return tueThursSchedule;
-  } else if (day == 3) {
-    return wedSchedule;
-  } else {
-    return null;
-  }
+  if (day == 1 || day == 5) return monFriSchedule;
+  if (day == 2 || day == 4) return tueThursSchedule;
+  if (day == 3) return wedSchedule;
+  return null;
 }
 
-// function to get current day of week for the segmented control
 int getCurrentDayOfWeek([DateTime? customNow]) {
   final day = (customNow ?? DateTime.now()).weekday;
-  // returns day=0
-  if (day == 0 || day == 1 || day == 5 || day == 6) {
-    return 0;
-  } else if (day == 2 || day == 4) {
-    return 1;
-  } else {
-    return 2;
-  }
+  if (day == 0 || day == 1 || day == 5 || day == 6) return 0;
+  if (day == 2 || day == 4) return 1;
+  return 2;
 }
 
-/// A small, dismissable notice banner shown above the schedule.
 class _ScheduleNotice extends StatelessWidget {
   const _ScheduleNotice({
     super.key,

@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -21,72 +21,49 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * Shared rendering + scheduling logic for the "Current period" home screen widget
- * and lock screen countdown notification.
+ * Shared rendering and scheduling logic for the home screen widget and the
+ * ongoing lock screen countdown notification.
  *
- * The widget and notification show the current school period and a live countdown
- * (a RemoteViews [android.widget.Chronometer] that ticks every second without
- * waking the device). Precise [AlarmManager] alarms re-render the widget and update
- * the notification right when each period ends, automatically starting the next
- * period countdown even when the phone is locked or the app is closed.
+ * The widget/notification shows the current school period and a live countdown
+ * (a RemoteViews Chronometer that ticks in the launcher process without waking
+ * the device). AlarmManager fires at each period boundary so the next period
+ * starts automatically even when the app is closed.
  *
- * Schedule data is written by the Flutter app (see lib/widget_sync.dart) into
- * the SharedPreferences provided by the home_widget plugin; until the app has
- * run once, built-in defaults (kept in sync with lib/data.dart) are used.
+ * Schedule data is written by Flutter (see lib/widget_sync.dart) into
+ * SharedPreferences via home_widget; built-in defaults (kept in sync with
+ * lib/data.dart) are used until the app has synced once.
  */
 object ScheduleWidgetRenderer {
 
-    /** Action broadcast by the AlarmManager when a period transition happens. */
-    const val ACTION_PERIOD_TICK = "com.example.westview_app.action.WIDGET_PERIOD_TICK"
+    const val ACTION_PERIOD_TICK = "com.westviewhs.app.action.WIDGET_PERIOD_TICK"
 
     private const val ALARM_REQUEST_CODE = 4201
-
-    // SharedPreferences keys used by the Flutter side (lib/widget_sync.dart).
     private const val KEY_MON_FRI = "schedule_monfri"
     private const val KEY_TUE_THU = "schedule_tuethu"
     private const val KEY_WED = "schedule_wed"
-
-    /**
-     * Special (modified) schedule override written by the Flutter app as
-     * `{"date": "2026-08-21", "periods": [...]}`. Only used while `date`
-     * matches the day being rendered; otherwise the regular schedules apply.
-     */
     private const val KEY_SPECIAL = "schedule_special"
 
-    /**
-     * A single period of the school day, times in minutes since midnight.
-     *
-     * [name] is the name the student sees (a custom class name such as
-     * "Human Body Systems" when one was set in the app's settings) and
-     * [detail] is the optional teacher / room line ("Mr. Smith · Rm 402").
-     */
     data class Period(
         val name: String,
         val startMinutes: Int,
         val endMinutes: Int,
         val detail: String = "",
     ) {
-        fun startsAt(day: LocalDate): LocalDateTime = day.atTime(startMinutes / 60, startMinutes % 60)
-        fun endsAt(day: LocalDate): LocalDateTime = day.atTime(endMinutes / 60, endMinutes % 60)
+        fun startsAt(day: LocalDate): LocalDateTime =
+            day.atTime(startMinutes / 60, startMinutes % 60)
+        fun endsAt(day: LocalDate): LocalDateTime =
+            day.atTime(endMinutes / 60, endMinutes % 60)
     }
 
-    /** What the widget should currently display. */
     sealed class WidgetState {
-        /** A period is running right now; countdown to [targetMillis]. */
         data class Current(val period: Period, val next: Period?, val targetMillis: Long) : WidgetState()
-
-        /** No period is running; countdown to the start of [period]. */
         data class Upcoming(val period: Period, val targetMillis: Long) : WidgetState()
-
-        /** School day is over. */
         data class Done(val nextSchoolDay: LocalDate) : WidgetState()
-
-        /** Weekend / no schedule today. */
         data class NoSchool(val nextSchoolDay: LocalDate, val firstPeriod: Period) : WidgetState()
     }
 
-    // Default schedules, used until the Flutter app has synced its data once.
-    // Keep these in sync with lib/data.dart.
+    // Defaults used until the Flutter app has synced schedule data.
+    // Must stay in sync with lib/data.dart.
     val defaultMonFri = listOf(
         Period("Period 1", 8 * 60 + 35, 10 * 60),
         Period("Passing", 10 * 60, 10 * 60 + 6),
@@ -125,7 +102,7 @@ object ScheduleWidgetRenderer {
         Period("Period 4", 14 * 60 + 26, 15 * 60 + 35),
     )
 
-    /** Re-renders widgets, updates the ongoing notification, and schedules the next transition alarm. */
+    /** Re-renders widgets, updates the notification, and schedules the next alarm. */
     fun renderAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(ComponentName(context, ScheduleWidgetProvider::class.java))
@@ -137,12 +114,10 @@ object ScheduleWidgetRenderer {
             ids.forEach { manager.updateAppWidget(it, views) }
         }
 
-        // Keep the ongoing notification in sync with the current period
         ScheduleNotificationManager.updateNotification(context)
 
         val notificationsActive = ScheduleNotificationManager.isNotificationEnabled(context)
         if (!hasWidgets && !notificationsActive) {
-            // Neither widget nor notifications are active; no alarms needed.
             cancelAlarm(context)
             return
         }
@@ -155,7 +130,7 @@ object ScheduleWidgetRenderer {
         alarmManager.cancel(tickPendingIntent(context))
     }
 
-    // ------------------------------------------------------------------ data
+    // -- data ---------------------------------------------------------
 
     fun scheduleKeyFor(day: DayOfWeek): String? = when (day) {
         DayOfWeek.MONDAY, DayOfWeek.FRIDAY -> KEY_MON_FRI
@@ -164,10 +139,9 @@ object ScheduleWidgetRenderer {
         else -> null
     }
 
-    /** Returns today's special schedule when one applies, otherwise the regular schedule. */
+    /** Returns today's schedule: special override when one applies, otherwise regular. */
     fun scheduleFor(context: Context, day: LocalDate): List<Period>? {
         specialScheduleFor(context, day)?.let { return it }
-
         val key = scheduleKeyFor(day.dayOfWeek) ?: return null
         val json = HomeWidgetPlugin.getData(context).getString(key, null)
         parsePeriods(json)?.let { return it }
@@ -178,15 +152,10 @@ object ScheduleWidgetRenderer {
         }
     }
 
-    /** Returns the special (modified) schedule for [day], or null when none applies. */
     private fun specialScheduleFor(context: Context, day: LocalDate): List<Period>? {
-        val json = HomeWidgetPlugin.getData(context).getString(KEY_SPECIAL, null)
-            ?: return null
+        val json = HomeWidgetPlugin.getData(context).getString(KEY_SPECIAL, null) ?: return null
         return try {
             val obj = JSONObject(json)
-            // The Flutter app also writes "no special schedule" days as an
-            // empty string; stale entries for other dates are ignored so the
-            // widget falls back to the regular schedule automatically.
             if (obj.optString("date") != day.toString()) return null
             parsePeriodsFrom(obj.optJSONArray("periods"))
         } catch (_: Exception) {
@@ -196,11 +165,7 @@ object ScheduleWidgetRenderer {
 
     private fun parsePeriods(json: String?): List<Period>? {
         if (json.isNullOrBlank()) return null
-        return try {
-            parsePeriodsFrom(JSONArray(json))
-        } catch (_: Exception) {
-            null
-        }
+        return try { parsePeriodsFrom(JSONArray(json)) } catch (_: Exception) { null }
     }
 
     private fun parsePeriodsFrom(array: JSONArray?): List<Period>? {
@@ -218,20 +183,16 @@ object ScheduleWidgetRenderer {
                     }
                 }
             }.takeIf { it.isNotEmpty() }
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 
     fun nextSchoolDayAfter(today: LocalDate): LocalDate {
         var day = today.plusDays(1)
-        while (scheduleKeyFor(day.dayOfWeek) == null) {
-            day = day.plusDays(1)
-        }
+        while (scheduleKeyFor(day.dayOfWeek) == null) day = day.plusDays(1)
         return day
     }
 
-    // ----------------------------------------------------------------- state
+    // -- state --------------------------------------------------------
 
     fun computeState(context: Context, now: LocalDateTime): WidgetState {
         val today = now.toLocalDate()
@@ -262,20 +223,17 @@ object ScheduleWidgetRenderer {
     fun toEpochMillis(dateTime: LocalDateTime): Long =
         dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    // ---------------------------------------------------------------- render
+    // -- render -------------------------------------------------------
 
     private fun buildViews(context: Context, state: WidgetState): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
 
-        // Tapping anywhere on the widget opens the app.
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?: Intent(context, MainActivity::class.java)
         views.setOnClickPendingIntent(
             R.id.widget_root,
             PendingIntent.getActivity(
-                context,
-                0,
-                launchIntent,
+                context, 0, launchIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             ),
         )
@@ -292,7 +250,6 @@ object ScheduleWidgetRenderer {
                         ?: "Last period of the day",
                 )
             }
-
             is WidgetState.Upcoming -> {
                 views.setTextViewText(R.id.widget_period, state.period.name)
                 showDetail(views, state.period.detail)
@@ -303,17 +260,12 @@ object ScheduleWidgetRenderer {
                     "School starts at ${formatTime(state.period.startMinutes)}",
                 )
             }
-
             is WidgetState.Done -> {
                 views.setTextViewText(R.id.widget_period, "School's out")
                 showDetail(views, "")
                 hideCountdown(views)
-                views.setTextViewText(
-                    R.id.widget_subtitle,
-                    "See you ${dayName(state.nextSchoolDay)}",
-                )
+                views.setTextViewText(R.id.widget_subtitle, "See you ${dayName(state.nextSchoolDay)}")
             }
-
             is WidgetState.NoSchool -> {
                 views.setTextViewText(R.id.widget_period, "No school today")
                 showDetail(views, "")
@@ -329,7 +281,6 @@ object ScheduleWidgetRenderer {
         return views
     }
 
-    /** Shows the teacher / room line, or hides it when there is nothing to show. */
     private fun showDetail(views: RemoteViews, detail: String) {
         if (detail.isBlank()) {
             views.setViewVisibility(R.id.widget_detail, View.GONE)
@@ -345,12 +296,9 @@ object ScheduleWidgetRenderer {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             val remaining = targetMillis - System.currentTimeMillis()
             val base = SystemClock.elapsedRealtime() + remaining.coerceAtLeast(0L)
-            // "%s" makes the Chronometer render H:MM:SS (or MM:SS); it ticks
-            // every second in the launcher process without any wakeups.
             views.setChronometer(R.id.widget_countdown, base, "%s", true)
             views.setChronometerCountDown(R.id.widget_countdown, true)
         } else {
-            // Pre-API 24 fallback (unreachable with minSdk 24): static text.
             val minutesLeft = ((targetMillis - System.currentTimeMillis()).coerceAtLeast(0L) / 60_000) + 1
             views.setTextViewText(R.id.widget_countdown, "$minutesLeft min")
         }
@@ -361,22 +309,20 @@ object ScheduleWidgetRenderer {
         views.setViewVisibility(R.id.widget_countdown, View.GONE)
     }
 
-    // ---------------------------------------------------------------- alarms
+    // -- alarms -------------------------------------------------------
 
     private fun tickPendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, ScheduleWidgetAlarmReceiver::class.java)
             .setAction(ACTION_PERIOD_TICK)
         return PendingIntent.getBroadcast(
-            context,
-            ALARM_REQUEST_CODE,
-            intent,
+            context, ALARM_REQUEST_CODE, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 
     /**
-     * Schedules a single exact alarm for the next moment the widget content
-     * or notification changes: the next period start/end today, or the next school day.
+     * Schedules a single alarm for the next moment the widget or notification
+     * changes: the next period start/end today, or the next school day.
      */
     fun scheduleNextTransition(context: Context, now: LocalDateTime) {
         val today = now.toLocalDate()
@@ -390,7 +336,7 @@ object ScheduleWidgetRenderer {
         }
 
         val nextSchoolDay = nextSchoolDayAfter(today)
-        candidates += nextSchoolDay.atTime(0, 5) // re-render when the new day begins
+        candidates += nextSchoolDay.atTime(0, 5)
         scheduleFor(context, nextSchoolDay)?.let { periods ->
             periods.forEach {
                 candidates += it.startsAt(nextSchoolDay)
@@ -402,8 +348,6 @@ object ScheduleWidgetRenderer {
         val alarmAt = if (next != null) {
             toEpochMillis(next) + 1_500
         } else {
-            // Should not happen (a next school day always exists), but keep a
-            // daily fallback so the widget can never go permanently stale.
             toEpochMillis(now.plusDays(1))
         }
 
@@ -416,15 +360,12 @@ object ScheduleWidgetRenderer {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, alarmAt, pendingIntent)
             }
         } catch (_: SecurityException) {
-            // SCHEDULE_EXACT_ALARM not granted (Android 12+): fall back to an
-            // inexact alarm; updates may then lag by a few minutes.
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmAt, pendingIntent)
         }
     }
 
-    // --------------------------------------------------------------- helpers
+    // -- helpers ------------------------------------------------------
 
-    /** Formats minutes-since-midnight as e.g. "8:35 AM". */
     private fun formatTime(minutes: Int): String {
         val hour24 = minutes / 60
         val minute = minutes % 60
@@ -437,7 +378,6 @@ object ScheduleWidgetRenderer {
         return "$hour12:${minute.toString().padStart(2, '0')} $suffix"
     }
 
-    /** e.g. "Monday". */
     private fun dayName(day: LocalDate): String =
         day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
 }

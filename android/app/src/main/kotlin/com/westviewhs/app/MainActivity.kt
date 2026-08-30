@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.content.res.Configuration
 import io.flutter.embedding.android.FlutterActivity
@@ -11,14 +11,8 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
-        // Set up PiP callback helper so Dart can receive PiP events
         pipCallbackHelper.configureFlutterEngine(flutterEngine)
-
-        // Let the live_activities package know you have a custom manager configured
         LiveActivityManagerHolder.instance = CustomLiveActivityManager(this)
-
-        // Ensure schedule countdown notification channel is initialized with lockscreen visibility
         ScheduleNotificationManager.ensureChannel(this)
     }
 
