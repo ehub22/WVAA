@@ -125,3 +125,4 @@ flutter test
 ```
 
 Tests cover schedule time math, settings persistence, the special-schedule parser and caching behavior (using `MockClient`), and Vimeo URL detection.
+
