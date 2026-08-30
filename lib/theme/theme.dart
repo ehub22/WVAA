@@ -109,7 +109,7 @@ final ThemeData lightTheme = ThemeData(
       borderRadius: BorderRadius.circular(8),
     ),
     labelStyle: TextStyle(color: onSurfaceVariantLight),
-    hintStyle: TextStyle(color: onSurfaceVariantLight.withValues()),
+    hintStyle: TextStyle(color: onSurfaceVariantLight.withOpacity(0.6)),
   ),
   iconTheme: IconThemeData(color: onBackgroundLight),
   textTheme: _baseTextTheme.apply(
@@ -173,7 +173,7 @@ final ThemeData darkTheme = ThemeData(
       borderRadius: BorderRadius.circular(8),
     ),
     labelStyle: TextStyle(color: onSurfaceVariantDark),
-    hintStyle: TextStyle(color: onSurfaceVariantDark.withValues()),
+    hintStyle: TextStyle(color: onSurfaceVariantDark.withOpacity(0.6)),
   ),
   iconTheme: IconThemeData(color: onBackgroundDark),
   textTheme: _baseTextTheme.apply(

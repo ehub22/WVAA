@@ -22,7 +22,11 @@ dependencies:
   http: ^1.6.0
   scrollable_positioned_list: ^0.3.8
   intl: ^0.20.2
-  live_activities: ^2.4.6
+  # Pinned at 2.4.7 because 2.5.0 requires Flutter 3.44+ and renames the
+  # Android plugin package, which would break the CustomLiveActivityManager
+  # import. Upgrade deliberately after testing against the new package name
+  # (`com.istornz.live_activities`).
+  live_activities: 2.4.7
   permission_handler: ^12.0.1
   home_widget: ^0.9.3
   shared_preferences: ^2.5.3
