@@ -5,7 +5,10 @@ import 'package:simple_pip_mode/simple_pip.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import 'telemetry.dart';
 import 'vimeo_pip.dart';
+import 'widgets/section_selector.dart';
+import 'widgets/status_views.dart';
 
 class _Publication {
   const _Publication(this.title, this.url);
@@ -22,7 +25,6 @@ class PublicationsPage extends StatefulWidget {
 
 class _PublicationsPageState extends State<PublicationsPage> {
   int selectedIndex = 0;
-  late final PageController _carouselController;
 
   static const List<_Publication> _publications = [
     _Publication('Westview Nexus', 'https://wvnexus.org/category/news/'),
@@ -30,24 +32,23 @@ class _PublicationsPageState extends State<PublicationsPage> {
         'Westview Newscast', 'https://vimeo.com/channels/westviewnewscast'),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _carouselController = PageController(viewportFraction: 0.7);
-  }
-
-  @override
-  void dispose() {
-    _carouselController.dispose();
-    super.dispose();
-  }
+  /// One key per publication so the header refresh button can reach the
+  /// currently visible WebView.
+  final List<GlobalKey<PublicationWebViewState>> _webKeys = [
+    for (var i = 0; i < _publications.length; i++)
+      GlobalKey<PublicationWebViewState>(),
+  ];
 
   void _onItemTapped(int index) {
-    _carouselController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeInOutCubic,
-    );
+    setState(() => selectedIndex = index);
+    Telemetry.instance.logEvent('view_section',
+        {'screen': 'publications', 'section': _publications[index].title});
+  }
+
+  void _refreshCurrent() {
+    Telemetry.instance.logEvent(
+        'publication_refresh', {'section': _publications[selectedIndex].title});
+    _webKeys[selectedIndex].currentState?.reload();
   }
 
   @override
@@ -67,60 +68,27 @@ class _PublicationsPageState extends State<PublicationsPage> {
                 // Height collapses to 0 during PiP so the WebView can fill the
                 // activity surface without the PlatformView being detached.
                 SizedBox(
-                  height: isPipActive ? 0 : 90,
+                  height: isPipActive ? 0 : null,
                   child: Offstage(
                     offstage: isPipActive,
-                    child: PageView.builder(
-                      controller: _carouselController,
-                      itemCount: _publications.length,
-                      onPageChanged: (index) =>
-                          setState(() => selectedIndex = index),
-                      itemBuilder: (context, index) {
-                        final isSelected = selectedIndex == index;
-                        return GestureDetector(
-                          onTap: () => _onItemTapped(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Theme.of(context).appBarTheme.backgroundColor
-                                  : Theme.of(context).appBarTheme.foregroundColor,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.transparent
-                                    : Colors.grey.withOpacity(0.3),
-                                width: 2,
-                              ),
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ]
-                                  : const [],
-                            ),
-                            child: Center(
-                              child: Text(
-                                _publications[index].title,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.black87,
-                                  fontSize: isSelected ? 16 : 14,
-                                ),
-                              ),
-                            ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SectionSelector(
+                            labels: [
+                              for (final p in _publications) p.title
+                            ],
+                            selectedIndex: selectedIndex,
+                            onSelected: _onItemTapped,
                           ),
-                        );
-                      },
+                        ),
+                        IconButton.filledTonal(
+                          tooltip: 'Refresh page',
+                          onPressed: _refreshCurrent,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                     ),
                   ),
                 ),
@@ -129,7 +97,14 @@ class _PublicationsPageState extends State<PublicationsPage> {
                   child: const Divider(height: 1),
                 ),
                 Expanded(
-                  child: _PipWebView(url: _publications[selectedIndex].url),
+                  child: LazyIndexedStack(
+                    index: selectedIndex,
+                    itemCount: _publications.length,
+                    itemBuilder: (context, index) => PublicationWebView(
+                      key: _webKeys[index],
+                      url: _publications[index].url,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -142,15 +117,21 @@ class _PublicationsPageState extends State<PublicationsPage> {
 
 /// WebView that bridges Vimeo playback to Android picture-in-picture. Only
 /// used by the Publications tab because other tabs do not host videos.
-class _PipWebView extends StatefulWidget {
-  const _PipWebView({required this.url});
+///
+/// Exposes the same last-known-content error handling as `web_page.dart`
+/// (full-screen retry state on first load, non-destructive notice when a
+/// refresh fails later).
+class PublicationWebView extends StatefulWidget {
+  const PublicationWebView({super.key, required this.url});
+
   final String url;
 
   @override
-  State<_PipWebView> createState() => _PipWebViewState();
+  State<PublicationWebView> createState() => PublicationWebViewState();
 }
 
-class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
+class PublicationWebViewState extends State<PublicationWebView>
+    with WidgetsBindingObserver {
   late final WebViewController _controller;
   late final SimplePip _pip;
   int _loading = 0;
@@ -159,6 +140,10 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
   bool _autoPipSupported = false;
   bool _isVideoPlaying = false;
   bool _pipInitialized = false;
+
+  bool _hasLoadedOnce = false;
+  bool _initialLoadFailed = false;
+  bool _refreshFailed = false;
 
   bool get _isVimeoPage => isVimeoUrl(widget.url);
 
@@ -191,7 +176,10 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
         NavigationDelegate(
           onPageStarted: (_) {
             if (!mounted) return;
-            setState(() => _loading = 1);
+            setState(() {
+              _loading = 1;
+              _refreshFailed = false;
+            });
             if (_isVideoPlaying) {
               _isVideoPlaying = false;
               unawaited(_syncPipMode());
@@ -203,15 +191,42 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
           },
           onPageFinished: (_) {
             if (!mounted) return;
-            setState(() => _loading = 100);
+            setState(() {
+              _loading = 100;
+              _hasLoadedOnce = true;
+              _initialLoadFailed = false;
+              _refreshFailed = false;
+            });
             if (_isVimeoPage) {
               unawaited(_installVimeoBridge());
               unawaited(_setupPipMode());
             }
           },
+          onWebResourceError: (error) {
+            final isMainFrame = error.isForMainFrame ?? false;
+            if (!isMainFrame || !mounted) return;
+            setState(() {
+              if (_hasLoadedOnce) {
+                _refreshFailed = true;
+              } else {
+                _initialLoadFailed = true;
+              }
+            });
+          },
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
+  }
+
+  /// Reloads the current page (used by the header refresh button).
+  void reload() {
+    if (!mounted) return;
+    setState(() {
+      _initialLoadFailed = false;
+      _refreshFailed = false;
+      _loading = 1;
+    });
+    _controller.reload();
   }
 
   Future<void> _installVimeoBridge() async {
@@ -285,7 +300,7 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
   }
 
   @override
-  void didUpdateWidget(covariant _PipWebView oldWidget) {
+  void didUpdateWidget(covariant PublicationWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url == widget.url) return;
     final wasPlaying = _isVideoPlaying;
@@ -293,6 +308,8 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
       _loading = 1;
       _pipInitialized = false;
       _isVideoPlaying = false;
+      _initialLoadFailed = false;
+      _refreshFailed = false;
     });
     if (wasPlaying || !isVimeoUrl(widget.url)) {
       unawaited(_syncPipMode());
@@ -341,15 +358,67 @@ class _PipWebViewState extends State<_PipWebView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return ColoredBox(
       color: Colors.black,
       child: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_loading < 100)
-            Container(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: const Center(child: CircularProgressIndicator()),
+          if (_initialLoadFailed)
+            ErrorStatusView(
+              title: "Couldn't open this page",
+              message: 'The page could not be loaded. Check your connection '
+                  'and try again.',
+              onRetry: reload,
+              retryLabel: 'Try again',
+            )
+          else if (!_hasLoadedOnce && _loading < 100)
+            const LoadingStatusView(label: 'Loading page…')
+          else if (_loading < 100)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 4),
+            ),
+          if (_refreshFailed)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: scheme.errorContainer,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_off,
+                          size: 18, color: scheme.onErrorContainer),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Couldn't refresh — still showing the last loaded "
+                          'page.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: scheme.onErrorContainer),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Dismiss',
+                        iconSize: 18,
+                        color: scheme.onErrorContainer,
+                        icon: const Icon(Icons.close),
+                        onPressed: () =>
+                            setState(() => _refreshFailed = false),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
         ],
       ),

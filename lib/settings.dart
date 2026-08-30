@@ -89,6 +89,9 @@ class AppSettings extends ChangeNotifier {
   bool _liveActivityEnabled = true;
   bool _showTeacher = true;
   bool _showRoom = true;
+  bool _analyticsEnabled = true;
+  bool _crashReportingEnabled = true;
+  bool _privacyNoticeSeen = false;
   Map<String, PeriodSettings> _periods = <String, PeriodSettings>{};
 
   /// Called after settings are persisted (used to refresh the Android home
@@ -111,6 +114,15 @@ class AppSettings extends ChangeNotifier {
 
   /// Show the room number in the schedule / notification / widget.
   bool get showRoom => _showRoom;
+
+  /// Anonymous, non-identifying usage analytics (see `telemetry.dart`).
+  bool get analyticsEnabled => _analyticsEnabled;
+
+  /// Anonymous crash reports (see `telemetry.dart`).
+  bool get crashReportingEnabled => _crashReportingEnabled;
+
+  /// Whether the first-run privacy disclosure has been acknowledged.
+  bool get privacyNoticeSeen => _privacyNoticeSeen;
 
   PeriodSettings periodSettings(String canonicalName) =>
       _periods[canonicalName] ?? const PeriodSettings();
@@ -180,6 +192,36 @@ class AppSettings extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> setAnalyticsEnabled(bool value) async {
+    if (_analyticsEnabled == value) return;
+    _analyticsEnabled = value;
+    await _persist();
+  }
+
+  Future<void> setCrashReportingEnabled(bool value) async {
+    if (_crashReportingEnabled == value) return;
+    _crashReportingEnabled = value;
+    await _persist();
+  }
+
+  Future<void> setPrivacyNoticeSeen({bool value = true}) async {
+    if (_privacyNoticeSeen == value) return;
+    _privacyNoticeSeen = value;
+    // Persisted directly: acknowledging the notice is not a "setting change"
+    // that needs to re-sync the home-screen widget.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      final json = raw != null && raw.isNotEmpty
+          ? Map<String, dynamic>.from(jsonDecode(raw) as Map)
+          : <String, dynamic>{};
+      json['privacyNoticeSeen'] = value;
+      await prefs.setString(_prefsKey, jsonEncode(json));
+    } catch (_) {
+      // Never let a failed write break the UI.
+    }
+  }
+
   Future<void> setPeriodSettings(String canonicalName, PeriodSettings value) async {
     if (value.isEmpty) {
       _periods.remove(canonicalName);
@@ -205,6 +247,9 @@ class AppSettings extends ChangeNotifier {
     _liveActivityEnabled = true;
     _showTeacher = true;
     _showRoom = true;
+    _analyticsEnabled = true;
+    _crashReportingEnabled = true;
+    _privacyNoticeSeen = false;
     _periods = <String, PeriodSettings>{};
     notifyListeners();
   }
@@ -229,6 +274,9 @@ class AppSettings extends ChangeNotifier {
     _liveActivityEnabled = json['liveActivityEnabled'] as bool? ?? true;
     _showTeacher = json['showTeacher'] as bool? ?? true;
     _showRoom = json['showRoom'] as bool? ?? true;
+    _analyticsEnabled = json['analyticsEnabled'] as bool? ?? true;
+    _crashReportingEnabled = json['crashReportingEnabled'] as bool? ?? true;
+    _privacyNoticeSeen = json['privacyNoticeSeen'] as bool? ?? false;
 
     final periods = json['periods'];
     final parsed = <String, PeriodSettings>{};
@@ -249,6 +297,9 @@ class AppSettings extends ChangeNotifier {
         'liveActivityEnabled': _liveActivityEnabled,
         'showTeacher': _showTeacher,
         'showRoom': _showRoom,
+        'analyticsEnabled': _analyticsEnabled,
+        'crashReportingEnabled': _crashReportingEnabled,
+        'privacyNoticeSeen': _privacyNoticeSeen,
         'periods': {
           for (final entry in _periods.entries) entry.key: entry.value.toJson(),
         },

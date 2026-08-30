@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'network_cache.dart';
 import 'settings.dart';
+import 'telemetry.dart';
 
 /// Settings page, opened from the button in the bottom right of the home page.
 class SettingsPage extends StatelessWidget {
@@ -19,8 +21,8 @@ class SettingsPage extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
-                _SectionHeader('Notifications'),
-                SwitchListTile.adaptive(
+                const _SectionHeader('Notifications'),
+                SwitchListTile(
                   value: settings.notificationsEnabled,
                   onChanged: (value) => settings.setNotificationsEnabled(value),
                   title: const Text('Notifications'),
@@ -29,7 +31,7 @@ class SettingsPage extends StatelessWidget {
                   ),
                   secondary: const Icon(Icons.notifications_outlined),
                 ),
-                SwitchListTile.adaptive(
+                SwitchListTile(
                   value: settings.liveActivityActive,
                   onChanged: settings.notificationsEnabled
                       ? (value) => settings.setLiveActivityEnabled(value)
@@ -46,8 +48,48 @@ class SettingsPage extends StatelessWidget {
 
                 const Divider(height: 32),
 
-                _SectionHeader('Class details'),
-                SwitchListTile.adaptive(
+                const _SectionHeader('Privacy & data'),
+                SwitchListTile(
+                  value: settings.analyticsEnabled,
+                  onChanged: (value) => settings.setAnalyticsEnabled(value),
+                  title: const Text('Anonymous usage statistics'),
+                  subtitle: const Text(
+                    'Counts of which screens are opened and whether refreshes '
+                    'succeed. Never identifies you.',
+                  ),
+                  secondary: const Icon(Icons.insights_outlined),
+                ),
+                SwitchListTile(
+                  value: settings.crashReportingEnabled,
+                  onChanged: (value) => settings.setCrashReportingEnabled(value),
+                  title: const Text('Crash reports'),
+                  subtitle: const Text(
+                    'Error text and stack trace when the app breaks, so it can '
+                    'be fixed. Never identifies you.',
+                  ),
+                  secondary: const Icon(Icons.bug_report_outlined),
+                ),
+                const _PrivacyDisclosure(),
+
+                const Divider(height: 32),
+
+                const _SectionHeader('Saved content'),
+                ListTile(
+                  leading: const Icon(Icons.download_done_outlined),
+                  title: const Text('Clear saved content'),
+                  subtitle: const Text(
+                    'Removes calendars, lunch menus and nutrition data saved '
+                    'for offline use. They download again next time you open '
+                    'them.',
+                  ),
+                  trailing: const Icon(Icons.delete_outline),
+                  onTap: () => _clearCachedContent(context),
+                ),
+
+                const Divider(height: 32),
+
+                const _SectionHeader('Class details'),
+                SwitchListTile(
                   value: settings.showTeacher,
                   onChanged: (value) => settings.setShowTeacher(value),
                   title: const Text('Show teacher'),
@@ -56,7 +98,7 @@ class SettingsPage extends StatelessWidget {
                   ),
                   secondary: const Icon(Icons.person_outline),
                 ),
-                SwitchListTile.adaptive(
+                SwitchListTile(
                   value: settings.showRoom,
                   onChanged: (value) => settings.setShowRoom(value),
                   title: const Text('Show room number'),
@@ -68,7 +110,7 @@ class SettingsPage extends StatelessWidget {
 
                 const Divider(height: 32),
 
-                _SectionHeader('My classes'),
+                const _SectionHeader('My classes'),
                 for (final name in customizablePeriodNames)
                   _PeriodTile(canonicalName: name),
                 Padding(
@@ -84,6 +126,14 @@ class SettingsPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _clearCachedContent(BuildContext context) async {
+    await NetworkCache.instance.clearAll();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved content cleared')),
     );
   }
 
@@ -110,6 +160,62 @@ class SettingsPage extends StatelessWidget {
     if (shouldReset ?? false) {
       await AppSettings.instance.resetPeriods();
     }
+  }
+}
+
+/// Plain-language privacy disclosure, always visible in Settings.
+class _PrivacyDisclosure extends StatelessWidget {
+  const _PrivacyDisclosure();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Card(
+        elevation: 0,
+        color: scheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.shield_outlined,
+                      size: 20, color: scheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'What we collect (and don\'t)',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Westview HS collects anonymous usage counts and crash reports '
+                'to keep the app working. It never collects your name, student '
+                'ID, contacts, location or advertising identifiers, and it '
+                'shares nothing with third parties. Reports go only to the '
+                'school\'s server (${Uri.parse(telemetryEndpoint).host}). Use '
+                'the switches above to turn either off at any time.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(height: 1.5, color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
