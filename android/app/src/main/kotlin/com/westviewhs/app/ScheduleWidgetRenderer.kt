@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -37,7 +37,7 @@ import java.util.Locale
 object ScheduleWidgetRenderer {
 
     /** Action broadcast by the AlarmManager when a period transition happens. */
-    const val ACTION_PERIOD_TICK = "com.example.westview_app.action.WIDGET_PERIOD_TICK"
+    const val ACTION_PERIOD_TICK = "com.westviewhs.app.action.WIDGET_PERIOD_TICK"
 
     private const val ALARM_REQUEST_CODE = 4201
 

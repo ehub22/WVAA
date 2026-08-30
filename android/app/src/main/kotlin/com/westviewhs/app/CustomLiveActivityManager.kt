@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.app.Notification
 import android.app.NotificationManager
@@ -18,33 +18,20 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
     override suspend fun buildNotification(
         notification: Notification.Builder,
         event: String,
-        data: Map<String, Any>
+        data: Map<String, Any>,
     ): Notification {
-        
-        // Ensure channels allow lockscreen display
+        // Ensure the countdown channel exists with the right importance/visibility
+        // so the live activity shows on the lock screen.
         ScheduleNotificationManager.ensureChannel(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channels = notificationManager.notificationChannels
-            for (channel in channels) {
-                if (channel.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
-                    channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    channel.setShowBadge(true)
-                    notificationManager.createNotificationChannel(channel)
-                }
-            }
-        }
 
-        // Link to the live_activity.xml layout
         val remoteViews = RemoteViews(context.packageName, R.layout.live_activity)
 
-        // 1. Extract the name data sent from Dart and bind it to the TextView.
         // Dart already resolved any custom class name configured in settings.
         val periodName = data["periodName"] as? String ?: "Period"
         remoteViews.setTextViewText(R.id.period_name, periodName)
 
-        // 1b. Optional teacher / room line ("Mr. Smith · Rm 402"), only shown
-        // when entered and enabled in settings.
+        // Optional teacher / room line ("Mr. Smith · Rm 402"), only shown when
+        // entered and enabled in settings.
         val periodDetail = (data["periodDetail"] as? String).orEmpty()
         if (periodDetail.isBlank()) {
             remoteViews.setViewVisibility(R.id.period_detail, View.GONE)
@@ -53,19 +40,17 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
             remoteViews.setViewVisibility(R.id.period_detail, View.VISIBLE)
         }
 
-        // 2. Extract the Unix timestamp, convert it to Android elapsedRealtime for the Chronometer
         val endTimeMillisStr = data["endTime"] as? String
         if (endTimeMillisStr != null) {
             val endTimeMillis = endTimeMillisStr.toLongOrNull() ?: 0L
             val diff = endTimeMillis - System.currentTimeMillis()
             val baseTime = SystemClock.elapsedRealtime() + diff.coerceAtLeast(0L)
 
-            // Set the countdown and start it
             remoteViews.setChronometer(
                 R.id.period_countdown,
                 baseTime,
-                "%s", // Display format
-                true  // isStarted
+                "%s",
+                true,
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 remoteViews.setChronometerCountDown(R.id.period_countdown, true)
@@ -78,32 +63,34 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
             context,
             0,
             launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Apply custom layout back to the notification channel builder
         notification.setCustomContentView(remoteViews)
         notification.setCustomBigContentView(remoteViews)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             notification.setCustomHeadsUpContentView(remoteViews)
         }
 
-        // Use the transparent monochrome Wolverine icon for small icon and launcher icon for large icon
         notification.setSmallIcon(R.drawable.ic_notification)
-        notification.setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.launcher_icon))
+        notification.setLargeIcon(
+            BitmapFactory.decodeResource(context.resources, R.mipmap.launcher_icon),
+        )
         notification.setContentIntent(clickPendingIntent)
 
-        // Ensure full visibility on lockscreen and ongoing status
         notification.setVisibility(Notification.VISIBILITY_PUBLIC)
         notification.setOngoing(true)
         notification.setShowWhen(false)
         notification.setCategory(Notification.CATEGORY_STATUS)
+        notification.setOnlyAlertOnce(true)
+        notification.setLocalOnly(true)
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
-            notification.setPriority(Notification.PRIORITY_HIGH)
+            notification.setPriority(Notification.PRIORITY_DEFAULT)
         }
 
-        // Set public version fallback for secure lockscreens
+        // Public-version fallback for secure lock screens that hide private content.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val publicBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification.Builder(context, ScheduleNotificationManager.CHANNEL_ID)
@@ -113,17 +100,52 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
             }
             publicBuilder
                 .setSmallIcon(R.drawable.ic_notification)
-                .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.launcher_icon))
+                .setLargeIcon(
+                    BitmapFactory.decodeResource(
+                        context.resources,
+                        R.mipmap.launcher_icon,
+                    ),
+                )
                 .setContentTitle(periodName)
                 .setContentText(if (periodDetail.isNotBlank()) periodDetail else "In progress")
                 .setContentIntent(clickPendingIntent)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setCategory(Notification.CATEGORY_STATUS)
             notification.setPublicVersion(publicBuilder.build())
         }
 
-        // Prime the background AlarmManager so the next notification automatically
-        // starts as soon as this period ends, even when the phone is locked.
+        // Repair any pre-existing channels whose visibility/importance was set
+        // incorrectly by previous versions of the app.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            for (channel in notificationManager.notificationChannels) {
+                var changed = false
+                if (channel.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
+                    channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    changed = true
+                }
+                if (channel.importance < NotificationManager.IMPORTANCE_LOW) {
+                    // Don't raise arbitrary channels, but do ensure the live
+                    // activity plugin's own channel is at least LOW so it
+                    // actually renders.
+                    if (channel.id == ScheduleNotificationManager.CHANNEL_ID ||
+                        channel.id.contains("live_activity", ignoreCase = true)
+                    ) {
+                        channel.setImportance(NotificationManager.IMPORTANCE_DEFAULT)
+                        changed = true
+                    }
+                }
+                if (changed) {
+                    channel.setShowBadge(true)
+                    notificationManager.createNotificationChannel(channel)
+                }
+            }
+        }
+
+        // Prime the AlarmManager so the next notification starts as soon as
+        // this period ends, even when the phone is locked.
         ScheduleWidgetRenderer.scheduleNextTransition(context, LocalDateTime.now())
 
         return notification.build()

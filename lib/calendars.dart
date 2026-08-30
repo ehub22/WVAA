@@ -1,93 +1,30 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
 import 'school_lunch.dart';
+
 enum CalendarType { google, schoolLunch }
 
-class WebPageInfo {
+/// Description of a top-level calendar tab. When [type] is
+/// [CalendarType.schoolLunch], [url] is ignored and the native lunch view is
+/// rendered.
+class CalendarTab {
+  const CalendarTab(this.title, this.url,
+      {this.isApi = false, this.type = CalendarType.google});
+
   final String title;
-  final String webPageURL;
-  final bool isApi; 
-  final CalendarType type; 
-  
-  const WebPageInfo(
-    this.title, 
-    this.webPageURL, {
-    this.isApi = false,
-    this.type = CalendarType.google, 
-  });
-}
-
-class WebPage extends StatefulWidget {
-  const WebPage({super.key, required this.webPage});
-  final WebPageInfo webPage;
-
-  @override
-  State<WebPage> createState() => _WebPageState();
-}
-
-class _WebPageState extends State<WebPage> {
-  late final WebViewController controller;
-  int loadingPercentage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            setState(() {
-              loadingPercentage = 0;
-            });
-          },
-          onProgress: (progress) {
-            setState(() {
-              loadingPercentage = progress;
-            });
-          },
-          onPageFinished: (url) {
-            setState(() {
-              loadingPercentage = 100;
-            });
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.webPage.webPageURL));
-  }
-
-  @override
-  void didUpdateWidget(WebPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.webPage.webPageURL != widget.webPage.webPageURL) {
-      setState(() {
-        loadingPercentage = 0;
-      });
-      controller.loadRequest(Uri.parse(widget.webPage.webPageURL));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        WebViewWidget(controller: controller),
-        if (loadingPercentage < 100)
-          Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: const Center(child: CircularProgressIndicator()),
-          ),
-      ],
-    );
-  }
+  final String url;
+  final bool isApi;
+  final CalendarType type;
 }
 
 class CalendarEventsView extends StatefulWidget {
-  final String apiUrl;
   const CalendarEventsView({super.key, required this.apiUrl});
+
+  final String apiUrl;
 
   @override
   State<CalendarEventsView> createState() => _CalendarEventsViewState();
@@ -95,13 +32,12 @@ class CalendarEventsView extends StatefulWidget {
 
 class _CalendarEventsViewState extends State<CalendarEventsView> {
   late Future<List<dynamic>> _eventsFuture;
-  final ItemScrollController itemScrollController = ItemScrollController();
+  final ItemScrollController _scrollController = ItemScrollController();
 
   @override
   void initState() {
     super.initState();
     _eventsFuture = _fetchEvents();
-    
     _eventsFuture.then((events) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToToday(events);
@@ -111,76 +47,103 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
 
   void _scrollToToday(List<dynamic> events) {
     final now = DateTime.now();
-    int targetIndex = events.indexWhere((e) {
-      DateTime displayDate = e['displayDate'];
+    final targetIndex = events.indexWhere((e) {
+      final displayDate = e['displayDate'] as DateTime;
       return _isSameDay(displayDate, now) || displayDate.isAfter(now);
     });
-
-    if (targetIndex != -1 && itemScrollController.isAttached) {
-      itemScrollController.jumpTo(index: targetIndex);
+    if (targetIndex != -1 && _scrollController.isAttached) {
+      _scrollController.jumpTo(index: targetIndex);
     }
   }
 
   Future<List<dynamic>> _fetchEvents() async {
     final twoDaysAgo = DateTime.now().subtract(const Duration(days: 1));
-    final dateToGet = Uri.encodeComponent(twoDaysAgo.toUtc().toIso8601String());
-    final String url = '${widget.apiUrl}&timeMin=$dateToGet&singleEvents=True&orderBy=startTime&maxResults=100';
+    final timeMin =
+        Uri.encodeComponent(twoDaysAgo.toUtc().toIso8601String());
+    final url =
+        '${widget.apiUrl}&timeMin=$timeMin&singleEvents=True&orderBy=startTime&maxResults=100';
 
     final response = await http.get(Uri.parse(url));
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      List<dynamic> items = data['items'] ?? [];
-      List<dynamic> expandedItems = [];
-
-      for (var event in items) {
-        DateTime start = _parseEventDate(event['start']);
-        DateTime end = _parseEventDate(event['end']);
-        DateTime inclusiveEnd = end.isAtSameMomentAs(start) 
-            ? end 
-            : end.subtract(const Duration(milliseconds: 1));
-
-        DateTime current = DateTime(start.year, start.month, start.day);
-        DateTime last = DateTime(inclusiveEnd.year, inclusiveEnd.month, inclusiveEnd.day);
-
-        while (current.isBefore(last) || current.isAtSameMomentAs(last)) {
-          final clone = Map<String, dynamic>.from(event);
-          clone['displayDate'] = current; 
-          expandedItems.add(clone);
-          current = current.add(const Duration(days: 1));
-        }
-      }
-
-      expandedItems.sort((a, b) => (a['displayDate'] as DateTime).compareTo(b['displayDate'] as DateTime));
-      return expandedItems;
-    } else {
-      throw Exception('Failed to load events');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load events (HTTP ${response.statusCode})');
     }
+
+    final data = json.decode(response.body);
+    final items = (data['items'] as List<dynamic>?) ?? const [];
+    final expanded = <Map<String, dynamic>>[];
+
+    for (final event in items) {
+      if (event is! Map<String, dynamic>) continue;
+      final start = _parseEventDate(event['start']);
+      final end = _parseEventDate(event['end']);
+      final inclusiveEnd =
+          end.isAtSameMomentAs(start) ? end : end.subtract(const Duration(milliseconds: 1));
+
+      var current = DateTime(start.year, start.month, start.day);
+      final last =
+          DateTime(inclusiveEnd.year, inclusiveEnd.month, inclusiveEnd.day);
+
+      while (!current.isAfter(last)) {
+        final clone = Map<String, dynamic>.from(event);
+        clone['displayDate'] = current;
+        expanded.add(clone);
+        current = current.add(const Duration(days: 1));
+      }
+    }
+
+    expanded.sort((a, b) =>
+        (a['displayDate'] as DateTime).compareTo(b['displayDate'] as DateTime));
+    return expanded;
   }
 
   DateTime _parseEventDate(Map<String, dynamic>? dateMap) {
     if (dateMap == null) return DateTime.now();
-    if (dateMap['dateTime'] != null) return DateTime.parse(dateMap['dateTime']).toLocal();
-    if (dateMap['date'] != null) return DateTime.parse(dateMap['date']);
+    if (dateMap['dateTime'] != null) {
+      return DateTime.parse(dateMap['dateTime'] as String).toLocal();
+    }
+    if (dateMap['date'] != null) return DateTime.parse(dateMap['date'] as String);
     return DateTime.now();
   }
 
-  bool _isSameDay(DateTime d1, DateTime d2) {
-    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
-  }
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String _getDayName(DateTime date) {
+  String _dayLabel(DateTime date) {
     final now = DateTime.now();
-    if (_isSameDay(date, now)) return "Today";
-    if (_isSameDay(date, now.subtract(const Duration(days: 1)))) return "Yesterday";
-    if (_isSameDay(date, now.add(const Duration(days: 1)))) return "Tomorrow";
-    
-    List<String> weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    List<String> months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return "${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}";
+    if (_isSameDay(date, now)) return 'Today';
+    if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
+      return 'Yesterday';
+    }
+    if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
+
+    const weekdays = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday',
+    ];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
   }
 
-  void _showEventDetails(BuildContext context, Map<String, dynamic> event, String timeStr) {
+  String _formatTime(Map<String, dynamic> event) {
+    final raw = event['start']?['dateTime'];
+    if (raw == null) return 'All Day';
+    final dt = DateTime.parse(raw as String).toLocal();
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final hour = dt.hour == 0
+        ? 12
+        : dt.hour > 12
+            ? dt.hour - 12
+            : dt.hour;
+    return '$hour:${dt.minute.toString().padLeft(2, '0')} $ampm';
+  }
+
+  void _showEventDetails(
+      BuildContext context, Map<String, dynamic> event, String timeStr) {
+    final description =
+        (event['description'] as String?) ?? 'No description provided.';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -188,8 +151,6 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        final description = event['description']?.toString() ?? "No description provided.";
-        
         return DraggableScrollableSheet(
           initialChildSize: 0.4,
           maxChildSize: 0.9,
@@ -214,32 +175,35 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
                     ),
                   ),
                   Text(
-                    event['summary'] ?? 'Untitled Event',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    (event['summary'] as String?) ?? 'Untitled Event',
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     timeStr,
-                    style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      color: Theme.of(context).primaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   if (event['location'] != null) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      event['location'],
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
+                    Text('${event['location']}',
+                        style: TextStyle(color: Colors.grey[600])),
                   ],
                   const Divider(height: 32),
                   const Text(
-                    "Description",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    'Description',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     description,
                     style: const TextStyle(fontSize: 15, height: 1.5),
                   ),
-                  const SizedBox(height: 40), // Bottom padding
+                  const SizedBox(height: 40),
                 ],
               ),
             );
@@ -256,49 +220,66 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return const Center(child: Text('Error loading calendar'));
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Couldn\'t load calendar events.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () =>
+                        setState(() => _eventsFuture = _fetchEvents()),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final events = snapshot.data ?? const [];
+        if (events.isEmpty) {
           return const Center(child: Text('No events found.'));
         }
 
-        final events = snapshot.data!;
-        
         return ScrollablePositionedList.builder(
-          itemScrollController: itemScrollController,
+          itemScrollController: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           itemCount: events.length,
           itemBuilder: (context, index) {
-            final event = events[index];
-            final DateTime currentDisplayDate = event['displayDate'];
-            bool showHeader = index == 0 || !_isSameDay(currentDisplayDate, events[index - 1]['displayDate']);
+            final event = events[index] as Map<String, dynamic>;
+            final displayDate = event['displayDate'] as DateTime;
+            final prevDate = index > 0
+                ? (events[index - 1] as Map<String, dynamic>)['displayDate']
+                    as DateTime?
+                : null;
+            final showHeader =
+                prevDate == null || !_isSameDay(displayDate, prevDate);
 
-            final title = event['summary'] ?? 'Untitled Event';
-            final location = event['location'];
-            
-            String timeStr = "All Day";
-            if (event['start']?['dateTime'] != null) {
-              final dt = DateTime.parse(event['start']['dateTime']).toLocal();
-              final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-              final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-              timeStr = "$hour:${dt.minute.toString().padLeft(2, '0')} $ampm";
-            }
+            final title = (event['summary'] as String?) ?? 'Untitled Event';
+            final location = event['location']?.toString();
+            final timeStr = _formatTime(event);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showHeader) ...[
+                if (showHeader)
                   Padding(
                     padding: const EdgeInsets.only(top: 20, bottom: 10),
                     child: Text(
-                      _getDayName(currentDisplayDate),
-                      style: TextStyle(
-                        fontSize: 15,
-                        letterSpacing: 1.2,
-                      ),
+                      _dayLabel(displayDate),
+                      style: const TextStyle(
+                          fontSize: 15, letterSpacing: 1.2),
                     ),
                   ),
-                ],
                 Card(
                   elevation: 0,
                   margin: const EdgeInsets.only(bottom: 8),
@@ -308,10 +289,12 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
                   ),
                   child: ListTile(
                     onTap: () => _showEventDetails(context, event, timeStr),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
                     title: Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 15),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,19 +302,26 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.schedule, size: 14, color: Colors.grey),
+                            const Icon(Icons.schedule,
+                                size: 14, color: Colors.grey),
                             const SizedBox(width: 4),
-                            Text(timeStr, style: const TextStyle(fontSize: 13)),
+                            Text(timeStr,
+                                style: const TextStyle(fontSize: 13)),
                           ],
                         ),
-                        if (location != null && location.toString().isNotEmpty) ...[
+                        if (location != null && location.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Row(
                             children: [
-                              const Icon(Icons.place_outlined, size: 14, color: Colors.grey),
+                              const Icon(Icons.place_outlined,
+                                  size: 14, color: Colors.grey),
                               const SizedBox(width: 4),
                               Expanded(
-                                child: Text(location, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                                child: Text(
+                                  location,
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ),
@@ -358,23 +348,24 @@ class CalendarsPage extends StatefulWidget {
 
 class _CalendarsPageState extends State<CalendarsPage> {
   int selectedIndex = 0;
-  late PageController _carouselController;
+  late final PageController _carouselController;
 
-  // 2. Add the School Lunches to your list
-  final List<WebPageInfo> calendars = const [
-    WebPageInfo(
-      'School Calendar', 
-      'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
+  final List<CalendarTab> _calendars = const [
+    CalendarTab(
+      'School Calendar',
+      'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events'
+      '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
-    WebPageInfo(
-      'Athletics', 
-      'https://www.googleapis.com/calendar/v3/calendars/c_bdlim8dben51vvr6p2omiguh1k@group.calendar.google.com/events?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo', 
+    CalendarTab(
+      'Athletics',
+      'https://www.googleapis.com/calendar/v3/calendars/c_bdlim8dben51vvr6p2omiguh1k@group.calendar.google.com/events'
+      '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
-    WebPageInfo(
-      'School Lunches', 
-      '', 
+    CalendarTab(
+      'School Lunches',
+      '',
       isApi: true,
       type: CalendarType.schoolLunch,
     ),
@@ -409,38 +400,42 @@ class _CalendarsPageState extends State<CalendarsPage> {
             height: 90,
             child: PageView.builder(
               controller: _carouselController,
-              itemCount: calendars.length,
+              itemCount: _calendars.length,
               onPageChanged: (index) => setState(() => selectedIndex = index),
               itemBuilder: (context, index) {
-                bool isSelected = selectedIndex == index;
-                
+                final isSelected = selectedIndex == index;
                 return GestureDetector(
                   onTap: () => _onItemTapped(index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected 
-                          ? Theme.of(context).appBarTheme.backgroundColor 
+                      color: isSelected
+                          ? Theme.of(context).appBarTheme.backgroundColor
                           : Theme.of(context).appBarTheme.foregroundColor,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isSelected 
-                            ? Colors.transparent 
+                        color: isSelected
+                            ? Colors.transparent
                             : Colors.grey.withOpacity(0.3),
                         width: 2,
                       ),
-                      boxShadow: isSelected 
-                          ? [BoxShadow(
-                              color: Theme.of(context).primaryColor.withOpacity(0.3), 
-                              blurRadius: 8, 
-                              offset: const Offset(0, 4)
-                            )] 
-                          : [],
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : const [],
                     ),
                     child: Center(
                       child: Text(
-                        calendars[index].title,
+                        _calendars[index].title,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: isSelected ? Colors.white : Colors.black87,
@@ -453,16 +448,13 @@ class _CalendarsPageState extends State<CalendarsPage> {
               },
             ),
           ),
-          
           const Divider(height: 1),
-
-          // 3. Conditionally render the correct view
           Expanded(
-            child: calendars[selectedIndex].type == CalendarType.schoolLunch
+            child: _calendars[selectedIndex].type == CalendarType.schoolLunch
                 ? const SchoolLunchView()
                 : CalendarEventsView(
-                    key: ValueKey(calendars[selectedIndex].webPageURL), 
-                    apiUrl: calendars[selectedIndex].webPageURL,
+                    key: ValueKey(_calendars[selectedIndex].url),
+                    apiUrl: _calendars[selectedIndex].url,
                   ),
           ),
         ],
