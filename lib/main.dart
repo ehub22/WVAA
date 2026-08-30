@@ -9,6 +9,7 @@ import 'schedule_page.dart';
 import 'settings.dart';
 import 'special_schedule.dart';
 import 'theme/theme.dart';
+import 'vimeo_pip.dart';
 import 'widget_sync.dart';
 
 Future<void> main() async {
