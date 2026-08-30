@@ -57,14 +57,14 @@ object ScheduleNotificationManager {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
                     "Schedule Countdown",
-                    NotificationManager.IMPORTANCE_DEFAULT,
+                    NotificationManager.IMPORTANCE_LOW,
                 ).apply {
+                    // IMPORTANCE_LOW is the right level for an ongoing
+                    // silent countdown (no sound, no heads-up, but visible on
+                    // the lock screen when visibility is PUBLIC).
                     description = "Westview HS ongoing period countdown notification"
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     setShowBadge(true)
-                    // IMPORTANCE_DEFAULT can still play a sound on creation;
-                    // suppress it so the ongoing countdown stays silent.
-                    setSound(null, null)
                     enableVibration(false)
                     enableLights(false)
                 }
@@ -202,7 +202,7 @@ object ScheduleNotificationManager {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
-            builder.setPriority(Notification.PRIORITY_DEFAULT)
+            builder.setPriority(Notification.PRIORITY_LOW)
         }
 
         notificationManager.notify(NOTIFICATION_ID, builder.build())

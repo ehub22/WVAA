@@ -1,7 +1,6 @@
 package com.westviewhs.app
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -87,7 +86,7 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
-            notification.setPriority(Notification.PRIORITY_DEFAULT)
+            notification.setPriority(Notification.PRIORITY_LOW)
         }
 
         // Public-version fallback for secure lock screens that hide private content.
@@ -113,35 +112,6 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setCategory(Notification.CATEGORY_STATUS)
             notification.setPublicVersion(publicBuilder.build())
-        }
-
-        // Repair any pre-existing channels whose visibility/importance was set
-        // incorrectly by previous versions of the app.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            for (channel in notificationManager.notificationChannels) {
-                var changed = false
-                if (channel.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
-                    channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    changed = true
-                }
-                if (channel.importance < NotificationManager.IMPORTANCE_LOW) {
-                    // Don't raise arbitrary channels, but do ensure the live
-                    // activity plugin's own channel is at least LOW so it
-                    // actually renders.
-                    if (channel.id == ScheduleNotificationManager.CHANNEL_ID ||
-                        channel.id.contains("live_activity", ignoreCase = true)
-                    ) {
-                        channel.setImportance(NotificationManager.IMPORTANCE_DEFAULT)
-                        changed = true
-                    }
-                }
-                if (changed) {
-                    channel.setShowBadge(true)
-                    notificationManager.createNotificationChannel(channel)
-                }
-            }
         }
 
         // Prime the AlarmManager so the next notification starts as soon as
