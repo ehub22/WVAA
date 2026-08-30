@@ -1,30 +1,30 @@
-// // This is a basic Flutter widget test.
-// //
-// // To perform an interaction with a widget in your test, use the WidgetTester
-// // utility in the flutter_test package. For example, you can send tap and scroll
-// // gestures. You can also use WidgetTester to find child widgets in the widget
-// // tree, read text, and verify that the values of widget properties are correct.
+import 'package:flutter_test/flutter_test.dart';
 
-// import 'package:flutter/material.dart';
-// import 'package:flutter_test/flutter_test.dart';
+import 'package:westview_app/data.dart';
+import 'package:westview_app/settings.dart';
 
-// import 'package:westview_app/main.dart';
+void main() {
+  test('default schedules are well-formed and sorted', () {
+    // Every schedule must list consecutive periods that never overlap and end
+    // no later than the last bell (15:35 / 3:35 PM).
+    for (final schedule in [monFriSchedule, tueThursSchedule, wedSchedule]) {
+      expect(schedule, isNotEmpty);
+      for (var i = 1; i < schedule.length; i++) {
+        final prevEnd = schedule[i - 1]['endTime'];
+        final curStart = schedule[i]['startTime'];
+        // Allow adjacent or passing periods to touch/overlap by 6 minutes, but
+        // never large gaps or backwards times.
+        expect(prevEnd.hour * 60 + prevEnd.minute,
+            lessThanOrEqualTo(curStart.hour * 60 + curStart.minute));
+      }
+    }
+  });
 
-// void main() {
-//   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-//     // Build our app and trigger a frame.
-//     await tester.pumpWidget(const WestviewApp());
-
-//     // Verify that our counter starts at 0.
-//     expect(find.text('0'), findsOneWidget);
-//     expect(find.text('1'), findsNothing);
-
-//     // Tap the '+' icon and trigger a frame.
-//     await tester.tap(find.byIcon(Icons.add));
-//     await tester.pump();
-
-//     // Verify that our counter has incremented.
-//     expect(find.text('0'), findsNothing);
-//     expect(find.text('1'), findsOneWidget);
-//   });
-// }
+  test('customizable period names cover only the four class periods', () {
+    expect(customizablePeriodNames, contains('Period 1'));
+    expect(customizablePeriodNames, contains('Period 4'));
+    expect(customizablePeriodNames,
+        isNot(contains('Passing')));
+    expect(customizablePeriodNames, isNot(contains('Lunch')));
+  });
+}

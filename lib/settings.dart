@@ -197,6 +197,18 @@ class AppSettings extends ChangeNotifier {
 
   // ------------------------------------------------------------- persistence
 
+  /// Resets in-memory state (used by tests so suites don't leak settings).
+  @visibleForTesting
+  void resetForTesting() {
+    _loaded = false;
+    _notificationsEnabled = true;
+    _liveActivityEnabled = true;
+    _showTeacher = true;
+    _showRoom = true;
+    _periods = <String, PeriodSettings>{};
+    notifyListeners();
+  }
+
   /// Loads the saved settings. Safe to call more than once and never throws.
   Future<void> load() async {
     try {

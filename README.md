@@ -1,120 +1,128 @@
-Westview Android App
+# Westview HS (WVAA)
 
+A companion app for Westview High School (Poway Unified School District), built with Flutter. The app brings together the schedules, calendars, newsletters, student publications, and lunch menu that students use every day, plus a live countdown notification and a home-screen widget that shows the current class period.
 
-Functions implemented so far:
-  Calendars (Athletics, school calendar, and school lunch)
-  Schedules by day, including special (modified) schedules fetched from the school's server
-  Newsletters (Weekly newsletter, counseling newsletters, and den announcements)
-  School publications (Nexus and Newscast)
-  Home screen widget (current period + time left, Android only)
+> The app is optimized for Android (the primary target). iOS support compiles but is not actively maintained.
 
+## Features
+
+- **Schedules** — Mon/Fri, Tue/Thu, and Wednesday late-start schedules with a live per-second countdown to the end of the current period. Any period can be renamed (e.g. "Human Body Systems" instead of "Period 1") with teacher and room number.
+- **Special (modified) schedules** — Early-release, assembly, and Link-Crew days are fetched from the school server and override the regular schedule in-app, on the widget, and in the ongoing notification. Results are cached for at least two days so the app still works when the server is unreachable.
+- **Live countdown notification** — An ongoing Android notification shows the current period, teacher/room, and a ticking Chronometer. It renders on the lock screen and survives reboots via AlarmManager.
+- **Home-screen widget** — "Current Period" widget shows the active class, a live countdown, and a one-liner about what's next. It self-updates at period boundaries with precise alarms and uses a Chronometer so it ticks without waking the device.
+- **Calendars** — School and Athletics Google Calendars, plus the daily school lunch menu with nutrition-fact details.
+- **Newsletters** — Weekly newsletter, counseling newsletters, and DEN announcements, each in an embedded WebView.
+- **Publications** — Westview Nexus (student newspaper) and Westview Newscast (Vimeo). Vimeo videos automatically enter Android picture-in-picture when you leave the app mid-playback.
+- **Theming** — Light and dark modes follow the system setting, using the school's gold/brass palette.
+
+## Project layout
+
+```
+lib/
+  main.dart              App entry point and bottom-navigation shell
+  data.dart              Bell schedules (Mon/Fri, Tue/Thu, Wed)
+  schedule_page.dart     Home/Schedule tab, live countdown, settings FAB
+  special_schedule.dart  Special-schedule fetch + multi-day cache
+  settings.dart          Persisted user settings (ChangeNotifier)
+  settings_page.dart     Settings UI
+  widget_sync.dart       Pushes schedules/settings to the Android widget
+  calendars.dart         Calendar tabs (School, Athletics, Lunches)
+  school_lunch.dart      Lunch menu + nutrition facts
+  newsletter_page.dart   Newsletter tabs
+  publications.dart      Publications tabs + Vimeo PiP handling
+  vimeo_pip.dart         Vimeo player <-> PiP bridge (injected JS)
+  web_page.dart          Shared WebView wrapper used by newsletters
+  theme/                 App color tokens + light/dark ThemeData
+
+android/app/src/main/kotlin/com/westviewhs/app/
+  MainActivity.kt                    Flutter activity, PiP callbacks, channel init
+  CustomLiveActivityManager.kt       Custom notification UI for the live activity
+  ScheduleNotificationManager.kt     Ongoing countdown notification + channel
+  ScheduleWidgetProvider.kt          Home-screen widget provider
+  ScheduleWidgetRenderer.kt          Widget rendering + AlarmManager scheduling
+  ScheduleWidgetAlarmReceiver.kt     Broadcast receiver for period ticks
+```
 
 ## Special (modified) schedules
 
-On days with a special schedule (early release, Link Crew, assemblies, …) the
-app replaces the regular weekday schedule with the special one, in the app and
-on the home screen widget, and shows a dismissable banner saying a special
-schedule is in effect.
-
-The schedule comes from the school's server:
+On days with a special schedule (early release, Link Crew, assemblies, …) the app replaces the regular weekday schedule with the one returned by the school's server and shows a dismissable "A special schedule is in effect today" banner.
 
 ```
 GET https://studycs.org/westview/special_schedule2/{month}/{day}
 ```
 
-- `HTTP 200` with a plain-text path containing `.json` → the app downloads
-  `https://studycs.org/{path}` and parses it (a JSON list of
-  `{hour, minute, duration, title, isPM}` entries).
-- `HTTP 200` with an empty body (or any response without `.json`) → no special
-  schedule that day, and the regular schedule is shown.
+- `HTTP 200` with a plain-text body containing `.json` → the app downloads `https://studycs.org/<path>` and parses it as a JSON list of `{hour, minute, duration, title, isPM}` entries.
+- `HTTP 200` with an empty body (or any body without `.json`) → no special schedule that day; the regular schedule is shown.
 
 ### Caching
 
-Every answer (schedule or "none") is cached on the device for **at least 2
-days** (3 days, to be safe), so the server is never asked more than once per
-date within that window. If the server cannot be reached, the last known
-answer — even a stale one — is still used, and a dismissable banner warns
-that "today's schedule may not be accurate". The cache also survives app
-restarts.
+Every answer (schedule or "none") is cached on device for **at least 2 days** (3 to leave headroom). The server is never asked more than once per date inside that window, so the app doesn't contribute to load spikes. If the server cannot be reached the last known answer — even a stale one — is still used, and a banner warns that "today's schedule may not be accurate". The cache survives app restarts via SharedPreferences.
 
 ### Backup sources
 
-If the primary server is down, the app tries each URL in the
-`fallbackUrls` list in `lib/special_schedule.dart` (empty by default). To add
-a backup, put the same JSON in a public Google Drive file (or any static
-host) and add its direct-download URL there, e.g.:
+If the primary server is down, the app tries each URL in `fallbackUrls` (empty by default). A backup URL can point at a static host (e.g. a public Google Drive direct-download link) and may use `{month}`/`{day}` placeholders.
 
 ```dart
-fallbackUrls.add('https://drive.google.com/uc?export=download&id=YOUR_PUBLIC_FILE_ID');
+fallbackUrls.add(
+  'https://drive.google.com/uc?export=download&id=YOUR_PUBLIC_FILE_ID',
+);
 ```
 
-URLs may use `{month}` and `{day}` placeholders for per-date hosts.
+## Home-screen widget (Android)
 
+Add the widget by long-pressing the home screen → Widgets → Westview HS → drag "Current Period" onto the home screen.
 
-## Home Screen Widget (Android)
+- The widget shows the current period and a Chronometer that counts down every second in the launcher process, so no wakeups are needed just to tick the timer.
+- Precise `AlarmManager` wakeups are scheduled for each period transition, plus boot/time/timezone/date change broadcasts, so the widget stays correct even when the app hasn't been opened in a while.
+- The Flutter app pushes schedules (including any special schedule and custom class/teacher/room names) via the `home_widget` plugin. Until the app runs once, built-in defaults (matching `lib/data.dart`) are used.
 
-The app ships a "Current Period" home screen widget (Android only):
+## Settings
 
-- Shows the current period (e.g. "Period 2") and a live countdown of how much
-  time is left, ticking every second via a native `Chronometer`.
-- Before school it counts down to the first period; after school and on
-  weekends it shows "School's out" / "No school today".
-- The Flutter app syncs the schedules (see `lib/widget_sync.dart`) into
-  SharedPreferences via the [`home_widget`](https://pub.dev/packages/home_widget)
-  plugin, and re-syncs whenever the current period changes while the app runs.
-- Native code (`ScheduleWidgetProvider.kt`, `ScheduleWidgetRenderer.kt`,
-  `ScheduleWidgetAlarmReceiver.kt`) renders the widget and schedules precise
-  `AlarmManager` wakeups for each period transition, plus re-renders on boot
-  and on time/date/time-zone changes — so the widget stays correct even when
-  the app hasn't been opened in a while.
+A settings button in the bottom-right of the home screen opens:
 
-To add the widget: long-press the home screen → Widgets → Westview HS →
-drag "Current Period" onto the home screen.
+- **Notifications** — master switch; when off the app posts no notifications at all.
+- **Live activity** — ongoing countdown notification (only runs while notifications are enabled).
+- **Show teacher / Show room number** — whether teacher/room show up in the schedule list, notification, and widget.
+- **My classes** — rename any period and enter teacher / room number.
 
+All settings are persisted immediately and applied across the schedule, notification, and widget.
 
+## Lock-screen notifications
 
-Used flutter in case we want to make this multiplatform later, but right now, I believe only android works.
+The live countdown notification is posted as an ongoing status notification on a channel with `VISIBILITY_PUBLIC` and `IMPORTANCE_DEFAULT` (silent, but visible on secure lock screens). Tapping it opens the app. On Android 13+ the app will ask for `POST_NOTIFICATIONS` on first launch (only when live activities are enabled, which is the default).
 
-## Settings (Android)
+## Building
 
-A settings button sits in the bottom right corner of the home page. It opens a
-settings page with:
+### Local (release APK, sideload)
 
-- **Notifications** – master switch for every notification the app posts.
-- **Live activity** – the ongoing notification with the countdown timer to the
-  end of the current period. It only runs while notifications are on.
-- **Show teacher / Show room number** – whether the teacher and room number
-  are displayed.
-- **My classes** – rename any period (e.g. "Human Body Systems" instead of
-  "Period 1") and enter the teacher and room number for it.
+```sh
+flutter pub get
+flutter build apk --release
+```
 
-Custom names, teachers and room numbers appear in the schedule list, in the
-live activity notification with the countdown timer, and on the home screen
-widget. Settings are saved on the device and applied immediately.
+Output: `build/app/outputs/flutter-apk/app-release.apk` (signed with the debug keystore — fine for sideloading).
 
-## Building the APK with GitHub Actions
+### Google Play
 
-This repo includes a GitHub Actions workflow (`.github/workflows/build-apk.yml`) that
-builds a release Android APK automatically:
+Configure a real signing keystore per the [Flutter signing guide](https://docs.flutter.dev/deployment/android#signing-the-app), then generate `android/key.properties` and point `release.signingConfig` at it.
 
-- On every push to `main` and on every pull request to `main`, the workflow builds
-  the APK and uploads it as a downloadable **build artifact** (kept for 30 days).
-- When you push a tag named `vX.Y.Z` (e.g. `v1.0.0`), the workflow creates a GitHub
-  **Release** and attaches the APK.
-- You can also trigger a build manually from **Actions → Build Android APK → Run workflow**.
+### GitHub Actions
 
-### Downloading the APK
-1. Open the **Actions** tab and pick a successful run.
-2. Scroll to **Artifacts** and download `app-release-<run-number>`.
-3. Install it on an Android device (you may need to allow "Install from unknown sources").
+`.github/workflows/build-apk.yml` builds a release APK on every push to `main` and every pull request targeting `main`, and uploads it as a downloadable workflow artifact (kept for 30 days). Pushing a tag `vX.Y.Z` additionally creates a GitHub Release with the APK attached. The workflow also accepts `workflow_dispatch` for manual runs. `versionCode` is set to the GitHub Actions run number so builds are monotonically increasing.
 
-### Versioning
-Each CI build sets `versionCode` to the GitHub run number so every APK is
-monotonically increasing, which is required before publishing anywhere.
+## Architecture notes
 
-### Signing for Google Play (optional)
-The CI build signs the APK with Flutter's auto-generated debug key. That is fine for
-direct distribution/sideloading, but not for the Play Store. To sign releases with your
-own keystore, follow the official Flutter guide
-(https://docs.flutter.dev/deployment/android#signing-the-app), then in CI store the
-keystore as a base64 secret and generate `android/key.properties` from it.
+- **State** — `AppSettings` and `SpecialScheduleService` are singletons extending `ChangeNotifier`; pages consume them via `ListenableBuilder` and add/remove listeners in `initState`/`dispose`.
+- **Timer** — a single 1-second `Timer.periodic` in `SchedulePage` drives the countdown, widget sync, and midnight-rollover detection; all other state updates are event-driven.
+- **Network** — HTTP calls go through a `http.Client` injected into `SpecialScheduleService` (for testability) with a 10-second timeout; failures never crash the UI.
+- **PiP** — Vimeo playback is detected via a JS bridge injected into the WebView (`vimeo_pip.dart`) that talks to Vimeo's postMessage player API. When the app backgrounds mid-playback the Flutter shell hides its chrome so the player can fill the activity surface before Android captures it for picture-in-picture.
+- **Package name** — Android application ID / namespace is `com.westviewhs.app`.
+
+## Tests
+
+```sh
+flutter test
+```
+
+Tests cover schedule time math, settings persistence, the special-schedule parser and caching behavior (using `MockClient`), and Vimeo URL detection.
+

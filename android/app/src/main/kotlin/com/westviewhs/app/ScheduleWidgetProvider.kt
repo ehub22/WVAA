@@ -1,4 +1,4 @@
-package com.example.westview_app
+package com.westviewhs.app
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -10,8 +10,8 @@ import es.antonborri.home_widget.HomeWidgetProvider
  *
  * Extends [HomeWidgetProvider] so data saved from Flutter via
  * `HomeWidget.saveWidgetData(...)` is available in `widgetData` (the
- * schedule is also read directly through `HomeWidgetPlugin.getData`
- * in [ScheduleWidgetRenderer] so the alarm receiver can access it too).
+ * schedule is also read directly through `HomeWidgetPlugin.getData` in
+ * [ScheduleWidgetRenderer] so the alarm receiver can access it too).
  */
 class ScheduleWidgetProvider : HomeWidgetProvider() {
 
@@ -21,6 +21,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
+        ScheduleWidgetRenderer.renderAll(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        // First widget placed — start scheduling transitions so the countdown
+        // stays in sync even without the app being opened.
+        ScheduleNotificationManager.ensureChannel(context)
         ScheduleWidgetRenderer.renderAll(context)
     }
 

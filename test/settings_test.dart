@@ -11,11 +11,8 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    await settings.resetPeriods();
-    await settings.setNotificationsEnabled(true);
-    await settings.setLiveActivityEnabled(true);
-    await settings.setShowTeacher(true);
-    await settings.setShowRoom(true);
+    settings.resetForTesting();
+    await settings.load();
   });
 
   test('only actual classes can be renamed', () {
