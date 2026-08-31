@@ -13,49 +13,26 @@ A companion app for Westview High School (Poway Unified School District), built 
 - **Calendars** — School and Athletics Google Calendars, plus the daily school lunch menu with nutrition-fact details.
 - **Newsletters** — Weekly newsletter, counseling newsletters, and DEN announcements, each in an embedded WebView.
 - **Publications** — Westview Nexus (student newspaper) and Westview Newscast (Vimeo). Vimeo videos automatically enter Android picture-in-picture when you leave the app mid-playback.
-- **Theming** — Material 3 light and dark themes that follow the system setting, built from the school's gold/brass palette with WCAG-AA-checked contrast pairs.
-- **Works on bad Wi-Fi** — Calendars, lunch menus and special schedules cache their last-known content on disk and keep showing it (with a "saved copy" notice) whenever the school network is down. Newsletter/publication WebViews keep their loaded pages and never blank out mid-session.
-- **Refresh everywhere** — Pull-to-refresh on calendars and lunch menus; a refresh button on newsletters and publications; retry buttons on every error screen.
-- **Accessibility** — Screen-reader labels on tabs, icons and interactive rows; 48dp minimum tap targets; full support for system font scaling (no clipped text).
-- **Privacy-first telemetry** — Anonymous crash reports and usage counts, disclosed up front, with per-stream opt-out. See [Privacy](#privacy) below.
-
-## Material 3, Android-first
-
-Android is the only actively supported target, so the UI is plain Material 3 throughout — `NavigationBar`, `SegmentedButton`, Material switches, bottom sheets — instead of cross-platform adaptive widgets. The one deliberate exception is the Publications WebView, which keeps a small platform branch for iOS inline-video playback so the project keeps compiling there.
-
-## Privacy
-
-The app collects two things, both anonymous, and nothing else:
-
-- **Anonymous usage statistics** — counts of which screens are opened and whether refreshes succeeded.
-- **Crash reports** — the error text and a truncated stack trace, when something breaks.
-
-It never collects names, student IDs, accounts, contacts, location, or advertising/device identifiers, and it uses no third-party analytics or crash SDKs. Reports go only to the school's own server (`studycs.org`, the same host as the special-schedule data). A first-run dialog discloses all of this, both streams can be turned off at any time in **Settings ▸ Privacy & data**, and disabling a stream drops its queued reports instead of sending them. Cached content (calendars, menus, nutrition data) stays on the device and can be wiped from **Settings ▸ Saved content**.
+- **Theming** — Light and dark modes follow the system setting, using the school's gold/brass palette.
 
 ## Project layout
 
 ```
 lib/
-  main.dart              App entry point, Material 3 navigation shell, crash
-                         reporting bootstrap, first-run privacy dialog
+  main.dart              App entry point and bottom-navigation shell
   data.dart              Bell schedules (Mon/Fri, Tue/Thu, Wed)
   schedule_page.dart     Home/Schedule tab, live countdown, settings FAB
   special_schedule.dart  Special-schedule fetch + multi-day cache
-  settings.dart          Persisted user settings incl. telemetry consent
-  settings_page.dart     Settings UI (notifications, privacy, classes)
-  telemetry.dart         Anonymous crash reporting + analytics (opt-out)
-  network_cache.dart     Last-known-good disk cache for network content
+  settings.dart          Persisted user settings (ChangeNotifier)
+  settings_page.dart     Settings UI
   widget_sync.dart       Pushes schedules/settings to the Android widget
   calendars.dart         Calendar tabs (School, Athletics, Lunches)
-  school_lunch.dart      Lunch menu + nutrition facts (cache-first)
+  school_lunch.dart      Lunch menu + nutrition facts
   newsletter_page.dart   Newsletter tabs
   publications.dart      Publications tabs + Vimeo PiP handling
   vimeo_pip.dart         Vimeo player <-> PiP bridge (injected JS)
-  web_page.dart          Shared WebView wrapper (loading/error/retry states)
-  theme/                 App color tokens + light/dark Material 3 ThemeData
-  widgets/
-    section_selector.dart  Material 3 pill tabs + lazy keep-alive stack
-    status_views.dart      Shared loading / empty / error / saved-copy states
+  web_page.dart          Shared WebView wrapper used by newsletters
+  theme/                 App color tokens + light/dark ThemeData
 
 android/app/src/main/kotlin/com/westviewhs/app/
   MainActivity.kt                    Flutter activity, PiP callbacks, channel init

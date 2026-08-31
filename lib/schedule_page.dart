@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:live_activities/live_activities.dart';
@@ -9,7 +10,6 @@ import 'data.dart';
 import 'settings.dart';
 import 'settings_page.dart';
 import 'special_schedule.dart';
-import 'telemetry.dart';
 import 'widget_sync.dart';
 
 class SchedulePage extends StatefulWidget {
@@ -92,8 +92,6 @@ class _SchedulePageState extends State<SchedulePage>
     if (service.lastFetchFailed && !_specialScheduleFetchFailed) {
       // A fresh failure: re-show the "may not be accurate" banner.
       _fetchFailedBannerDismissed = false;
-      Telemetry.instance
-          .logEvent('special_schedule_fetch_failed', {'stale': special != null});
     }
     _specialScheduleFetchFailed = service.lastFetchFailed;
 
@@ -252,8 +250,6 @@ class _SchedulePageState extends State<SchedulePage>
   @override
   Widget build(BuildContext context) {
     final currentPeriodEndTime = _getCurrentPeriodEndTime();
-    final currentPeriodName = _getCurrentPeriodName();
-    final scheme = Theme.of(context).colorScheme;
 
     return ListenableBuilder(
       listenable: _settings,
@@ -261,13 +257,6 @@ class _SchedulePageState extends State<SchedulePage>
         return SafeArea(
           child: Column(
             children: [
-              // Thin progress line while today's special schedule is being
-              // checked against the server.
-              if (SpecialScheduleService.instance.isRefreshing)
-                const LinearProgressIndicator(
-                  minHeight: 2,
-                  semanticsLabel: 'Checking for schedule updates',
-                ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsetsDirectional.fromSTEB(10, 0, 10, 0),
@@ -285,8 +274,10 @@ class _SchedulePageState extends State<SchedulePage>
                               message:
                                   "Couldn't reach the special-schedule server, "
                                   "so today's schedule may not be accurate.",
-                              background: scheme.errorContainer,
-                              foreground: scheme.onErrorContainer,
+                              background:
+                                  Theme.of(context).colorScheme.error,
+                              foreground:
+                                  Theme.of(context).colorScheme.onError,
                               onDismiss: () => setState(
                                   () => _fetchFailedBannerDismissed = true),
                             ),
@@ -296,102 +287,62 @@ class _SchedulePageState extends State<SchedulePage>
                               icon: Icons.event_note,
                               message:
                                   'A special schedule is in effect today.',
-                              background: scheme.primaryContainer,
-                              foreground: scheme.onPrimaryContainer,
+                              background: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
+                              foreground: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
                               onDismiss: () => setState(
                                   () => _specialScheduleBannerDismissed = true),
                             ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 8),
-                            child: SegmentedButton<int>(
-                              // The segments show whole-day schedules, not a
-                              // transient choice, so the checkmark is noise.
-                              showSelectedIcon: false,
-                              segments: const [
-                                ButtonSegment(
-                                    value: 0, label: Text('Mon/Fri')),
-                                ButtonSegment(
-                                    value: 1, label: Text('Tue/Thu')),
-                                ButtonSegment(value: 2, label: Text('Wed')),
-                              ],
-                              selected: {selectedDayScheduleIndex},
-                              onSelectionChanged: (selection) {
-                                final index = selection.first;
-                                setState(() {
-                                  selectedDayScheduleIndex = index;
-                                  selectedDaySchedule =
-                                      index == getCurrentDayOfWeek()
-                                          ? _todaySchedule
-                                          : [
-                                              monFriSchedule,
-                                              tueThursSchedule,
-                                              wedSchedule,
-                                            ][index];
-                                });
-                              },
-                            ),
+                          AdaptiveSegmentedControl(
+                            labels: const ['Mon/Fri', 'Tue/Thu', 'Wed'],
+                            selectedIndex: selectedDayScheduleIndex,
+                            onValueChanged: (index) {
+                              selectedDayScheduleIndex = index;
+                              selectedDaySchedule =
+                                  index == getCurrentDayOfWeek()
+                                      ? _todaySchedule
+                                      : [
+                                          monFriSchedule,
+                                          tueThursSchedule,
+                                          wedSchedule,
+                                        ][index];
+                              if (mounted) setState(() {});
+                            },
                           ),
                           Card(
-                            color: scheme.primaryContainer,
+                            color: Theme.of(context).cardColor,
                             child: Padding(
                               padding: const EdgeInsets.only(
                                   top: 16, left: 8, right: 8, bottom: 8),
                               child: Center(
                                 child: currentPeriodEndTime != null
-                                    ? Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            _settings.displayName(
-                                                currentPeriodName ?? ''),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  color: scheme
-                                                      .onPrimaryContainer,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          // The ticking digits are excluded
-                                          // from the semantic tree (they would
-                                          // re-announce every second); the
-                                          // period name above carries the
-                                          // meaning for screen readers.
-                                          ExcludeSemantics(
-                                            child: TimerCountdown(
-                                              format: CountDownTimerFormat
-                                                  .hoursMinutesSeconds,
-                                              endTime: currentPeriodEndTime,
-                                              timeTextStyle: TextStyle(
-                                                fontSize: 20,
-                                                color: scheme
-                                                    .onPrimaryContainer,
-                                              ),
-                                              onEnd: () {
-                                                // Roll straight into the next
-                                                // period's countdown without a
-                                                // visible pause.
-                                                if (mounted) {
-                                                  _updateLiveActivity();
-                                                  setState(() {});
-                                                }
-                                              },
-                                            ),
-                                          ),
-                                        ],
+                                    ? TimerCountdown(
+                                        format: CountDownTimerFormat
+                                            .hoursMinutesSeconds,
+                                        endTime: currentPeriodEndTime,
+                                        timeTextStyle:
+                                            const TextStyle(fontSize: 20),
+                                        onEnd: () {
+                                          // Roll straight into the next
+                                          // period's countdown without a
+                                          // visible pause.
+                                          if (mounted) {
+                                            _updateLiveActivity();
+                                            setState(() {});
+                                          }
+                                        },
                                       )
                                     : Text(
                                         'No active period',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color:
-                                                  scheme.onSurfaceVariant,
-                                            ),
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline,
+                                        ),
                                       ),
                               ),
                             ),
@@ -410,9 +361,7 @@ class _SchedulePageState extends State<SchedulePage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Standard-size FAB (56dp) for a comfortable touch target;
-                    // the tooltip doubles as the screen-reader label.
-                    FloatingActionButton(
+                    FloatingActionButton.small(
                       heroTag: 'home_settings_button',
                       tooltip: 'Settings',
                       onPressed: _openSettings,
@@ -429,7 +378,6 @@ class _SchedulePageState extends State<SchedulePage>
   }
 
   Widget _buildPeriodCard(BuildContext context, dynamic period) {
-    final scheme = Theme.of(context).colorScheme;
     final canonicalName = period['Period'] as String;
     final displayName = _settings.displayName(canonicalName);
     final details = _settings.detailsFor(canonicalName);
@@ -437,55 +385,54 @@ class _SchedulePageState extends State<SchedulePage>
             period['startTime'], period['endTime']) &&
         identical(selectedDaySchedule, _todaySchedule);
 
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: isNow ? scheme.onPrimaryContainer : scheme.onSurface,
-          fontWeight: FontWeight.w600,
-        );
-    final detailStyle =
-        Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: isNow ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-            );
-    final timeStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: isNow ? scheme.onPrimaryContainer : scheme.onSurface,
-        );
+    final highlightStyle =
+        isNow ? Theme.of(context).appBarTheme.titleTextStyle : null;
+    final detailStyle = (highlightStyle ??
+            Theme.of(context).textTheme.bodyMedium ??
+            const TextStyle())
+        .copyWith(
+      fontSize: 12,
+      color: isNow
+          ? Theme.of(context).appBarTheme.titleTextStyle?.color
+          : Theme.of(context).colorScheme.outline,
+    );
 
     return Card(
       elevation: isNow ? 5 : 0,
-      color: isNow ? scheme.primaryContainer : scheme.surfaceContainerLow,
-      child: Semantics(
-        container: true,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(displayName, style: titleStyle),
-                    if (details.isNotEmpty)
-                      Text(details, style: detailStyle),
-                  ],
-                ),
+      color: isNow
+          ? Theme.of(context).appBarTheme.backgroundColor
+          : Theme.of(context).cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(displayName, style: highlightStyle),
+                  if (details.isNotEmpty)
+                    Text(details, style: detailStyle),
+                ],
               ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  (period['startTime'] as TimeOfDay).format(context),
-                  style: timeStyle,
-                ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                (period['startTime'] as TimeOfDay).format(context),
+                style: highlightStyle,
               ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  (period['endTime'] as TimeOfDay).format(context),
-                  style: timeStyle,
-                ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                (period['endTime'] as TimeOfDay).format(context),
+                style: highlightStyle,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -583,11 +530,10 @@ class _ScheduleNotice extends StatelessWidget {
               ),
             ),
           ),
-          // Full 48dp tap target; only the glyph is small.
           IconButton(
             tooltip: 'Dismiss',
-            iconSize: 18,
-            icon: Icon(Icons.close, color: foreground),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, size: 18, color: foreground),
             onPressed: onDismiss,
           ),
         ],

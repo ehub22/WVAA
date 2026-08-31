@@ -1,13 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-
-import 'network_cache.dart';
-import 'telemetry.dart';
-import 'widgets/status_views.dart';
 
 class DailyLunch {
   const DailyLunch({
@@ -29,20 +24,15 @@ class DailyLunch {
   final List<String> milk;
 }
 
-/// The monthly school lunch menu.
-///
-/// Like the calendars, this view is cache-first: the last successful menu (and
-/// its nutrition-recipe data) is saved on disk and shown whenever the
-/// healthepro API cannot be reached, so the menu still opens on unreliable
-/// school Wi-Fi. Pull down to force a refresh.
 class SchoolLunchView extends StatefulWidget {
   const SchoolLunchView({super.key});
 
   @override
-  State<SchoolLunchView> createState() => SchoolLunchViewState();
+  State<SchoolLunchView> createState() => _SchoolLunchViewState();
 }
 
-class SchoolLunchViewState extends State<SchoolLunchView> {
+class _SchoolLunchViewState extends State<SchoolLunchView> {
+  late Future<List<DailyLunch>> _lunchFuture;
   final ItemScrollController _scrollController = ItemScrollController();
   final Map<String, dynamic> _recipes = {};
 
@@ -50,186 +40,87 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   static const String _apiMenu = '135312';
   static const String _apiRecipes = '111591';
   static const String _apiBase = 'https://menus.healthepro.com/api/organizations';
-  static const String _menuCacheKey = 'lunch_menu_current_month';
-  static const String _recipesCacheKey = 'lunch_recipes_current_month';
-  static const Duration _cacheMaxAge = Duration(hours: 12);
-  static const Duration _requestTimeout = Duration(seconds: 10);
-
-  List<DailyLunch>? _lunches;
-  DateTime? _cachedAt;
-  bool _loading = false;
-  bool _showingSavedCopy = false;
-  String? _error;
-  bool _needsScrollToToday = true;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _lunchFuture = _fetchLunches();
+    _lunchFuture.then((lunches) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToToday(lunches);
+      });
+    });
   }
 
-  Future<void> _load({bool force = false}) async {
-    if (_loading) return;
+  void _scrollToToday(List<DailyLunch> lunches) {
+    final now = DateTime.now();
+    final target = lunches.indexWhere((l) =>
+        (l.date.year == now.year &&
+            l.date.month == now.month &&
+            l.date.day == now.day) ||
+        l.date.isAfter(now));
+    if (target != -1 && _scrollController.isAttached) {
+      _scrollController.jumpTo(index: target);
+    }
+  }
+
+  void _retry() {
     setState(() {
-      _loading = true;
-      _error = null;
+      _recipes.clear();
+      _lunchFuture = _fetchLunches();
     });
-
-    // Serve the cached month immediately, if present and parseable.
-    CachedResponse? menuCache;
-    try {
-      menuCache = await NetworkCache.instance.read(_menuCacheKey);
-      if (_lunches == null && menuCache != null) {
-        final cached = _parseLunchData(menuCache.body);
-        if (cached.isNotEmpty) {
-          _lunches = cached;
-          _cachedAt = menuCache.cachedAt;
-          final recipesCache =
-              await NetworkCache.instance.read(_recipesCacheKey);
-          if (recipesCache != null) {
-            _parseRecipesInto(recipesCache.body, _recipes);
-          }
-        }
-      }
-    } catch (error) {
-      // Corrupt cache entry: ignore it and go to the network.
-      debugPrint('Lunch cache unusable: $error');
-    }
-
-    if (!force &&
-        menuCache != null &&
-        menuCache.isFreshWithin(_cacheMaxAge, DateTime.now()) &&
-        (_lunches?.isNotEmpty ?? false)) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      _scrollToTodayIfNeeded();
-      return;
-    }
-
-    try {
-      final now = DateTime.now();
-      final recipesBody = await _fetchRecipes(now);
-      final menuBody = await _fetchMenu(now);
-
-      // Parse into fresh maps first so a parse error can't leave the view
-      // half-updated.
-      final recipes = <String, dynamic>{};
-      _parseRecipesInto(recipesBody, recipes);
-      final lunches = _parseLunchData(menuBody);
-
-      await NetworkCache.instance.write(_recipesCacheKey, recipesBody);
-      await NetworkCache.instance.write(_menuCacheKey, menuBody);
-      Telemetry.instance.logEvent('lunch_refresh');
-
-      if (!mounted) return;
-      setState(() {
-        _recipes
-          ..clear()
-          ..addAll(recipes);
-        _lunches = lunches;
-        _cachedAt = DateTime.now();
-        _loading = false;
-        _showingSavedCopy = false;
+    _lunchFuture.then((lunches) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToToday(lunches);
       });
-      _scrollToTodayIfNeeded();
-    } catch (error) {
-      debugPrint('Lunch fetch failed: $error');
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        if (_lunches != null && _lunches!.isNotEmpty) {
-          _showingSavedCopy = true;
-          Telemetry.instance.logEvent('lunch_cache_used');
-        } else {
-          _error = "Couldn't reach the menu server. "
-              'Check your connection and try again.';
-        }
-      });
-    }
-  }
-
-  void _scrollToTodayIfNeeded() {
-    if (!_needsScrollToToday) return;
-    final lunches = _lunches;
-    if (lunches == null || lunches.isEmpty) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_needsScrollToToday) return;
-      final now = DateTime.now();
-      final target = lunches.indexWhere((l) =>
-          (l.date.year == now.year &&
-              l.date.month == now.month &&
-              l.date.day == now.day) ||
-          l.date.isAfter(now));
-      if (target != -1 && _scrollController.isAttached) {
-        _scrollController.jumpTo(index: target);
-        _needsScrollToToday = false;
-      }
     });
   }
 
-  String _monthRecipesUrl(DateTime now) {
-    final start =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
-    final lastDay = DateTime(now.year, now.month + 1, 0).day;
+  Future<List<DailyLunch>> _fetchLunches() async {
+    final now = DateTime.now();
+    final year = now.year;
+    final month = now.month;
+
+    final start = '$year-${month.toString().padLeft(2, '0')}-01';
+    final lastDay = DateTime(year, month + 1, 0).day;
     final end =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${lastDay.toString().padLeft(2, '0')}';
-    return '$_apiBase/$_apiOrg/menus/$_apiRecipes/start_date/$start/end_date/$end/recipes/';
-  }
+        '$year-${month.toString().padLeft(2, '0')}-${lastDay.toString().padLeft(2, '0')}';
+    final recipesUrl =
+        '$_apiBase/$_apiOrg/menus/$_apiRecipes/start_date/$start/end_date/$end/recipes/';
 
-  Future<String> _fetchRecipes(DateTime now) async {
     // Recipes are best-effort nutrition info; don't fail the whole page if
     // that endpoint is flaky.
     try {
-      final response = await http
-          .get(Uri.parse(_monthRecipesUrl(now)))
-          .timeout(_requestTimeout);
-      if (response.statusCode == 200) return response.body;
+      final recipeResponse = await http
+          .get(Uri.parse(recipesUrl))
+          .timeout(const Duration(seconds: 10));
+      if (recipeResponse.statusCode == 200) {
+        final recipeData =
+            json.decode(recipeResponse.body) as Map<String, dynamic>;
+        final recipeList = (recipeData['data'] as List<dynamic>?) ?? const [];
+        for (final r in recipeList) {
+          if (r is Map<String, dynamic> && r['name'] != null) {
+            _recipes[r['name'] as String] = r;
+          }
+        }
+      }
     } catch (e) {
       debugPrint('Failed to fetch lunch recipes: $e');
     }
-    return '';
-  }
 
-  Future<String> _fetchMenu(DateTime now) async {
     final url =
-        '$_apiBase/$_apiOrg/menus/$_apiMenu/year/${now.year}/month/${now.month}/date_overwrites';
+        '$_apiBase/$_apiOrg/menus/$_apiMenu/year/$year/month/$month/date_overwrites';
+
     final response =
-        await http.get(Uri.parse(url)).timeout(_requestTimeout);
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception(
           'Failed to load lunch data (HTTP ${response.statusCode})');
     }
-    return response.body;
+    return _parseLunchData(response.body);
   }
 
-  /// Fills [recipes] with `name -> recipe` entries from an API response body.
-  @visibleForTesting
-  static void parseRecipes(String body, Map<String, dynamic> recipes) {
-    _parseRecipesInto(body, recipes);
-  }
-
-  static void _parseRecipesInto(String body, Map<String, dynamic> recipes) {
-    if (body.isEmpty) return;
-    try {
-      final data = json.decode(body) as Map<String, dynamic>;
-      final recipeList = (data['data'] as List<dynamic>?) ?? const [];
-      for (final r in recipeList) {
-        if (r is Map<String, dynamic> && r['name'] != null) {
-          recipes[r['name'] as String] = r;
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to parse lunch recipes: $e');
-    }
-  }
-
-  /// Parses the healthepro `date_overwrites` body into a sorted day list.
-  @visibleForTesting
-  static List<DailyLunch> parseLunchData(String jsonString) {
-    return _parseLunchData(jsonString);
-  }
-
-  static List<DailyLunch> _parseLunchData(String jsonString) {
+  List<DailyLunch> _parseLunchData(String jsonString) {
     final data = json.decode(jsonString) as Map<String, dynamic>;
     final days = (data['data'] as List<dynamic>?) ?? const [];
     final lunches = <DailyLunch>[];
@@ -305,10 +196,16 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
     final now = DateTime.now();
     if (_isSameDay(date, now)) return 'Today';
     if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
+
     const weekdays = [
       'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',    ];
-    return '${weekdays[date.weekday - 1]}, ${shortDateLabel(date)}';
+      'Friday', 'Saturday', 'Sunday',
+    ];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -321,11 +218,11 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   }
 
   void _showNutritionFacts(BuildContext context, String mealName) {
-    Telemetry.instance.logEvent('nutrition_facts_opened');
     final recipe = _recipes[mealName];
     if (recipe == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No nutrition facts available for $mealName')),
+        SnackBar(
+            content: Text('No nutrition facts available for $mealName')),
       );
       return;
     }
@@ -349,10 +246,9 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
           'Protein: ${_formatNutrient(nutrients['protein_grams'])}g\n\n';
     }
 
-    final scheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
+    showModalBottomSheet(
       context: context,
-      backgroundColor: scheme.surfaceContainerLow,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -374,42 +270,29 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: scheme.outlineVariant,
+                    color: Theme.of(context).dividerColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              Text(
-                mealName,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              Text(mealName,
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(
                 servingSizeText,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const Divider(height: 32),
-              Text(
-                'Nutrition Facts',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              const Text('Nutrition Facts',
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text(
-                nutritionText,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(height: 1.5),
-              ),
+              Text(nutritionText,
+                  style: const TextStyle(fontSize: 15, height: 1.5)),
               const SizedBox(height: 40),
             ],
           ),
@@ -421,65 +304,34 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   Widget _buildMenuSection(
       BuildContext context, String title, List<String> items) {
     if (items.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        Text(
-          title,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
+        Text(title,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 8),
         for (final item in items)
           Padding(
-            padding: const EdgeInsets.only(bottom: 2, left: 2),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _showNutritionFacts(context, item),
-                // Full 48dp row height for an easy tap, with a label that
-                // tells screen-reader users what tapping does.
-                child: Semantics(
-                  label: '$item — view nutrition facts',
-                  excludeSemantics: true,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              '• ',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: scheme.outline),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              item,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(color: scheme.primary),
-                            ),
-                          ),
-                        ],
+            padding: const EdgeInsets.only(bottom: 4, left: 2),
+            child: InkWell(
+              onTap: () => _showNutritionFacts(context, item),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('• ',
+                      style: TextStyle(color: Colors.grey, fontSize: 14)),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -489,123 +341,103 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final lunches = _lunches;
-    final hasContent = lunches != null && lunches.isNotEmpty;
-
-    Widget content;
-    if (hasContent) {
-      content = ScrollablePositionedList.builder(
-        itemScrollController: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: lunches.length,
-        itemBuilder: (context, index) =>
-            _buildLunchCard(context, lunches[index], scheme),
-      );
-    } else if (_error != null) {
-      content = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          const SizedBox(height: 80),
-          ErrorStatusView(
-            title: "Couldn't load the lunch menu",
-            message: _error!,
-            onRetry: () => _load(force: true),
-          ),
-        ],
-      );
-    } else if (_loading) {
-      content = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          LoadingStatusView(label: 'Loading the menu…'),
-        ],
-      );
-    } else {
-      content = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 80),
-          EmptyStatusView(
-            icon: Icons.restaurant_menu,
-            title: 'No lunch menu published',
-            message:
-                "This month's menu hasn't been published yet. Pull down to "
-                'refresh.',
-          ),
-        ],
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () => _load(force: true),
-      child: Column(
-        children: [
-          if (_showingSavedCopy && _cachedAt != null)
-            SavedCopyNotice(
-                label: 'Saved menu from ${shortDateLabel(_cachedAt!)}'),
-          Expanded(child: content),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLunchCard(
-      BuildContext context, DailyLunch lunch, ColorScheme scheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 20, bottom: 10),
-          child: Text(
-            _formatDate(lunch.date),
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: scheme.primary,
-                  letterSpacing: 1.2,
-                ),
-          ),
-        ),
-        Card(
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 8),
-          color: scheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: scheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: lunch.isDayOff
-                ? Row(
-                    children: [
-                      Icon(Icons.beach_access_outlined,
-                          size: 20, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          lunch.dayOffReason ?? 'No School',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildMenuSection(context, 'Lunch Entrees', lunch.entrees),
-                      _buildMenuSection(
-                          context, 'Vegetables', lunch.vegetables),
-                      _buildMenuSection(context, 'Fruit & Juice', lunch.fruit),
-                      _buildMenuSection(context, 'Milk Choice', lunch.milk),
-                    ],
+    return FutureBuilder<List<DailyLunch>>(
+      future: _lunchFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Couldn\'t load school lunches.',
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-          ),
-        ),
-      ],
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _retry,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final lunches = snapshot.data ?? const [];
+        if (lunches.isEmpty) {
+          return const Center(child: Text('No lunch data available.'));
+        }
+
+        return ScrollablePositionedList.builder(
+          itemScrollController: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: lunches.length,
+          itemBuilder: (context, index) {
+            final lunch = lunches[index];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 10),
+                  child: Text(
+                    _formatDate(lunch.date),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Theme.of(context).cardColor,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: lunch.isDayOff
+                        ? Row(
+                            children: [
+                              Text(
+                                lunch.dayOffReason ?? 'No School',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Color.fromARGB(255, 158, 146, 105),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildMenuSection(
+                                  context, 'Lunch Entrees', lunch.entrees),
+                              _buildMenuSection(
+                                  context, 'Vegetables', lunch.vegetables),
+                              _buildMenuSection(
+                                  context, 'Fruit & Juice', lunch.fruit),
+                              _buildMenuSection(
+                                  context, 'Milk Choice', lunch.milk),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
