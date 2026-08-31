@@ -72,6 +72,31 @@ jobs:
       - name: Show Flutter version
         run: flutter --version
 
+             # Configure Gradle caching. We keep the fast part of the Gradle cache
+      # (downloaded dependencies, wrapper distributions, transforms, compiled
+      # build scripts) but we deliberately do NOT cache the local build cache.
+      #
+      # `gradle/actions/setup-gradle@v4` restores `caches/build-cache-1` from a
+      # previous run when the exact commit key is not found. Flutter's Gradle
+      # integration can then reuse a prior run's compiled artifacts and emit an
+      # APK that is byte-for-byte identical to the old one even when the Dart or
+      # Kotlin source changed. Excluding the build cache here (plus disabling it
+      # in android/gradle.properties) prevents that stale-output reuse while
+      # still saving time on dependency downloads.
+      - name: Set up Gradle cache (dependencies only)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-excludes: |
+            caches/build-cache-1
+            caches/keyrings
+
+      # Remove build outputs and Flutter/Dart intermediates before building so a
+      # CI run never ships a leftover APK from a previous checkout. This does not
+      # clear the Gradle dependency cache set up above.
+      - name: Clean stale build outputs
+        run: flutter clean
+
+
       - name: Get Flutter dependencies
         run: flutter pub get
 
