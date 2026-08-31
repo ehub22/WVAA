@@ -146,11 +146,6 @@ class SpecialScheduleService extends ChangeNotifier {
   bool _lastFetchFailed = false;
   bool get lastFetchFailed => _lastFetchFailed;
 
-  /// Whether a network refresh is currently in flight. The schedule page
-  /// shows a thin progress line while this is true.
-  bool _isRefreshing = false;
-  bool get isRefreshing => _isRefreshing;
-
   /// Today's special schedule when the cache has one — including a stale one,
   /// which is still better than the regular schedule while the server is
   /// down. Returns null when the server confirmed there is none, or when
@@ -210,8 +205,6 @@ class SpecialScheduleService extends ChangeNotifier {
       return;
     }
 
-    _isRefreshing = true;
-    notifyListeners();
     try {
       final fetched = await _fetchForDay(now);
       _cache[key] = fetched;
@@ -222,8 +215,6 @@ class SpecialScheduleService extends ChangeNotifier {
       // Unreachable: keep whatever we had (even stale) and warn the UI.
       debugPrint('Special schedule fetch failed: $error');
       _lastFetchFailed = true;
-    } finally {
-      _isRefreshing = false;
     }
     notifyListeners();
   }
@@ -236,7 +227,6 @@ class SpecialScheduleService extends ChangeNotifier {
     _inFlight = null;
     _cache.clear();
     _lastFetchFailed = false;
-    _isRefreshing = false;
   }
 
   // ----------------------------------------------------------------- network

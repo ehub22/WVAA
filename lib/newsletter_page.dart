@@ -1,15 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'telemetry.dart';
 import 'web_page.dart';
-import 'widgets/section_selector.dart';
 
-/// The newsletters tab: weekly newsletter, counseling newsletters and DEN
-/// announcements, each in an embedded WebView.
-///
-/// Each newsletter keeps its own WebView alive (lazy IndexedStack) so content
-/// loaded once stays on screen when switching sections — and keeps rendering
-/// even when the network drops mid-session.
 class NewsletterPage extends StatefulWidget {
   const NewsletterPage({super.key});
 
@@ -19,8 +11,9 @@ class NewsletterPage extends StatefulWidget {
 
 class _NewsletterPageState extends State<NewsletterPage> {
   int selectedIndex = 0;
+  late final PageController _carouselController;
 
-  static const List<_Newsletter> _newsletters = [
+  final List<_Newsletter> _newsletters = const [
     _Newsletter(
       'Weekly Newsletter',
       'https://www.canva.com/design/DAHAfg0kzy4/j0rtuhnsLlGu4XMtz5mqRA/view'
@@ -37,22 +30,24 @@ class _NewsletterPageState extends State<NewsletterPage> {
     ),
   ];
 
-  /// One key per newsletter so the header refresh button can reach the
-  /// currently visible WebView.
-  final List<GlobalKey<WebPageViewState>> _webKeys = [
-    for (var i = 0; i < _newsletters.length; i++) GlobalKey<WebPageViewState>(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() => selectedIndex = index);
-    Telemetry.instance
-        .logEvent('view_section', {'screen': 'newsletters', 'section': _newsletters[index].title});
+  @override
+  void initState() {
+    super.initState();
+    _carouselController = PageController(viewportFraction: 0.7);
   }
 
-  void _refreshCurrent() {
-    Telemetry.instance.logEvent('newsletter_refresh',
-        {'section': _newsletters[selectedIndex].title});
-    _webKeys[selectedIndex].currentState?.reload();
+  @override
+  void dispose() {
+    _carouselController.dispose();
+    super.dispose();
+  }
+
+  void _onItemTapped(int index) {
+    _carouselController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   @override
@@ -60,36 +55,61 @@ class _NewsletterPageState extends State<NewsletterPage> {
     return SafeArea(
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: SectionSelector(
-                  labels: [for (final n in _newsletters) n.title],
-                  selectedIndex: selectedIndex,
-                  onSelected: _onItemTapped,
-                ),
-              ),
-              // WebViews don't participate in Flutter's pull-to-refresh, so
-              // this tab (and Publications) gets an explicit refresh button.
-              // The tooltip doubles as the screen-reader label.
-              IconButton.filledTonal(
-                tooltip: 'Refresh page',
-                onPressed: _refreshCurrent,
-                icon: const Icon(Icons.refresh),
-              ),
-              const SizedBox(width: 8),
-            ],
+          SizedBox(
+            height: 90,
+            child: PageView.builder(
+              controller: _carouselController,
+              itemCount: _newsletters.length,
+              onPageChanged: (index) => setState(() => selectedIndex = index),
+              itemBuilder: (context, index) {
+                final isSelected = selectedIndex == index;
+                return GestureDetector(
+                  onTap: () => _onItemTapped(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Theme.of(context).appBarTheme.backgroundColor
+                          : Theme.of(context).appBarTheme.foregroundColor,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.transparent
+                            : Colors.grey.withOpacity(0.3),
+                        width: 2,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : const [],
+                    ),
+                    child: Center(
+                      child: Text(
+                        _newsletters[index].title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontSize: isSelected ? 16 : 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
           const Divider(height: 1),
           Expanded(
-            child: LazyIndexedStack(
-              index: selectedIndex,
-              itemCount: _newsletters.length,
-              itemBuilder: (context, index) => WebPageView(
-                key: _webKeys[index],
-                url: _newsletters[index].url,
-              ),
-            ),
+            child: WebPageView(url: _newsletters[selectedIndex].url),
           ),
         ],
       ),
