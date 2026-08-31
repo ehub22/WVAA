@@ -118,15 +118,15 @@ class _HomePageState extends State<_HomePage> {
         return AdaptiveScaffold(
           tabBarHidden: isPipActive,
           bottomNavigationBar: isPipActive ? null : _buildBottomNavigationBar(),
-          body: ColoredBox(
-            color: Colors.black,
-            child: IndexedStack(
-              // During PiP the app must always surface the Publications tab
-              // (which owns the Vimeo WebView), no matter which tab the user
-              // last selected.
-              index: isPipActive ? _publicationsIndex : _selectedIndex,
-              children: _pages,
-            ),
+          // No hard-coded body color: the scaffold's themed background
+          // (light/dark) must show through behind the tabs. The Publications
+          // tab paints its own black scaffold because it hosts the video.
+          body: IndexedStack(
+            // During PiP the app must always surface the Publications tab
+            // (which owns the Vimeo WebView), no matter which tab the user
+            // last selected.
+            index: isPipActive ? _publicationsIndex : _selectedIndex,
+            children: _pages,
           ),
         );
       },

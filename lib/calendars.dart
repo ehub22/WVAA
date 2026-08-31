@@ -412,13 +412,13 @@ class _CalendarsPageState extends State<CalendarsPage> {
                         horizontal: 10, vertical: 12),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Theme.of(context).appBarTheme.backgroundColor
-                          : Theme.of(context).appBarTheme.foregroundColor,
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
                             ? Colors.transparent
-                            : Colors.grey.withOpacity(0.3),
+                            : Theme.of(context).colorScheme.outlineVariant,
                         width: 2,
                       ),
                       boxShadow: isSelected
@@ -438,7 +438,9 @@ class _CalendarsPageState extends State<CalendarsPage> {
                         _calendars[index].title,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black87,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurface,
                           fontSize: isSelected ? 16 : 14,
                         ),
                       ),
