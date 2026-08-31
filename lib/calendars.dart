@@ -1,10 +1,15 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import 'network_cache.dart';
 import 'school_lunch.dart';
+import 'telemetry.dart';
+import 'widgets/section_selector.dart';
+import 'widgets/status_views.dart';
 
 enum CalendarType { google, schoolLunch }
 
@@ -21,54 +26,156 @@ class CalendarTab {
   final CalendarType type;
 }
 
+/// Shows the events of one Google Calendar.
+///
+/// Data flow is cache-first: the last successful response is shown
+/// immediately (if present) and reused whenever the network is unreachable, so
+/// the calendar still opens on unreliable school Wi-Fi. Pull down (or use
+/// Retry) to force a network refresh.
 class CalendarEventsView extends StatefulWidget {
-  const CalendarEventsView({super.key, required this.apiUrl});
+  const CalendarEventsView({
+    super.key,
+    required this.apiUrl,
+    this.calendarName = 'calendar',
+  });
 
   final String apiUrl;
 
+  /// Human-readable name, used in notices and anonymous analytics.
+  final String calendarName;
+
   @override
-  State<CalendarEventsView> createState() => _CalendarEventsViewState();
+  State<CalendarEventsView> createState() => CalendarEventsViewState();
 }
 
-class _CalendarEventsViewState extends State<CalendarEventsView> {
-  late Future<List<dynamic>> _eventsFuture;
+class CalendarEventsViewState extends State<CalendarEventsView> {
   final ItemScrollController _scrollController = ItemScrollController();
+  static const Duration _cacheMaxAge = Duration(hours: 6);
+  static const Duration _requestTimeout = Duration(seconds: 15);
+
+  List<Map<String, dynamic>>? _events;
+  DateTime? _cachedAt;
+  bool _loading = false;
+  bool _showingSavedCopy = false;
+  String? _error;
+
+  /// Whether the initial scroll-to-today still needs to happen.
+  bool _needsScrollToToday = true;
 
   @override
   void initState() {
     super.initState();
-    _eventsFuture = _fetchEvents();
-    _eventsFuture.then((events) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToToday(events);
-      });
-    });
+    _load();
   }
 
-  void _scrollToToday(List<dynamic> events) {
-    final now = DateTime.now();
-    final targetIndex = events.indexWhere((e) {
-      final displayDate = e['displayDate'] as DateTime;
-      return _isSameDay(displayDate, now) || displayDate.isAfter(now);
+  /// Loads events: disk cache first, then network unless the cache is fresh.
+  /// With [force], always goes to the network (pull-to-refresh / Retry).
+  Future<void> _load({bool force = false}) async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
     });
-    if (targetIndex != -1 && _scrollController.isAttached) {
-      _scrollController.jumpTo(index: targetIndex);
+
+    // Serve the cached response immediately, if present and parseable.
+    CachedResponse? cache;
+    try {
+      cache = await NetworkCache.instance.read(widget.apiUrl);
+      if (_events == null && cache != null) {
+        final cached = parseEvents(cache.body);
+        if (cached.isNotEmpty) {
+          _events = cached;
+          _cachedAt = cache.cachedAt;
+        }
+      }
+    } catch (error) {
+      // Corrupt cache entry: ignore it and go to the network.
+      debugPrint('Calendar cache unusable: $error');
+    }
+
+    // A fresh cache satisfies the load without touching the network, keeping
+    // the school's calendar quota (and the student's battery) happy.
+    if (!force &&
+        cache != null &&
+        cache.isFreshWithin(_cacheMaxAge, DateTime.now()) &&
+        (_events?.isNotEmpty ?? false)) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _scrollToTodayIfNeeded();
+      return;
+    }
+
+    try {
+      final body = await _fetchEventsBody();
+      final events = parseEvents(body);
+      await NetworkCache.instance.write(widget.apiUrl, body);
+      Telemetry.instance
+          .logEvent('calendar_refresh', {'calendar': widget.calendarName});
+      if (!mounted) return;
+      setState(() {
+        _events = events;
+        _cachedAt = DateTime.now();
+        _loading = false;
+        _showingSavedCopy = false;
+      });
+      _scrollToTodayIfNeeded();
+    } catch (error) {
+      debugPrint('Calendar fetch failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (_events != null && _events!.isNotEmpty) {
+          // Offline: keep showing the last known events.
+          _showingSavedCopy = true;
+          Telemetry.instance.logEvent('calendar_cache_used',
+              {'calendar': widget.calendarName});
+        } else {
+          _error = 'Couldn\'t reach the calendar server. '
+              'Check your connection and try again.';
+        }
+      });
     }
   }
 
-  Future<List<dynamic>> _fetchEvents() async {
+  void _scrollToTodayIfNeeded() {
+    if (!_needsScrollToToday) return;
+    final events = _events;
+    if (events == null || events.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_needsScrollToToday) return;
+      final now = DateTime.now();
+      final targetIndex = events.indexWhere((e) {
+        final displayDate = e['displayDate'] as DateTime;
+        return _isSameDay(displayDate, now) || displayDate.isAfter(now);
+      });
+      if (targetIndex != -1 && _scrollController.isAttached) {
+        _scrollController.jumpTo(index: targetIndex);
+        _needsScrollToToday = false;
+      }
+    });
+  }
+
+  Future<String> _fetchEventsBody() async {
     final twoDaysAgo = DateTime.now().subtract(const Duration(days: 1));
-    final timeMin =
-        Uri.encodeComponent(twoDaysAgo.toUtc().toIso8601String());
+    final timeMin = Uri.encodeComponent(twoDaysAgo.toUtc().toIso8601String());
     final url =
         '${widget.apiUrl}&timeMin=$timeMin&singleEvents=True&orderBy=startTime&maxResults=100';
 
-    final response = await http.get(Uri.parse(url));
+    final response =
+        await http.get(Uri.parse(url)).timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to load events (HTTP ${response.statusCode})');
     }
+    return response.body;
+  }
 
-    final data = json.decode(response.body);
+  /// Parses a Google Calendar API `events` response into a flat, sorted list
+  /// where multi-day events are expanded to one entry per day.
+  ///
+  /// Public and static so it can be unit-tested against saved payloads.
+  @visibleForTesting
+  static List<Map<String, dynamic>> parseEvents(String body) {
+    final data = json.decode(body);
     final items = (data['items'] as List<dynamic>?) ?? const [];
     final expanded = <Map<String, dynamic>>[];
 
@@ -76,8 +183,9 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
       if (event is! Map<String, dynamic>) continue;
       final start = _parseEventDate(event['start']);
       final end = _parseEventDate(event['end']);
-      final inclusiveEnd =
-          end.isAtSameMomentAs(start) ? end : end.subtract(const Duration(milliseconds: 1));
+      final inclusiveEnd = end.isAtSameMomentAs(start)
+          ? end
+          : end.subtract(const Duration(milliseconds: 1));
 
       var current = DateTime(start.year, start.month, start.day);
       final last =
@@ -96,7 +204,7 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
     return expanded;
   }
 
-  DateTime _parseEventDate(Map<String, dynamic>? dateMap) {
+  static DateTime _parseEventDate(Map<String, dynamic>? dateMap) {
     if (dateMap == null) return DateTime.now();
     if (dateMap['dateTime'] != null) {
       return DateTime.parse(dateMap['dateTime'] as String).toLocal();
@@ -118,13 +226,8 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
 
     const weekdays = [
       'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',
-    ];
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
+      'Friday', 'Saturday', 'Sunday',    ];
+    return '${weekdays[date.weekday - 1]}, ${shortDateLabel(date)}';
   }
 
   String _formatTime(Map<String, dynamic> event) {
@@ -142,9 +245,10 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
 
   void _showEventDetails(
       BuildContext context, Map<String, dynamic> event, String timeStr) {
+    final scheme = Theme.of(context).colorScheme;
     final description =
         (event['description'] as String?) ?? 'No description provided.';
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -169,39 +273,51 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
+                        color: scheme.outlineVariant,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                   Text(
                     (event['summary'] as String?) ?? 'Untitled Event',
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     timeStr,
-                    style: TextStyle(
-                      color: Theme.of(context).primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                   if (event['location'] != null) ...[
                     const SizedBox(height: 4),
-                    Text('${event['location']}',
-                        style: TextStyle(color: Colors.grey[600])),
+                    Text(
+                      '${event['location']}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
                   ],
                   const Divider(height: 32),
-                  const Text(
+                  Text(
                     'Description',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     description,
-                    style: const TextStyle(fontSize: 15, height: 1.5),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(height: 1.5),
                   ),
                   const SizedBox(height: 40),
                 ],
@@ -215,126 +331,157 @@ class _CalendarEventsViewState extends State<CalendarEventsView> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<dynamic>>(
-      future: _eventsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Couldn\'t load calendar events.',
-                    style: Theme.of(context).textTheme.bodyLarge,
+    final events = _events;
+    final hasContent = events != null && events.isNotEmpty;
+
+    // Every non-content state is rendered inside a scrollable so that
+    // pull-to-refresh keeps working from the loading/empty/error screens.
+    Widget content;
+    if (hasContent) {
+      content = ScrollablePositionedList.builder(
+        itemScrollController: _scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: events.length,
+        itemBuilder: (context, index) =>
+            _buildEventTile(context, events, index),
+      );
+    } else if (_error != null) {
+      content = ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 80),
+          ErrorStatusView(
+            title: 'Couldn\'t load calendar events',
+            message: _error!,
+            onRetry: () => _load(force: true),
+          ),
+        ],
+      );
+    } else if (_loading) {
+      content = ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 120),
+          LoadingStatusView(label: 'Loading events…'),
+        ],
+      );
+    } else {
+      content = ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 80),
+          EmptyStatusView(
+            icon: Icons.event_available,
+            title: 'No upcoming events',
+            message: 'This calendar has nothing scheduled right now. '
+                'Pull down to refresh.',
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _load(force: true),
+      child: Column(
+        children: [
+          if (_showingSavedCopy && _cachedAt != null)
+            SavedCopyNotice(
+                label: 'Saved copy from ${shortDateLabel(_cachedAt!)}'),
+          Expanded(child: content),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventTile(
+      BuildContext context, List<Map<String, dynamic>> events, int index) {
+    final scheme = Theme.of(context).colorScheme;
+    final event = events[index];
+    final displayDate = event['displayDate'] as DateTime;
+    final prevDate = index > 0
+        ? (events[index - 1])['displayDate'] as DateTime?
+        : null;
+    final showHeader = prevDate == null || !_isSameDay(displayDate, prevDate);
+
+    final title = (event['summary'] as String?) ?? 'Untitled Event';
+    final location = event['location']?.toString();
+    final timeStr = _formatTime(event);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showHeader)
+          Padding(
+            padding: const EdgeInsets.only(top: 20, bottom: 10),
+            child: Text(
+              _dayLabel(displayDate),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    letterSpacing: 1.2,
+                    color: scheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: () =>
-                        setState(() => _eventsFuture = _fetchEvents()),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
             ),
-          );
-        }
-        final events = snapshot.data ?? const [];
-        if (events.isEmpty) {
-          return const Center(child: Text('No events found.'));
-        }
-
-        return ScrollablePositionedList.builder(
-          itemScrollController: _scrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: events.length,
-          itemBuilder: (context, index) {
-            final event = events[index] as Map<String, dynamic>;
-            final displayDate = event['displayDate'] as DateTime;
-            final prevDate = index > 0
-                ? (events[index - 1] as Map<String, dynamic>)['displayDate']
-                    as DateTime?
-                : null;
-            final showHeader =
-                prevDate == null || !_isSameDay(displayDate, prevDate);
-
-            final title = (event['summary'] as String?) ?? 'Untitled Event';
-            final location = event['location']?.toString();
-            final timeStr = _formatTime(event);
-
-            return Column(
+          ),
+        Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 8),
+          color: scheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            onTap: () => _showEventDetails(context, event, timeStr),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            title: Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showHeader)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 20, bottom: 10),
-                    child: Text(
-                      _dayLabel(displayDate),
-                      style: const TextStyle(
-                          fontSize: 15, letterSpacing: 1.2),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 14, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      timeStr,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
-                  ),
-                Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(color: Colors.grey.withOpacity(0.2)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    onTap: () => _showEventDetails(context, event, timeStr),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    title: Text(
-                      title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 15),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.schedule,
-                                size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text(timeStr,
-                                style: const TextStyle(fontSize: 13)),
-                          ],
-                        ),
-                        if (location != null && location.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              const Icon(Icons.place_outlined,
-                                  size: 14, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  location,
-                                  style: const TextStyle(fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
+                if (location != null && location.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.place_outlined,
+                          size: 14, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -348,9 +495,8 @@ class CalendarsPage extends StatefulWidget {
 
 class _CalendarsPageState extends State<CalendarsPage> {
   int selectedIndex = 0;
-  late final PageController _carouselController;
 
-  final List<CalendarTab> _calendars = const [
+  static const List<CalendarTab> _calendars = [
     CalendarTab(
       'School Calendar',
       'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events'
@@ -371,24 +517,12 @@ class _CalendarsPageState extends State<CalendarsPage> {
     ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _carouselController = PageController(viewportFraction: 0.7);
-  }
-
-  @override
-  void dispose() {
-    _carouselController.dispose();
-    super.dispose();
-  }
-
   void _onItemTapped(int index) {
-    _carouselController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeInOutCubic,
-    );
+    setState(() => selectedIndex = index);
+    Telemetry.instance.logEvent('view_section', {
+      'screen': 'calendars',
+      'section': _calendars[index].title,
+    });
   }
 
   @override
@@ -396,66 +530,27 @@ class _CalendarsPageState extends State<CalendarsPage> {
     return SafeArea(
       child: Column(
         children: [
-          SizedBox(
-            height: 90,
-            child: PageView.builder(
-              controller: _carouselController,
-              itemCount: _calendars.length,
-              onPageChanged: (index) => setState(() => selectedIndex = index),
-              itemBuilder: (context, index) {
-                final isSelected = selectedIndex == index;
-                return GestureDetector(
-                  onTap: () => _onItemTapped(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).appBarTheme.backgroundColor
-                          : Theme.of(context).appBarTheme.foregroundColor,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected
-                            ? Colors.transparent
-                            : Colors.grey.withOpacity(0.3),
-                        width: 2,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Theme.of(context)
-                                    .primaryColor
-                                    .withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : const [],
-                    ),
-                    child: Center(
-                      child: Text(
-                        _calendars[index].title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black87,
-                          fontSize: isSelected ? 16 : 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+          SectionSelector(
+            labels: [for (final tab in _calendars) tab.title],
+            selectedIndex: selectedIndex,
+            onSelected: _onItemTapped,
           ),
           const Divider(height: 1),
           Expanded(
-            child: _calendars[selectedIndex].type == CalendarType.schoolLunch
-                ? const SchoolLunchView()
-                : CalendarEventsView(
-                    key: ValueKey(_calendars[selectedIndex].url),
-                    apiUrl: _calendars[selectedIndex].url,
-                  ),
+            child: LazyIndexedStack(
+              index: selectedIndex,
+              itemCount: _calendars.length,
+              itemBuilder: (context, index) {
+                final tab = _calendars[index];
+                return tab.type == CalendarType.schoolLunch
+                    ? const SchoolLunchView()
+                    : CalendarEventsView(
+                        key: ValueKey(tab.url),
+                        apiUrl: tab.url,
+                        calendarName: tab.title.toLowerCase(),
+                      );
+              },
+            ),
           ),
         ],
       ),
