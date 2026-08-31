@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  cupertino_icons: ^1.0.8
+  adaptive_platform_ui: ^0.1.100
   flutter_timer_countdown: ^1.0.7
   timer_builder: ^2.0.0
   webview_flutter: ^4.13.0
