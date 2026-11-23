@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:westview_app/theme/theme.dart';
 import 'package:westview_app/widgets/section_selector.dart';
@@ -48,17 +49,23 @@ void main() {
     expect(selected, findsOneWidget);
     expect(unselected, findsOneWidget);
 
+    // `getSemantics` returns a SemanticsNode; its accessibility flags live in
+    // `getSemanticsData()`, which is the API that exists in current Flutter.
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Counseling').first)
-          .flags
-          .contains(SemanticsFlag.isSelected),
+      tester
+          .getSemantics(find.bySemanticsLabel('Counseling').first)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
       isTrue,
       reason: 'the active section must be announced as selected',
     );
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Weekly Newsletter').first)
-          .flags
-          .contains(SemanticsFlag.isSelected),
+      tester
+          .getSemantics(find.bySemanticsLabel('Weekly Newsletter').first)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
       isFalse,
     );
 

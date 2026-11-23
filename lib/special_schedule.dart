@@ -204,10 +204,22 @@ class SpecialScheduleService extends ChangeNotifier {
 
     // A fresh answer is reused verbatim, so the server is never asked more
     // than once per date within the cache TTL (>= 2 days).
-    if (!force && cached != null && cached.isFresh(now)) {
-      _lastFetchFailed = false;
-      notifyListeners();
-      return;
+    //
+    // Note the lookup above is by *day*: if the cache holds an answer for
+    // 8/18, asking again on 8/20 finds nothing under "8/20" and would hit
+    // the network on every day after the first. So any answer that is still
+    // inside the TTL window is reused for the current day too — that is what
+    // makes the TTL mean "don't poll the server", which matters on school
+    // Wi-Fi and on the maintenance side of the endpoint.
+    if (!force) {
+      final fresh = cached != null && cached.isFresh(now)
+          ? cached
+          : _freshestWithinTtl(now);
+      if (fresh != null) {
+        _lastFetchFailed = false;
+        notifyListeners();
+        return;
+      }
     }
 
     _isRefreshing = true;
@@ -226,6 +238,19 @@ class SpecialScheduleService extends ChangeNotifier {
       _isRefreshing = false;
     }
     notifyListeners();
+  }
+
+  /// The most recent cached answer that is still inside the TTL, whatever day
+  /// it was fetched for. Returns null when everything is stale.
+  SpecialScheduleResult? _freshestWithinTtl(DateTime now) {
+    SpecialScheduleResult? best;
+    for (final entry in _cache.values) {
+      if (!entry.isFresh(now)) continue;
+      if (best == null || entry.fetchedAt.isAfter(best.fetchedAt)) {
+        best = entry;
+      }
+    }
+    return best;
   }
 
   /// Clears all state (used by tests).

@@ -110,7 +110,9 @@ void main() {
 
     test('short disclaimer says it is not a PUSD app', () {
       expect(shortDisclaimer, contains('Not a Poway Unified app'));
-      expect(shortDisclaimer, contains('not sponsored or endorsed'));
+      // Case-insensitive: the sentence starts with a capital, but the
+      // assertion is about the substance of the claim.
+      expect(shortDisclaimer.toLowerCase(), contains('not sponsored or endorsed'));
     });
 
     test('short disclaimer is at least as specific, not vaguer', () {
