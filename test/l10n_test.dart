@@ -234,10 +234,8 @@ void main() {
         (tester) async {
       final handle = tester.ensureSemantics();
       await pumpHelp(tester, AppLanguage.english);
-      expect(
-        find.bySemanticsLabel('Call 911, 9 1 1'),
-        findsOneWidget,
-      );
+      final label = AppStrings.forTag('en')['help.emergency.call'];
+      expect(find.bySemanticsLabel('$label, 9 1 1'), findsOneWidget);
       handle.dispose();
     });
   });

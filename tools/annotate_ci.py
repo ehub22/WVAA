@@ -84,6 +84,23 @@ def test_annotations(text: str) -> None:
             "\n".join(detail)[:MAX_LEN] or "no detail captured",
         )
 
+    # 2b. The expanded reporter prints the actual exception *before* the
+    # "[E]" line ("Test failed. See exception logs above."), so capture those
+    # blocks directly: they are the only place the real reason appears.
+    blocks: list[str] = []
+    for i, line in enumerate(lines):
+        if not re.search(r"(EXCEPTION CAUGHT|The following .* was thrown)", line):
+            continue
+        block = [line.strip()]
+        for follow in lines[i + 1 : i + 14]:
+            if re.match(r"^\d\d:\d\d \+\d+", follow.strip()):
+                break
+            if follow.strip():
+                block.append(follow.strip())
+        blocks.append(" | ".join(block))
+    for index, block in enumerate(blocks[:6], start=1):
+        annotate("error", f"exception {index}", block[:MAX_LEN])
+
     # 3. A one-line summary so the count is visible in the check list.
     summary = next(
         (ln.strip() for ln in reversed(lines) if re.search(r"\+\d+.*(-\d+)?", ln)),

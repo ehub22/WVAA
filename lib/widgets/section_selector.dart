@@ -78,16 +78,20 @@ class _SelectorPill extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: background,
-        borderRadius: BorderRadius.circular(28),
-        child: InkWell(
-          onTap: onTap,
+      // The semantics node must be the *outermost* wrapper of the tappable
+      // area, otherwise the label and the selected state belong to an inner
+      // node that screen readers and tests cannot find as one control.
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        excludeSemantics: true,
+        child: Material(
+          color: background,
           borderRadius: BorderRadius.circular(28),
-          // The Text child supplies the label; this adds the selected state
-          // so screen readers announce the active section.
-          child: Semantics(
-            selected: selected,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48, minWidth: 72),
               child: Padding(
