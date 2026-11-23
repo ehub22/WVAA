@@ -150,6 +150,18 @@ jobs:
           tail -n 120 /tmp/build.log
           exit $status
 
+      # The step log cannot be downloaded in every review environment, and
+      # annotations are capped in size, so keep the full build log as the
+      # authoritative record of a failed build.
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: /tmp/build.log
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload APK as a build artifact
         uses: actions/upload-artifact@v4
         with:
