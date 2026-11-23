@@ -112,6 +112,13 @@ jobs:
       - name: Verify WCAG contrast of the theme
         run: python3 tools/audit_contrast.py --strict
 
+      # The string catalogue is a large hand-edited Dart map; a stray comma
+      # there is a *compile* error that surfaces as "the Dart compiler exited
+      # unexpectedly" 200 lines later. Check its structure directly so the
+      # failure names the offending line.
+      - name: Check the string catalogue
+        run: python3 tools/check_strings.py
+
       - name: Run Flutter tests (includes the l10n/a11y suite)
         # Failure text is re-emitted as GitHub *annotations* (see
         # tools/annotate_ci.py): annotations are small and readable through the

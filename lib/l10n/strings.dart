@@ -352,8 +352,8 @@ const Map<String, Map<String, String>> _catalog = {
     'schedule.noActivePeriod':
         'No active period',
     'schedule.now':
-    'schedule.endsAt': 'ends at',
         'Now',
+    'schedule.endsAt': 'ends at',
     'schedule.special':
         'A special schedule is in effect today',
     'schedule.mayNotBeAccurate':
@@ -697,8 +697,8 @@ const Map<String, Map<String, String>> _catalog = {
     'schedule.noActivePeriod':
         'Ningún período activo',
     'schedule.now':
-    'schedule.endsAt': 'termina a las',
         'Ahora',
+    'schedule.endsAt': 'termina a las',
     'schedule.special':
         'Hoy hay un horario especial',
     'schedule.mayNotBeAccurate':
@@ -995,8 +995,8 @@ const Map<String, Map<String, String>> _catalog = {
     'schedule.noActivePeriod':
         '当前没有课程',
     'schedule.now':
-    'schedule.endsAt': '结束于',
         '现在',
+    'schedule.endsAt': '结束于',
     'schedule.special':
         '今天有特殊课表',
     'schedule.mayNotBeAccurate':
@@ -1330,8 +1330,8 @@ const Map<String, Map<String, String>> _catalog = {
     'schedule.noActivePeriod':
         'Walang aktibong period',
     'schedule.now':
-    'schedule.endsAt': 'matatapos nang',
         'Ngayon',
+    'schedule.endsAt': 'matatapos nang',
     'schedule.special':
         'May espesyal na iskedyul ngayon',
     'schedule.mayNotBeAccurate':
