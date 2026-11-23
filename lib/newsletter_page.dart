@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'support.dart';
 import 'telemetry.dart';
 import 'web_page.dart';
 import 'widgets/section_selector.dart';
@@ -77,7 +78,9 @@ class _NewsletterPageState extends State<NewsletterPage> {
                 onPressed: _refreshCurrent,
                 icon: const Icon(Icons.refresh),
               ),
-              const SizedBox(width: 8),
+              // Help is reachable from every tab, not just the home screen.
+              const HelpIconButton(),
+              const SizedBox(width: 4),
             ],
           ),
           const Divider(height: 1),

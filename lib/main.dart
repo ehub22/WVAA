@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'calendars.dart';
 import 'newsletter_page.dart';
 import 'publications.dart';
+import 'safety.dart';
 import 'schedule_page.dart';
 import 'settings.dart';
 import 'special_schedule.dart';
+import 'support.dart';
 import 'telemetry.dart';
 import 'theme/theme.dart';
 import 'vimeo_pip.dart';
@@ -19,6 +21,11 @@ Future<void> main() async {
   // Load persisted settings before the first frame so nothing flashes with
   // the defaults.
   await AppSettings.instance.load();
+
+  // Safety toggles (quick exit, recents privacy). Loaded before the first
+  // frame so the recents thumbnail is never briefly un-hidden.
+  await SafetySettings.instance.load();
+  unawaited(QuickExit.applyRecentsPrivacy(SafetySettings.instance.hideRecents));
 
   // Rehydrate the special-schedule cache from disk. The network refresh
   // happens lazily from the schedule page.
@@ -46,7 +53,8 @@ Future<void> main() async {
   };
 
   // Sends anything queued from previous offline launches, then records the
-  // anonymous app-open event.
+  // anonymous app-open event. Both are no-ops until the student opts in (see
+  // settings.dart / telemetry.dart).
   unawaited(Telemetry.instance.init());
 
   await runZonedGuarded(() async {
@@ -80,6 +88,7 @@ class _HomePage extends StatefulWidget {
 
 class _HomePageState extends State<_HomePage> {
   static const int _publicationsIndex = 2;
+  static const int _helpIndex = 4;
   int _selectedIndex = 0;
 
   static const List<String> _screenNames = [
@@ -96,6 +105,7 @@ class _HomePageState extends State<_HomePage> {
     NewsletterPage(),
     PublicationsPage(),
     CalendarsPage(),
+    SupportPage(),
   ];
 
   @override
@@ -111,25 +121,32 @@ class _HomePageState extends State<_HomePage> {
   void _onTabSelected(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
-    Telemetry.instance
-        .logEvent('screen_view', {'screen': _screenNames[index]});
+    // The Get-help tab is deliberately excluded from analytics: the app never
+    // records that a student looked at crisis or counseling resources.
+    if (index != _helpIndex) {
+      Telemetry.instance
+          .logEvent('screen_view', {'screen': _screenNames[index]});
+    }
   }
 
-  /// One-time, plain-language disclosure of what the app reports (and what it
-  /// never reports), with a one-tap opt-out. See Settings ▸ Privacy afterwards.
+  /// One-time, plain-language disclosure of what the app *may* report (and
+  /// what it never reports), with an explicit choice. Nothing is sent before
+  /// this dialog is answered, and either stream can be turned off later in
+  /// Settings ▸ Privacy.
   Future<void> _maybeShowPrivacyNotice() async {
     if (!mounted || AppSettings.instance.privacyNoticeSeen) return;
 
-    final optedOut = await showDialog<bool>(
+    final share = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => const _PrivacyNoticeDialog(),
     );
 
-    if (optedOut == true) {
-      await AppSettings.instance.setAnalyticsEnabled(false);
-      await AppSettings.instance.setCrashReportingEnabled(false);
-    }
+    // Either way, both streams are set explicitly so the stored state always
+    // reflects a real decision rather than a default.
+    final agreed = share ?? false;
+    await AppSettings.instance.setAnalyticsEnabled(agreed);
+    await AppSettings.instance.setCrashReportingEnabled(agreed);
     await AppSettings.instance.setPrivacyNoticeSeen();
   }
 
@@ -153,30 +170,46 @@ class _HomePageState extends State<_HomePage> {
           // each destination keeps a 48dp+ touch target at any text scale.
           bottomNavigationBar: isPipActive
               ? null
-              : NavigationBar(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: _onTabSelected,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home),
-                      label: 'Schedule',
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    NavigationBar(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: _onTabSelected,
+                      labelBehavior:
+                          NavigationDestinationLabelBehavior.alwaysShow,
+                      destinations: const [
+                        NavigationDestination(
+                          icon: Icon(Icons.home_outlined),
+                          selectedIcon: Icon(Icons.home),
+                          label: 'Schedule',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.newspaper),
+                          selectedIcon: Icon(Icons.newspaper),
+                          label: 'Newsletters',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.play_circle_outline),
+                          selectedIcon: Icon(Icons.play_circle),
+                          label: 'Publications',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.calendar_month_outlined),
+                          selectedIcon: Icon(Icons.calendar_month),
+                          label: 'Calendar',
+                        ),
+                        // Always-available help: a student in a bad moment
+                        // should never have to guess which tab hides the
+                        // counselling and crisis resources.
+                        NavigationDestination(
+                          icon: Icon(Icons.support_agent),
+                          selectedIcon: Icon(Icons.support_agent),
+                          label: 'Get help',
+                        ),
+                      ],
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.newspaper),
-                      selectedIcon: Icon(Icons.newspaper),
-                      label: 'Newsletters',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.play_circle_outline),
-                      selectedIcon: Icon(Icons.play_circle),
-                      label: 'Publications',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.calendar_month_outlined),
-                      selectedIcon: Icon(Icons.calendar_month),
-                      label: 'Calendars',
-                    ),
+                    const _DistrictDisclaimerBar(),
                   ],
                 ),
         );
@@ -185,47 +218,98 @@ class _HomePageState extends State<_HomePage> {
   }
 }
 
-/// First-run privacy disclosure.
+/// Permanent, compact district disclaimer pinned under the navigation bar on
+/// every tab. The full wording (English + Spanish) lives on the Get-help
+/// screen; this is the always-visible one-liner so the app never looks like an
+/// official Poway Unified product at a glance.
+class _DistrictDisclaimerBar extends StatelessWidget {
+  const _DistrictDisclaimerBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      child: InkWell(
+        onTap: () => openSupportPage(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  shortDisclaimer,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// First-run privacy disclosure. Deliberately written in plain language and
+/// asked *before* anything is collected (opt-in, not opt-out).
 class _PrivacyNoticeDialog extends StatelessWidget {
   const _PrivacyNoticeDialog();
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Privacy at a glance'),
+      title: const Text('Your privacy'),
       content: const SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'To keep this app working, Westview HS collects two things — '
-              'and nothing else:',
+              'This app can send two things to the school’s own server, and '
+              'nothing else:',
             ),
             SizedBox(height: 12),
-            Text('• Anonymous usage counts (which screens are opened, '
-                'whether a refresh succeeded).'),
-            Text('• Crash reports (the error text and stack trace) when '
-                'something breaks.'),
+            Text('• Anonymous usage counts — which screens are opened and '
+                'whether a refresh worked. No names, no accounts.'),
+            Text('• Crash reports — the error text, with anything you typed '
+                'into Settings removed, so bugs can be fixed.'),
             SizedBox(height: 12),
-            Text('It never collects your name, student ID, contacts, '
-                'location, or any advertising identifier, and it shares '
-                'nothing with third parties. Reports go only to the '
-                'school\u2019s server.'),
+            Text(
+              'It never collects your name, student ID, contacts, location, '
+              'or advertising identifiers, and it shares nothing with third '
+              'parties. There is no third-party analytics.',
+            ),
             SizedBox(height: 12),
-            Text('You can turn either off at any time in Settings ▸ '
-                'Privacy.'),
+            Text('Both are off unless you turn them on, and you can change '
+                'this any time in Settings ▸ Privacy.'),
           ],
         ),
       ),
+      actionsOverflowDirection: VerticalDirection.down,
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Turn off both'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Don’t share'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Got it'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Share anonymously'),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'Westview HS (WVAA) is a student-built app. It is not a Poway '
+            'Unified app and is not endorsed by the District. The Get help '
+            'tab has counselors and 24/7 crisis lines — opening it is never '
+            'recorded.',
+            style: TextStyle(fontSize: 12, height: 1.4),
+          ),
         ),
       ],
     );

@@ -2,13 +2,22 @@
 
 A companion app for Westview High School (Poway Unified School District), built with Flutter. The app brings together the schedules, calendars, newsletters, student publications, and lunch menu that students use every day, plus a live countdown notification and a home-screen widget that shows the current class period.
 
+> **This is not a Poway Unified app.** It is a student-built project. It is not
+> sponsored or endorsed by Poway Unified School District or Westview High
+> School, and nothing in it should be treated as an official school statement.
+> See [Student safety](#student-safety) and [`docs/SAFETY.md`](docs/SAFETY.md).
+
 > The app is optimized for Android (the primary target). iOS support compiles but is not actively maintained.
 
 ## Features
 
+- **Get help** — a permanent tab with the school counselors (by last-name
+  caseload, with one-tap call and e-mail), 24/7 crisis lines (988, San Diego
+  Access & Crisis Line, Crisis Text Line, Trevor Project), anonymous reporting
+  routes, and 911. Works fully offline; opening it is never logged.
 - **Schedules** — Mon/Fri, Tue/Thu, and Wednesday late-start schedules with a live per-second countdown to the end of the current period. Any period can be renamed (e.g. "Human Body Systems" instead of "Period 1") with teacher and room number.
 - **Special (modified) schedules** — Early-release, assembly, and Link-Crew days are fetched from the school server and override the regular schedule in-app, on the widget, and in the ongoing notification. Results are cached for at least two days so the app still works when the server is unreachable.
-- **Live countdown notification** — An ongoing Android notification shows the current period, teacher/room, and a ticking Chronometer. It renders on the lock screen and survives reboots via AlarmManager.
+- **Live countdown notification** — An ongoing Android notification shows the current period, teacher/room, and a ticking Chronometer. On the lock screen it shows the period name only (visibility `SECRET`); teacher and room appear once the phone is unlocked. It survives reboots via AlarmManager.
 - **Home-screen widget** — "Current Period" widget shows the active class, a live countdown, and a one-liner about what's next. It self-updates at period boundaries with precise alarms and uses a Chronometer so it ticks without waking the device.
 - **Calendars** — School and Athletics Google Calendars, plus the daily school lunch menu with nutrition-fact details.
 - **Newsletters** — Weekly newsletter, counseling newsletters, and DEN announcements, each in an embedded WebView.
@@ -17,7 +26,8 @@ A companion app for Westview High School (Poway Unified School District), built 
 - **Works on bad Wi-Fi** — Calendars, lunch menus and special schedules cache their last-known content on disk and keep showing it (with a "saved copy" notice) whenever the school network is down. Newsletter/publication WebViews keep their loaded pages and never blank out mid-session.
 - **Refresh everywhere** — Pull-to-refresh on calendars and lunch menus; a refresh button on newsletters and publications; retry buttons on every error screen.
 - **Accessibility** — Screen-reader labels on tabs, icons and interactive rows; 48dp minimum tap targets; full support for system font scaling (no clipped text).
-- **Privacy-first telemetry** — Anonymous crash reports and usage counts, disclosed up front, with per-stream opt-out. See [Privacy](#privacy) below.
+- **Privacy-first telemetry** — Anonymous crash reports and usage counts, **off until you opt in**, with per-stream switch and automatic scrubbing of anything you typed. See [Privacy](#privacy) below.
+- **Safety controls** — quick exit from a long-press, and the app's last screen hidden in the Android app switcher. Class details are never shown on the lock screen.
 
 ## Material 3, Android-first
 
@@ -25,12 +35,50 @@ Android is the only actively supported target, so the UI is plain Material 3 thr
 
 ## Privacy
 
-The app collects two things, both anonymous, and nothing else:
+The app can collect two things, both anonymous, and nothing else:
 
 - **Anonymous usage statistics** — counts of which screens are opened and whether refreshes succeeded.
 - **Crash reports** — the error text and a truncated stack trace, when something breaks.
 
-It never collects names, student IDs, accounts, contacts, location, or advertising/device identifiers, and it uses no third-party analytics or crash SDKs. Reports go only to the school's own server (`studycs.org`, the same host as the special-schedule data). A first-run dialog discloses all of this, both streams can be turned off at any time in **Settings ▸ Privacy & data**, and disabling a stream drops its queued reports instead of sending them. Cached content (calendars, menus, nutrition data) stays on the device and can be wiped from **Settings ▸ Saved content**.
+Both are **opt-in**. They start disabled, and nothing is queued or sent until the first-run dialog is answered with "Share anonymously" (or the matching switch is turned on in **Settings ▸ Privacy**). Turning a stream off later drops its queued reports instead of sending them.
+
+It never collects names, student IDs, accounts, contacts, location, or advertising/device identifiers, and it uses no third-party analytics or crash SDKs. Reports go only to the school's own server (`studycs.org`, the same host as the special-schedule data), and are scrubbed first:
+
+- anything typed into "My classes" (class names, teacher names, room numbers) is replaced with `[text]`,
+- anything that looks like an e-mail address or phone number is replaced with `[email]` / `[phone]`,
+- the only identifier is a session id regenerated on every launch.
+
+Opening the **Get help** tab is never recorded, by design.
+
+Cached content (calendars, menus, nutrition data) stays on the device and can be wiped from **Settings ▸ Saved content**.
+
+## Student safety
+
+Full detail (data sources, verification dates, and the reasoning behind each
+decision) is in [`docs/SAFETY.md`](docs/SAFETY.md). The short version:
+
+- **Get help is always one tap away** — a navigation tab, a Help button on the
+  schedule screen, and a Settings entry. Counselors, crisis lines and 911 are
+  compiled into the app, so the screen works with no network at all.
+- **Contacts are verified and pinned by tests.** Counselor caseloads, extensions
+  and e-mails come from the school's counseling page (checked November 2025);
+  every hotline number is asserted in `test/support_resources_test.dart` so a
+  typo cannot ship.
+- **The district disclaimer is permanent.** The exact Poway Unified wording
+  ("This activity is not a school-sponsored activity and is not endorsed by the
+  school or Poway Unified School District…") plus its Spanish version appears
+  on the Get-help screen and in Settings, and a one-line version is pinned
+  under the navigation bar on every tab.
+- **Nothing about the schedule appears on a locked phone.** The countdown
+  notification's channel visibility is `SECRET`, and its redacted "public"
+  version (used if visibility is ever loosened) carries the period name only —
+  never the course name, teacher or room.
+- **Quick exit** (long-press any Help button) and **hide in app switcher** are
+  both on by default and can be turned off in **Settings ▸ Safety**. Quick exit
+  works from every tab, since the Help icon is in each tab's header.
+- The app has no full-screen-intent permission, does not show itself over the
+  lock screen, and requests no permissions beyond internet, notifications and
+  what the home-screen widget needs.
 
 ## Project layout
 
@@ -43,7 +91,9 @@ lib/
   special_schedule.dart  Special-schedule fetch + multi-day cache
   settings.dart          Persisted user settings incl. telemetry consent
   settings_page.dart     Settings UI (notifications, privacy, classes)
-  telemetry.dart         Anonymous crash reporting + analytics (opt-out)
+  telemetry.dart         Anonymous crash reporting + analytics (opt-in, scrubbed)
+  support.dart           Get-help screen: counselors, crisis lines, disclaimer
+  safety.dart            Quick exit + recents privacy
   network_cache.dart     Last-known-good disk cache for network content
   widget_sync.dart       Pushes schedules/settings to the Android widget
   calendars.dart         Calendar tabs (School, Athletics, Lunches)
@@ -53,6 +103,7 @@ lib/
   vimeo_pip.dart         Vimeo player <-> PiP bridge (injected JS)
   web_page.dart          Shared WebView wrapper (loading/error/retry states)
   theme/                 App color tokens + light/dark Material 3 ThemeData
+docs/SAFETY.md           Student-safety and developer-safety design notes
   widgets/
     section_selector.dart  Material 3 pill tabs + lazy keep-alive stack
     status_views.dart      Shared loading / empty / error / saved-copy states
@@ -103,16 +154,24 @@ Add the widget by long-pressing the home screen → Widgets → Westview HS → 
 
 A settings button in the bottom-right of the home screen opens:
 
+- **Safety** — Get help now, quick exit, hide preview in app switcher.
+
 - **Notifications** — master switch; when off the app posts no notifications at all.
 - **Live activity** — ongoing countdown notification (only runs while notifications are enabled).
 - **Show teacher / Show room number** — whether teacher/room show up in the schedule list, notification, and widget.
 - **My classes** — rename any period and enter teacher / room number.
+- **About this app** — the district disclaimer (English + Spanish), what the
+  app is not, and the "not a crisis service" notice.
 
 All settings are persisted immediately and applied across the schedule, notification, and widget.
 
 ## Lock-screen notifications
 
-The live countdown notification is posted as an ongoing status notification on a channel with `VISIBILITY_PUBLIC` and `IMPORTANCE_DEFAULT` (silent, but visible on secure lock screens). Tapping it opens the app. On Android 13+ the app will ask for `POST_NOTIFICATIONS` on first launch (only when live activities are enabled, which is the default).
+The live countdown notification is posted as an ongoing, silent status notification on a channel with `IMPORTANCE_LOW` and `VISIBILITY_SECRET`. Secret means the notification is hidden from the lock screen entirely — no period name, course name, teacher or room — and only appears once the phone is unlocked. (The notification also carries a separate "public version" that shows the period name alone, so even if the channel's visibility is ever loosened, teacher and room still never appear.) Tapping it opens the app (never over the lock screen: the activity is `showWhenLocked="false"` and the app holds no `USE_FULL_SCREEN_INTENT` permission).
+
+On Android 13+ the app asks for `POST_NOTIFICATIONS` on first launch (only when live activities are enabled, which is the default). Declining it breaks nothing: the schedule, widget and Get-help tab all keep working.
+
+Students who want class details hidden everywhere can turn off **Show teacher** / **Show room number** in Settings; those switches apply to the schedule, the notification and the widget.
 
 ## Building
 

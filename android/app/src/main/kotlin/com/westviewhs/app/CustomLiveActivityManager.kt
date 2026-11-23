@@ -77,7 +77,9 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
         )
         notification.setContentIntent(clickPendingIntent)
 
-        notification.setVisibility(Notification.VISIBILITY_PUBLIC)
+        // SECRET keeps the countdown off the lock screen's visible content:
+        // period name, teacher and room are only shown after unlock.
+        notification.setVisibility(Notification.VISIBILITY_SECRET)
         notification.setOngoing(true)
         notification.setShowWhen(false)
         notification.setCategory(Notification.CATEGORY_STATUS)
@@ -105,11 +107,12 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
                         R.mipmap.launcher_icon,
                     ),
                 )
+                // Public version: class name only, never teacher or room.
                 .setContentTitle(periodName)
-                .setContentText(if (periodDetail.isNotBlank()) periodDetail else "In progress")
+                .setContentText("In progress")
                 .setContentIntent(clickPendingIntent)
                 .setOngoing(true)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setVisibility(Notification.VISIBILITY_SECRET)
                 .setCategory(Notification.CATEGORY_STATUS)
             notification.setPublicVersion(publicBuilder.build())
         }

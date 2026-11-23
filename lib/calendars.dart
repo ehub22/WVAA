@@ -7,6 +7,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'network_cache.dart';
 import 'school_lunch.dart';
+import 'support.dart';
 import 'telemetry.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
@@ -530,10 +531,19 @@ class _CalendarsPageState extends State<CalendarsPage> {
     return SafeArea(
       child: Column(
         children: [
-          SectionSelector(
-            labels: [for (final tab in _calendars) tab.title],
-            selectedIndex: selectedIndex,
-            onSelected: _onItemTapped,
+          Row(
+            children: [
+              Expanded(
+                child: SectionSelector(
+                  labels: [for (final tab in _calendars) tab.title],
+                  selectedIndex: selectedIndex,
+                  onSelected: _onItemTapped,
+                ),
+              ),
+              // Help is reachable from every tab, not just the home screen.
+              const HelpIconButton(),
+              const SizedBox(width: 4),
+            ],
           ),
           const Divider(height: 1),
           Expanded(

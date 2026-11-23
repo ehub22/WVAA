@@ -53,5 +53,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Get-help screen: allow tel:, sms: and mailto: links to open in the
+	     phone, Messages and Mail apps. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>mailto</string>
+	</array>
 </dict>
 </plist>

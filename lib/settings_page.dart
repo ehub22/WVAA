@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'network_cache.dart';
+import 'safety.dart';
 import 'settings.dart';
+import 'support.dart';
 import 'telemetry.dart';
 
 /// Settings page, opened from the button in the bottom right of the home page.
@@ -13,8 +15,11 @@ class SettingsPage extends StatelessWidget {
     final settings = AppSettings.instance;
 
     return ListenableBuilder(
-      listenable: settings,
+      // Safety toggles live in their own notifier; merge so flipping either
+      // one repaints the switches immediately.
+      listenable: Listenable.merge([settings, SafetySettings.instance]),
       builder: (context, _) {
+        final safety = SafetySettings.instance;
         return Scaffold(
           appBar: AppBar(title: const Text('Settings')),
           body: SafeArea(
@@ -47,6 +52,38 @@ class SettingsPage extends StatelessWidget {
                 ),
 
                 const Divider(height: 32),
+
+                const _SectionHeader('Safety'),
+                ListTile(
+                  leading: const Icon(Icons.support_agent),
+                  title: const Text('Get help now'),
+                  subtitle: const Text(
+                    'Westview counselors, crisis lines and hotlines, and how to '
+                    'report a safety concern. Works offline.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => openSupportPage(context),
+                ),
+                SwitchListTile(
+                  value: safety.quickExitEnabled,
+                  onChanged: SafetySettings.instance.setQuickExitEnabled,
+                  title: const Text('Quick exit'),
+                  subtitle: const Text(
+                    'Long-press the Help button to leave the app immediately. '
+                    'Nothing you looked at stays on screen.',
+                  ),
+                  secondary: const Icon(Icons.exit_to_app),
+                ),
+                SwitchListTile(
+                  value: safety.hideRecents,
+                  onChanged: SafetySettings.instance.setHideRecents,
+                  title: const Text('Hide preview in app switcher'),
+                  subtitle: const Text(
+                    'Stops the app’s last screen from showing in your recent-'
+                    'apps list (Android).',
+                  ),
+                  secondary: const Icon(Icons.visibility_off_outlined),
+                ),
 
                 const _SectionHeader('Privacy & data'),
                 SwitchListTile(
@@ -121,6 +158,8 @@ class SettingsPage extends StatelessWidget {
                     label: const Text('Reset all class names'),
                   ),
                 ),
+                const _AboutAppFooter(),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -163,6 +202,74 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
+/// Permanent "who made this" footer: the district disclaimer in full, in both
+/// languages, plus the app's own limits.
+class _AboutAppFooter extends StatelessWidget {
+  const _AboutAppFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          const _SectionHeader('About this app'),
+          Text(
+            'Westview HS (WVAA) is a student-built companion app, not an '
+            'official school or district product.',
+            style: textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            disclaimers.english,
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            disclaimers.spanish,
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Schedules, menus and links can be out of date or wrong. Always '
+            'confirm time-sensitive information with the school office. '
+            'Counselor contacts were last checked $supportDataVerified; the '
+            'counseling office or the school website is the authoritative '
+            'source.',
+            style: textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'This app is not a crisis service and is not monitored. If you or '
+            'someone else is in danger, call 911. In an emotional crisis, call '
+            'or text 988.',
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Plain-language privacy disclosure, always visible in Settings.
 class _PrivacyDisclosure extends StatelessWidget {
   const _PrivacyDisclosure();
@@ -189,23 +296,27 @@ class _PrivacyDisclosure extends StatelessWidget {
                   Icon(Icons.shield_outlined,
                       size: 20, color: scheme.primary),
                   const SizedBox(width: 8),
-                  Text(
-                    'What we collect (and don\'t)',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                  Expanded(
+                    child: Text(
+                      "What we collect (and don't)",
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                'Westview HS collects anonymous usage counts and crash reports '
-                'to keep the app working. It never collects your name, student '
-                'ID, contacts, location or advertising identifiers, and it '
-                'shares nothing with third parties. Reports go only to the '
-                'school\'s server (${Uri.parse(telemetryEndpoint).host}). Use '
-                'the switches above to turn either off at any time.',
+                'Both switches above are off unless you turned them on in the '
+                'welcome dialog. When on, the app sends anonymous usage counts '
+                'and crash reports so it can be fixed — with anything you '
+                'typed into Settings removed first. It never collects your '
+                'name, student ID, contacts, location or advertising '
+                'identifiers, and it shares nothing with third parties. '
+                'Reports go only to the school\'s server '
+                '(${Uri.parse(telemetryEndpoint).host}).',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall

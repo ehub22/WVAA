@@ -5,6 +5,7 @@ import 'package:simple_pip_mode/simple_pip.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import 'support.dart';
 import 'telemetry.dart';
 import 'vimeo_pip.dart';
 import 'widgets/section_selector.dart';
@@ -87,7 +88,8 @@ class _PublicationsPageState extends State<PublicationsPage> {
                           onPressed: _refreshCurrent,
                           icon: const Icon(Icons.refresh),
                         ),
-                        const SizedBox(width: 8),
+                        const HelpIconButton(),
+                        const SizedBox(width: 4),
                       ],
                     ),
                   ),

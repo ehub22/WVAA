@@ -28,6 +28,10 @@ dependencies:
   permission_handler: ^12.0.1
   home_widget: ^0.9.3
   shared_preferences: ^2.5.3
+  # Used by the Get-help screen so a student can tap a counselor or a crisis
+  # line and land in the phone/keyboard/browser they already use. The app never
+  # handles the call or the message itself.
+  url_launcher: ^6.2.0
 
 dev_dependencies:
   flutter_test:

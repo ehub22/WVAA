@@ -6,9 +6,11 @@ import 'package:live_activities/live_activities.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'data.dart';
+import 'safety.dart';
 import 'settings.dart';
 import 'settings_page.dart';
 import 'special_schedule.dart';
+import 'support.dart';
 import 'telemetry.dart';
 import 'widget_sync.dart';
 
@@ -177,6 +179,8 @@ class _SchedulePageState extends State<SchedulePage>
 
     if (enabled && currentEndTime != null && currentPeriodName != null) {
       final displayName = _settings.displayName(currentPeriodName);
+      // The countdown notification is visible on the lock screen, so teacher
+      // and room only travel with it when the student has left those on.
       final details = _settings.detailsFor(currentPeriodName);
       final signature =
           '$displayName|$details|${currentEndTime.millisecondsSinceEpoch}';
@@ -410,6 +414,24 @@ class _SchedulePageState extends State<SchedulePage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    // Help is always one tap away, in the same place, on the
+                    // first screen the app opens to. Long-pressing it (when
+                    // quick exit is on) leaves the app immediately.
+                    GestureDetector(
+                      onLongPress: QuickExit.longPressHandler(context),
+                      // The FAB is a Material widget, so it only gets an
+                      // opaque hit area if the detector below it does.
+                      behavior: HitTestBehavior.opaque,
+                      child: FloatingActionButton.extended(
+                        heroTag: 'home_help_button',
+                        tooltip: 'Get help now. Long-press to leave the app '
+                            "quickly if this screen shouldn't be seen.",
+                        onPressed: () => openSupportPage(context),
+                        icon: const Icon(Icons.support_agent),
+                        label: const Text('Help'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     // Standard-size FAB (56dp) for a comfortable touch target;
                     // the tooltip doubles as the screen-reader label.
                     FloatingActionButton(

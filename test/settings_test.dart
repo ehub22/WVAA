@@ -87,6 +87,11 @@ void main() {
       'Ceramics',
     );
 
+    // Re-read from the stored payload (a real relaunch, not the mock store).
+    SharedPreferences.setMockInitialValues(
+      <String, Object>{'westview_settings_v1': raw},
+    );
+    settings.resetForTesting();
     await settings.load();
     expect(settings.notificationsEnabled, isFalse);
     expect(settings.displayName('Period 4'), 'Ceramics');
