@@ -150,6 +150,18 @@ def build_annotations(text: str) -> None:
             annotate("error", "gradle task", stripped[:MAX_LEN])
         if stripped.startswith("* Where:"):
             annotate("error", "gradle: where", stripped[:MAX_LEN])
+    # Gradle's "What went wrong:" block can be printed *before* "FAILURE:",
+    # and some failures only carry a "> ..." cause line. Emit the whole
+    # neighbourhood of the first FAILURE: marker, which always contains it.
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if "FAILURE: Build failed" not in line:
+            continue
+        start = max(0, i - 25)
+        block = [ln.strip() for ln in lines[start : i + 12] if ln.strip()]
+        annotate("error", "build failure context", "\n".join(block)[:MAX_LEN])
+        break
+
     if seen == 0 and "FAILURE:" not in text:
         tail = "\n".join(text.splitlines()[-12:])
         annotate("error", "build failed", tail[:MAX_LEN])
