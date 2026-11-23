@@ -137,6 +137,19 @@ def build_annotations(text: str) -> None:
         stripped = line.strip()
         if stripped.startswith("FAILURE:") or stripped.startswith("Caused by:"):
             annotate("error", "gradle", stripped[:MAX_LEN])
+
+    # Gradle's real explanation sits in the lines that follow "What went
+    # wrong:" and in "> Task :app:... FAILED" / "Execution failed for task".
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("What went wrong:"):
+            block = [ln.strip() for ln in lines[i + 1 : i + 8] if ln.strip()]
+            annotate("error", "gradle: what went wrong", "\n".join(block)[:MAX_LEN])
+        if stripped.startswith("> Task") and "FAILED" in stripped:
+            annotate("error", "gradle task", stripped[:MAX_LEN])
+        if stripped.startswith("* Where:"):
+            annotate("error", "gradle: where", stripped[:MAX_LEN])
     if seen == 0 and "FAILURE:" not in text:
         tail = "\n".join(text.splitlines()[-12:])
         annotate("error", "build failed", tail[:MAX_LEN])
