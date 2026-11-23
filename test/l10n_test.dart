@@ -234,8 +234,14 @@ void main() {
         (tester) async {
       final handle = tester.ensureSemantics();
       await pumpHelp(tester, AppLanguage.english);
-      final label = AppStrings.forTag('en')['help.emergency.call'];
-      expect(find.bySemanticsLabel('$label, 9 1 1'), findsOneWidget);
+      final label = '${AppStrings.forTag('en')['help.emergency.call']}, 9 1 1';
+      // Assert the *declared* label on the Semantics widget: that is the
+      // contract with TalkBack, and it does not depend on how the engine
+      // merges the button's own node.
+      final matches = tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .where((widget) => widget.properties.label == label);
+      expect(matches, isNotEmpty, reason: 'expected a Semantics labelled "$label"');
       handle.dispose();
     });
   });

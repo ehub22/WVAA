@@ -57,7 +57,7 @@ void main() {
           .getSemanticsData()
           .flagsCollection
           .isSelected,
-      isTrue,
+      Tristate.isTrue,
       reason: 'the active section must be announced as selected',
     );
     expect(
@@ -66,7 +66,7 @@ void main() {
           .getSemanticsData()
           .flagsCollection
           .isSelected,
-      isFalse,
+      Tristate.isFalse,
     );
 
     handle.dispose();

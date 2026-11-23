@@ -38,7 +38,7 @@ void main() {
     await tester.pumpWidget(_app(
       const ErrorStatusView(message: 'Check your connection.'),
     ));
-    expect(find.text('Retry'), findsNothing);
+    expect(find.text('Try again'), findsNothing);
 
     await tester.pumpWidget(_app(
       ErrorStatusView(
@@ -51,7 +51,9 @@ void main() {
     expect(
         find.text('Check your connection and try again.'), findsOneWidget);
 
-    final retry = find.widgetWithText(FilledButton, 'Retry');
+    // The label comes from the catalogue (common.retry = "Try again") so a
+    // translated build never shows English here.
+    final retry = find.widgetWithText(FilledButton, 'Try again');
     expect(retry, findsOneWidget);
     expect(tester.getSize(retry).height, greaterThanOrEqualTo(48),
         reason: 'retry buttons must keep a 48dp tap target');
