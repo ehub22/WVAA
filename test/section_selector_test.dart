@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:westview_app/theme/theme.dart';
 import 'package:westview_app/widgets/section_selector.dart';
@@ -50,23 +49,24 @@ void main() {
     expect(unselected, findsOneWidget);
 
     // `getSemantics` returns a SemanticsNode; its accessibility flags live in
-    // `getSemanticsData()`, which is the API that exists in current Flutter.
+    // `getSemanticsData().flagsCollection`, and `isSelected` is a Tristate
+    // value that is not exported from the public API — comparing its string
+    // form keeps this working across Flutter versions.
+    String selectedState(Finder finder) => tester
+        .getSemantics(finder)
+        .getSemanticsData()
+        .flagsCollection
+        .isSelected
+        .toString();
+
     expect(
-      tester
-          .getSemantics(find.bySemanticsLabel('Counseling').first)
-          .getSemanticsData()
-          .flagsCollection
-          .isSelected,
-      Tristate.isTrue,
+      selectedState(find.bySemanticsLabel('Counseling').first),
+      'Tristate.isTrue',
       reason: 'the active section must be announced as selected',
     );
     expect(
-      tester
-          .getSemantics(find.bySemanticsLabel('Weekly Newsletter').first)
-          .getSemanticsData()
-          .flagsCollection
-          .isSelected,
-      Tristate.isFalse,
+      selectedState(find.bySemanticsLabel('Weekly Newsletter').first),
+      'Tristate.isFalse',
     );
 
     handle.dispose();
