@@ -153,13 +153,18 @@ def build_annotations(text: str) -> None:
     # Gradle's "What went wrong:" block can be printed *before* "FAILURE:",
     # and some failures only carry a "> ..." cause line. Emit the whole
     # neighbourhood of the first FAILURE: marker, which always contains it.
+    # One annotation per line around the first failure, so nothing is lost to
+    # the 900-character cap. Progress bars and unzip chatter are dropped.
+    noise = re.compile(r"(Unzipping|^\[=+|^\s*$|Download |Installing |Preparing )")
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if "FAILURE: Build failed" not in line:
             continue
-        start = max(0, i - 25)
-        block = [ln.strip() for ln in lines[start : i + 12] if ln.strip()]
-        annotate("error", "build failure context", "\n".join(block)[:MAX_LEN])
+        for offset, raw in enumerate(lines[max(0, i - 30) : i + 15]):
+            stripped = raw.strip()
+            if not stripped or noise.search(stripped):
+                continue
+            annotate("error", f"build log L{offset}", stripped[:MAX_LEN])
         break
 
     # Individual diagnostic lines, emitted one annotation each so that the
