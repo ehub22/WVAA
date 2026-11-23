@@ -55,31 +55,34 @@ def test_annotations(text: str) -> None:
     for message in compile_errors[:MAX_ANNOTATIONS]:
         annotate("error", "compile error", message[:MAX_LEN])
 
-    # 2. Failing tests: the "Expected/Actual" block after a [E] marker.
+    # 2. Failing tests. The expanded reporter writes
+    #        00:09 +107 -3: /path/test/foo_test.dart: name [E]
+    #        <detail lines...>
+    #        00:09 +107 -3: Next test...
+    # so collect every line between a failure header and the next progress
+    # line, without trying to pattern-match the detail itself.
+    progress = re.compile(r"^\d\d:\d\d \+\d+")
     failures = 0
     for i, line in enumerate(lines):
-        if not re.search(r"\[E\]$", line.strip()):
+        stripped = line.strip()
+        if not stripped.endswith("[E]"):
             continue
         failures += 1
-        name = line.strip().removesuffix("[E]").strip()
+        name = stripped.split(": ", 1)[-1].removesuffix("[E]").strip()
         detail: list[str] = []
-        for follow in lines[i + 1 : i + 12]:
-            stripped = follow.strip()
-            if re.match(r"^\d\d:\d\d \+\d+.*\[E\]$", stripped):
+        for follow in lines[i + 1 : i + 40]:
+            nxt = follow.strip()
+            if progress.match(nxt) or nxt.endswith("[E]"):
                 break
-            if stripped.startswith(("package:", "test/", "dart:")):
-                detail.append(stripped)
-                continue
-            if detail or any(
-                key in stripped
-                for key in ("Expected:", "Actual:", "Which:", "Exception:",
-                            "The following", "══╡")
-            ):
-                detail.append(stripped)
-            if len(detail) >= 6:
+            if nxt:
+                detail.append(nxt)
+            elif detail:
                 break
-        annotate("error", f"test failed: {name}"[:180],
-                 "\n".join(detail)[:MAX_LEN] or "see the step log")
+        annotate(
+            "error",
+            f"test failed ({failures}): {name}"[:200],
+            "\n".join(detail)[:MAX_LEN] or "no detail captured",
+        )
 
     # 3. A one-line summary so the count is visible in the check list.
     summary = next(
