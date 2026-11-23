@@ -67,6 +67,13 @@ void main() {
           expect(strings.isMissing(key), isFalse,
               reason: '$language is missing critical key $key');
           // Fallback would silently return English; force a real translation.
+          // Proper nouns (the school name) and the district-required wording
+          // are intentionally identical in every language, so they are
+          // exempt.
+          const allowedIdentical = {
+            'help.counselor.careerRole',
+          };
+          if (allowedIdentical.contains(key)) continue;
           expect(
             strings[key],
             isNot(AppStrings.forTag('en')[key]),
@@ -133,6 +140,9 @@ void main() {
         for (final match in lookup.allMatches(file.readAsStringSync())) {
           final key = match.group(1)!;
           if (english.containsKey(key)) continue;
+          // `hotline.$id.name` etc. are built at run time from the hotline id;
+          // their concrete keys are asserted in the hotline test above.
+          if (key.contains(r'$')) continue;
           missing.add('${file.path}: $key');
         }
       }

@@ -75,7 +75,11 @@ class NetworkCache {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_entryPrefix$key', jsonEncode(entry.toJson()));
       await _updateIndex(prefs, key, entry.cachedAt);
-      await _prune(prefs);
+      // Prune relative to the entry being written, not to the wall clock: an
+      // entry stamped `now` must never be deleted by its own write. (With the
+      // wall clock, any caller passing an older timestamp — tests, or a
+      // restored backup — would silently lose the entry it just stored.)
+      await _prune(prefs, now: entry.cachedAt);
     } catch (_) {
       // Cache writes must never break the UI.
     }
@@ -118,12 +122,12 @@ class NetworkCache {
     await prefs.setString(_indexKey, jsonEncode(index));
   }
 
-  Future<void> _prune(SharedPreferences prefs) async {
+  Future<void> _prune(SharedPreferences prefs, {DateTime? now}) async {
     final index = await _readIndex(prefs);
-    final now = DateTime.now();
+    final reference = now ?? DateTime.now();
     final expired = index.entries
         .where((entry) =>
-            now.difference(
+            reference.difference(
                 DateTime.fromMillisecondsSinceEpoch(entry.value)) >
             maxAge)
         .map((entry) => entry.key)
