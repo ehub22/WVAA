@@ -119,7 +119,7 @@ class EmptyStatusView extends StatelessWidget {
             Icon(icon, size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              title ?? AppStrings.of(context)['common.errorTitle'],
+              title,
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme

@@ -70,7 +70,13 @@ jobs:
           set -e
 
       - name: Show Flutter version
-        run: flutter --version
+        shell: bash
+        run: |
+          flutter --version | tee /tmp/versions.log
+          python3 - "$(head -1 /tmp/versions.log)" <<'PY'
+          import sys
+          print(f"::notice title=Flutter::{sys.argv[1]}")
+          PY
 
              # Configure Gradle caching. We keep the fast part of the Gradle cache
       # (downloaded dependencies, wrapper distributions, transforms, compiled
@@ -107,14 +113,35 @@ jobs:
         run: python3 tools/audit_contrast.py --strict
 
       - name: Run Flutter tests (includes the l10n/a11y suite)
-        run: flutter test
+        # Failure text is re-emitted as GitHub *annotations* (see
+        # tools/annotate_ci.py): annotations are small and readable through the
+        # check-run API even where the full step log download is not.
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter expanded > /tmp/test.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/test.log test
+          cat /tmp/test.log
+          exit $status
 
       # Build a release APK. The versionCode is set to the GitHub run number so
       # each build is monotonically increasing. The APK is signed with Flutter's
       # auto-generated debug key (see android/app/build.gradle.kts). To publish
       # on Google Play, configure a real keystore (see the README).
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }}
+        # Same trick as the test step: re-emit the interesting lines of the
+        # build output as annotations, which stay readable when the full step
+        # log cannot be downloaded.
+        shell: bash
+        run: |
+          set +e
+          flutter build apk --release --build-number=${{ github.run_number }} \
+            > /tmp/build.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/build.log build
+          tail -n 120 /tmp/build.log
+          exit $status
 
       - name: Upload APK as a build artifact
         uses: actions/upload-artifact@v4

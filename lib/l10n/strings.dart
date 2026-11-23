@@ -439,6 +439,7 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.emailSubject': 'Student question for my counselor',
     'help.counselor.careerTitle': 'College & career guidance',
     'help.counselor.careerRole': 'College & Career Guidance Technician',
+    'settings.roomShort': 'Rm',
   },
 
   // -------------------------------------------------------------------- Español
@@ -783,6 +784,7 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.emailSubject': 'Pregunta de estudiante para mi consejero',
     'help.counselor.careerTitle': 'Orientación universitaria y profesional',
     'help.counselor.careerRole': 'Técnica de orientación universitaria y profesional',
+    'settings.roomShort': 'Aula',
   },
 
   // ------------------------------------------------------------------ 简体中文
@@ -1080,6 +1082,7 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.emailSubject': '学生咨询（致辅导员）',
     'help.counselor.careerTitle': '升学与职业指导',
     'help.counselor.careerRole': '升学与职业指导技术员',
+    'settings.roomShort': '教室',
   },
 
   // ------------------------------------------------------------------ Filipino
@@ -1414,5 +1417,6 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.emailSubject': 'Tanong ng estudyante para sa aking counselor',
     'help.counselor.careerTitle': 'Gabay sa kolehiyo at karera',
     'help.counselor.careerRole': 'College & Career Guidance Technician',
+    'settings.roomShort': 'Rm',
   },
 };

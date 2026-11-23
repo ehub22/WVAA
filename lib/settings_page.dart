@@ -405,10 +405,12 @@ class _PeriodTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = AppSettings.instance;
+    final t = AppStrings.of(context);
     final periodSettings = settings.periodSettings(canonicalName);
     final details = <String>[
       if (periodSettings.teacher.isNotEmpty) periodSettings.teacher,
-      if (periodSettings.room.isNotEmpty) 'Rm ${periodSettings.room}',
+      if (periodSettings.room.isNotEmpty)
+        '${t['settings.roomShort']} ${periodSettings.room}',
     ].join(' · ');
 
     final subtitle = <String>[
@@ -419,7 +421,7 @@ class _PeriodTile extends StatelessWidget {
     return ListTile(
       title: Text(settings.displayName(canonicalName)),
       subtitle: Text(
-        subtitle.isEmpty ? 'Tap to add a name, teacher or room' : subtitle,
+        subtitle.isEmpty ? t['settings.tapToAdd'] : subtitle,
       ),
       trailing: const Icon(Icons.edit_outlined),
       onTap: () => _editPeriod(context),
