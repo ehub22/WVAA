@@ -162,6 +162,23 @@ def build_annotations(text: str) -> None:
         annotate("error", "build failure context", "\n".join(block)[:MAX_LEN])
         break
 
+    # Individual diagnostic lines, emitted one annotation each so that the
+    # 900-character cap on a single annotation cannot hide the actual cause.
+    # (A combined "context" block is truncated mid-sentence when the log has
+    # NDK unzip progress right before the failure.)
+    interesting = re.compile(
+        r"^(WARNING:|e: |error:|w: .*deprecat|> Could not|> Failed|> A problem|"
+        r"> Error|> .*(incompatible|not supported|is lower than)|"
+        r"\* Try:|\* Exception is:)"
+    )
+    emitted = 0
+    for i, line in enumerate(text.splitlines()):
+        stripped = line.strip()
+        if not interesting.match(stripped) or emitted >= MAX_ANNOTATIONS - 5:
+            continue
+        emitted += 1
+        annotate("error", "gradle detail", stripped[:MAX_LEN])
+
     if seen == 0 and "FAILURE:" not in text:
         tail = "\n".join(text.splitlines()[-12:])
         annotate("error", "build failed", tail[:MAX_LEN])
