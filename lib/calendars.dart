@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import 'l10n/strings.dart';
 import 'network_cache.dart';
 import 'school_lunch.dart';
 import 'support.dart';
@@ -18,10 +19,15 @@ enum CalendarType { google, schoolLunch }
 /// [CalendarType.schoolLunch], [url] is ignored and the native lunch view is
 /// rendered.
 class CalendarTab {
-  const CalendarTab(this.title, this.url,
+  const CalendarTab(this.titleKey, this.slug, this.url,
       {this.isApi = false, this.type = CalendarType.google});
 
-  final String title;
+  /// Catalogue key for the tab label, so it follows the app language.
+  final String titleKey;
+
+  /// Language-independent identifier used for analytics and cache names —
+  /// never the translated label, so metrics stay comparable across languages.
+  final String slug;
   final String url;
   final bool isApi;
   final CalendarType type;
@@ -58,7 +64,9 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   DateTime? _cachedAt;
   bool _loading = false;
   bool _showingSavedCopy = false;
-  String? _error;
+  /// Catalogue key for the error message, translated when it is rendered so
+  /// switching language also re-translates an error already on screen.
+  bool _error = false;
 
   /// Whether the initial scroll-to-today still needs to happen.
   bool _needsScrollToToday = true;
@@ -75,7 +83,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     if (_loading) return;
     setState(() {
       _loading = true;
-      _error = null;
+      _error = false;
     });
 
     // Serve the cached response immediately, if present and parseable.
@@ -131,8 +139,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
           Telemetry.instance.logEvent('calendar_cache_used',
               {'calendar': widget.calendarName});
         } else {
-          _error = 'Couldn\'t reach the calendar server. '
-              'Check your connection and try again.';
+          _error = true;
         }
       });
     }
@@ -217,25 +224,29 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String _dayLabel(DateTime date) {
+  String _dayLabel(DateTime date, AppStrings strings) {
     final now = DateTime.now();
-    if (_isSameDay(date, now)) return 'Today';
+    if (_isSameDay(date, now)) return strings['calendar.today'];
     if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
-      return 'Yesterday';
+      return strings['calendar.yesterday'];
     }
-    if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
+    if (_isSameDay(date, now.add(const Duration(days: 1)))) {
+      return strings['calendar.tomorrow'];
+    }
 
-    const weekdays = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',    ];
-    return '${weekdays[date.weekday - 1]}, ${shortDateLabel(date)}';
+    // Weekday names come from the catalogue so they translate; DateFormat
+    // would need a locale-aware intl setup for the same result.
+    final weekdays = strings['calendar.weekdays'].split(',');
+    final name = weekdays[(date.weekday - 1).clamp(0, 6)];
+    return '$name, ${shortDateLabel(date)}';
   }
 
-  String _formatTime(Map<String, dynamic> event) {
+  String _formatTime(Map<String, dynamic> event, AppStrings strings) {
     final raw = event['start']?['dateTime'];
-    if (raw == null) return 'All Day';
+    if (raw == null) return strings['calendar.allDay'];
     final dt = DateTime.parse(raw as String).toLocal();
-    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final ampm =
+        dt.hour >= 12 ? strings['calendar.pm'] : strings['calendar.am'];
     final hour = dt.hour == 0
         ? 12
         : dt.hour > 12
@@ -247,8 +258,9 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   void _showEventDetails(
       BuildContext context, Map<String, dynamic> event, String timeStr) {
     final scheme = Theme.of(context).colorScheme;
+    final strings = AppStrings.of(context);
     final description =
-        (event['description'] as String?) ?? 'No description provided.';
+        (event['description'] as String?) ?? strings['calendar.noDescription'];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -280,7 +292,8 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
                     ),
                   ),
                   Text(
-                    (event['summary'] as String?) ?? 'Untitled Event',
+                    (event['summary'] as String?) ??
+                        strings['calendar.untitled'],
                     style: Theme.of(context)
                         .textTheme
                         .titleLarge
@@ -306,7 +319,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
                   ],
                   const Divider(height: 32),
                   Text(
-                    'Description',
+                    strings['calendar.description'],
                     style: Theme.of(context)
                         .textTheme
                         .titleSmall
@@ -346,14 +359,14 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
         itemBuilder: (context, index) =>
             _buildEventTile(context, events, index),
       );
-    } else if (_error != null) {
+    } else if (_error) {
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 80),
           ErrorStatusView(
-            title: 'Couldn\'t load calendar events',
-            message: _error!,
+            title: AppStrings.of(context)['calendar.errorTitle'],
+            message: AppStrings.of(context)['calendar.errorBody'],
             onRetry: () => _load(force: true),
           ),
         ],
@@ -361,21 +374,23 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     } else if (_loading) {
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          LoadingStatusView(label: 'Loading events…'),
+        children: [
+          const SizedBox(height: 120),
+          LoadingStatusView(
+            label: AppStrings.of(context)['calendar.loading'],
+          ),
         ],
       );
     } else {
+      final emptyStrings = AppStrings.of(context);
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 80),
+        children: [
+          const SizedBox(height: 80),
           EmptyStatusView(
             icon: Icons.event_available,
-            title: 'No upcoming events',
-            message: 'This calendar has nothing scheduled right now. '
-                'Pull down to refresh.',
+            title: emptyStrings['calendar.emptyTitle'],
+            message: emptyStrings['calendar.emptyBody'],
           ),
         ],
       );
@@ -387,7 +402,9 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
         children: [
           if (_showingSavedCopy && _cachedAt != null)
             SavedCopyNotice(
-                label: 'Saved copy from ${shortDateLabel(_cachedAt!)}'),
+              label:
+                  '${AppStrings.of(context)['calendar.savedCopy']} ${shortDateLabel(_cachedAt!)}',
+            ),
           Expanded(child: content),
         ],
       ),
@@ -404,9 +421,10 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
         : null;
     final showHeader = prevDate == null || !_isSameDay(displayDate, prevDate);
 
-    final title = (event['summary'] as String?) ?? 'Untitled Event';
+    final strings = AppStrings.of(context);
+    final title = (event['summary'] as String?) ?? strings['calendar.untitled'];
     final location = event['location']?.toString();
-    final timeStr = _formatTime(event);
+    final timeStr = _formatTime(event, strings);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +433,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 10),
             child: Text(
-              _dayLabel(displayDate),
+              _dayLabel(displayDate, AppStrings.of(context)),
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     letterSpacing: 1.2,
                     color: scheme.onSurfaceVariant,
@@ -499,19 +517,22 @@ class _CalendarsPageState extends State<CalendarsPage> {
 
   static const List<CalendarTab> _calendars = [
     CalendarTab(
-      'School Calendar',
+      'calendar.tabSchool',
+      'school',
       'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events'
       '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
     CalendarTab(
-      'Athletics',
+      'calendar.tabAthletics',
+      'athletics',
       'https://www.googleapis.com/calendar/v3/calendars/c_bdlim8dben51vvr6p2omiguh1k@group.calendar.google.com/events'
       '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
     CalendarTab(
-      'School Lunches',
+      'calendar.tabLunch',
+      'lunch',
       '',
       isApi: true,
       type: CalendarType.schoolLunch,
@@ -522,7 +543,7 @@ class _CalendarsPageState extends State<CalendarsPage> {
     setState(() => selectedIndex = index);
     Telemetry.instance.logEvent('view_section', {
       'screen': 'calendars',
-      'section': _calendars[index].title,
+      'section': _calendars[index].slug,
     });
   }
 
@@ -535,7 +556,10 @@ class _CalendarsPageState extends State<CalendarsPage> {
             children: [
               Expanded(
                 child: SectionSelector(
-                  labels: [for (final tab in _calendars) tab.title],
+                  labels: [
+                    for (final tab in _calendars)
+                      AppStrings.of(context)[tab.titleKey],
+                  ],
                   selectedIndex: selectedIndex,
                   onSelected: _onItemTapped,
                 ),
@@ -557,7 +581,7 @@ class _CalendarsPageState extends State<CalendarsPage> {
                     : CalendarEventsView(
                         key: ValueKey(tab.url),
                         apiUrl: tab.url,
-                        calendarName: tab.title.toLowerCase(),
+                        calendarName: tab.slug,
                       );
               },
             ),

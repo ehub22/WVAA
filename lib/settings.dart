@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data.dart';
+import 'l10n/strings.dart';
 
 /// Per-period customization: a student friendly name plus optional teacher and
 /// room number, e.g. "Human Body Systems · Mr. Smith · Rm 402".
@@ -99,6 +100,7 @@ class AppSettings extends ChangeNotifier {
   bool _analyticsEnabled = false;
   bool _crashReportingEnabled = false;
   bool _privacyNoticeSeen = false;
+  AppLanguage _language = AppLanguage.system;
   Map<String, PeriodSettings> _periods = <String, PeriodSettings>{};
 
   /// Called after settings are persisted (used to refresh the Android home
@@ -130,6 +132,18 @@ class AppSettings extends ChangeNotifier {
 
   /// Whether the first-run privacy disclosure has been acknowledged.
   bool get privacyNoticeSeen => _privacyNoticeSeen;
+
+  /// UI language. [AppLanguage.system] follows the device locale; every other
+  /// value pins the app to that language regardless of device settings (some
+  /// students share a phone, or the phone is set to a language they read less
+  /// comfortably than another).
+  AppLanguage get language => _language;
+
+  Future<void> setLanguage(AppLanguage value) async {
+    if (_language == value) return;
+    _language = value;
+    await _persist();
+  }
 
   /// Every string the student typed into "My classes" (custom names, teacher
   /// names, room numbers). Used by telemetry to scrub those values out of
@@ -261,6 +275,7 @@ class AppSettings extends ChangeNotifier {
     _analyticsEnabled = false;
     _crashReportingEnabled = false;
     _privacyNoticeSeen = false;
+    _language = AppLanguage.system;
     _periods = <String, PeriodSettings>{};
     notifyListeners();
   }
@@ -303,6 +318,7 @@ class AppSettings extends ChangeNotifier {
     // default rather than a choice.
     _privacyNoticeSeen =
         hasCurrentConsent ? (json['privacyNoticeSeen'] as bool? ?? false) : false;
+    _language = AppLanguage.fromCode(json['language'] as String?);
 
     final periods = json['periods'];
     final parsed = <String, PeriodSettings>{};
@@ -327,6 +343,7 @@ class AppSettings extends ChangeNotifier {
         'analyticsEnabled': _analyticsEnabled,
         'crashReportingEnabled': _crashReportingEnabled,
         'privacyNoticeSeen': _privacyNoticeSeen,
+        'language': _language.code,
         'periods': {
           for (final entry in _periods.entries) entry.key: entry.value.toJson(),
         },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'l10n/strings.dart';
 import 'network_cache.dart';
 import 'safety.dart';
 import 'settings.dart';
@@ -20,20 +21,19 @@ class SettingsPage extends StatelessWidget {
       listenable: Listenable.merge([settings, SafetySettings.instance]),
       builder: (context, _) {
         final safety = SafetySettings.instance;
+        final t = AppStrings.of(context);
         return Scaffold(
-          appBar: AppBar(title: const Text('Settings')),
+          appBar: AppBar(title: Text(t['settings.title'])),
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
-                const _SectionHeader('Notifications'),
+                _SectionHeader(t['settings.notifications']),
                 SwitchListTile(
                   value: settings.notificationsEnabled,
                   onChanged: (value) => settings.setNotificationsEnabled(value),
-                  title: const Text('Notifications'),
-                  subtitle: const Text(
-                    'Allow Westview HS to send notifications',
-                  ),
+                  title: Text(t['settings.notifications']),
+                  subtitle: Text(t['settings.notificationsSub']),
                   secondary: const Icon(Icons.notifications_outlined),
                 ),
                 SwitchListTile(
@@ -41,113 +41,105 @@ class SettingsPage extends StatelessWidget {
                   onChanged: settings.notificationsEnabled
                       ? (value) => settings.setLiveActivityEnabled(value)
                       : null,
-                  title: const Text('Live activity'),
+                  title: Text(t['settings.liveActivity']),
                   subtitle: Text(
                     settings.notificationsEnabled
-                        ? 'Ongoing notification with a countdown to the end of '
-                            'the current period'
-                        : 'Turn notifications on to use the live activity',
+                        ? t['settings.liveOn']
+                        : t['settings.liveOff'],
                   ),
                   secondary: const Icon(Icons.timer_outlined),
                 ),
 
                 const Divider(height: 32),
 
-                const _SectionHeader('Safety'),
+                _SectionHeader(t['settings.safety']),
                 ListTile(
                   leading: const Icon(Icons.support_agent),
-                  title: const Text('Get help now'),
-                  subtitle: const Text(
-                    'Westview counselors, crisis lines and hotlines, and how to '
-                    'report a safety concern. Works offline.',
-                  ),
+                  title: Text(t['settings.getHelp']),
+                  subtitle: Text(t['settings.getHelpSub']),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => openSupportPage(context),
                 ),
                 SwitchListTile(
                   value: safety.quickExitEnabled,
                   onChanged: SafetySettings.instance.setQuickExitEnabled,
-                  title: const Text('Quick exit'),
-                  subtitle: const Text(
-                    'Long-press the Help button to leave the app immediately. '
-                    'Nothing you looked at stays on screen.',
-                  ),
+                  title: Text(t['settings.quickExit']),
+                  subtitle: Text(t['settings.quickExitSub']),
                   secondary: const Icon(Icons.exit_to_app),
                 ),
                 SwitchListTile(
                   value: safety.hideRecents,
                   onChanged: SafetySettings.instance.setHideRecents,
-                  title: const Text('Hide preview in app switcher'),
-                  subtitle: const Text(
-                    'Stops the app’s last screen from showing in your recent-'
-                    'apps list (Android).',
-                  ),
+                  title: Text(t['settings.hideRecents']),
+                  subtitle: Text(t['settings.hideRecentsSub']),
                   secondary: const Icon(Icons.visibility_off_outlined),
                 ),
+                Semantics(
+                  button: true,
+                  child: ListTile(
+                    leading: const Icon(Icons.translate),
+                    // Written in all four languages so it is findable from any
+                    // starting language, whatever the app is currently set to.
+                    title: const Text('Language · Idioma · 语言 · Wika'),
+                    subtitle: Text(
+                      AppSettings.instance.language == AppLanguage.system
+                          ? t['settings.langSystem']
+                          : AppSettings.instance.language.pluralLabel,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _pickLanguage(context),
+                  ),
+                ),
 
-                const _SectionHeader('Privacy & data'),
+                _SectionHeader(t['settings.privacy']),
                 SwitchListTile(
                   value: settings.analyticsEnabled,
                   onChanged: (value) => settings.setAnalyticsEnabled(value),
-                  title: const Text('Anonymous usage statistics'),
-                  subtitle: const Text(
-                    'Counts of which screens are opened and whether refreshes '
-                    'succeed. Never identifies you.',
-                  ),
+                  title: Text(t['settings.analytics']),
+                  subtitle: Text(t['settings.analyticsSub']),
                   secondary: const Icon(Icons.insights_outlined),
                 ),
                 SwitchListTile(
                   value: settings.crashReportingEnabled,
                   onChanged: (value) => settings.setCrashReportingEnabled(value),
-                  title: const Text('Crash reports'),
-                  subtitle: const Text(
-                    'Error text and stack trace when the app breaks, so it can '
-                    'be fixed. Never identifies you.',
-                  ),
+                  title: Text(t['settings.crash']),
+                  subtitle: Text(t['settings.crashSub']),
                   secondary: const Icon(Icons.bug_report_outlined),
                 ),
                 const _PrivacyDisclosure(),
 
                 const Divider(height: 32),
 
-                const _SectionHeader('Saved content'),
+                _SectionHeader(t['settings.savedContent']),
                 ListTile(
                   leading: const Icon(Icons.download_done_outlined),
-                  title: const Text('Clear saved content'),
-                  subtitle: const Text(
-                    'Removes calendars, lunch menus and nutrition data saved '
-                    'for offline use. They download again next time you open '
-                    'them.',
-                  ),
+                  title: Text(t['settings.clear']),
+                  subtitle: Text(t['settings.clearSub']),
                   trailing: const Icon(Icons.delete_outline),
                   onTap: () => _clearCachedContent(context),
                 ),
 
                 const Divider(height: 32),
 
-                const _SectionHeader('Class details'),
+                _SectionHeader(t['settings.classDetails']),
                 SwitchListTile(
                   value: settings.showTeacher,
                   onChanged: (value) => settings.setShowTeacher(value),
-                  title: const Text('Show teacher'),
-                  subtitle: const Text(
-                    'Show the teacher in the schedule, notification and widget',
-                  ),
+                  title: Text(t['settings.showTeacher']),
+                  subtitle: Text(t['settings.showTeacherSub']),
                   secondary: const Icon(Icons.person_outline),
                 ),
                 SwitchListTile(
                   value: settings.showRoom,
                   onChanged: (value) => settings.setShowRoom(value),
-                  title: const Text('Show room number'),
-                  subtitle: const Text(
-                    'Show the room in the schedule, notification and widget',
-                  ),
+                  title: Text(t['settings.showRoom']),
+                  subtitle: Text(t['settings.showRoomSub']),
                   secondary: const Icon(Icons.meeting_room_outlined),
                 ),
 
                 const Divider(height: 32),
 
-                const _SectionHeader('My classes'),
+                _SectionHeader(t['settings.myClasses']),
                 for (final name in customizablePeriodNames)
                   _PeriodTile(canonicalName: name),
                 Padding(
@@ -155,7 +147,7 @@ class SettingsPage extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () => _confirmReset(context),
                     icon: const Icon(Icons.restart_alt),
-                    label: const Text('Reset all class names'),
+                    label: Text(t['settings.resetClasses']),
                   ),
                 ),
                 const _AboutAppFooter(),
@@ -168,30 +160,75 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// Language picker. Every option is listed in its own language, with the
+  /// English name underneath, so a student who cannot read the current UI
+  /// language can still find theirs.
+  Future<void> _pickLanguage(BuildContext context) async {
+    final current = AppSettings.instance.language;
+    final t = AppStrings.of(context);
+    final choice = await showModalBottomSheet<AppLanguage>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  t['settings.langPickTitle'],
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ),
+            for (final language in AppLanguage.values)
+              ListTile(
+                // Every entry is legible from any starting language: its own
+                // name first, then all four names on the subtitle line.
+                title: Text(language.nativeName),
+                subtitle: language == AppLanguage.system
+                    ? null
+                    : Text(language.pluralLabel),
+                trailing: language == current
+                    ? Icon(Icons.check, semanticLabel: t['common.selected'])
+                    : null,
+                selected: language == current,
+                onTap: () => Navigator.of(context).pop(language),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice != null) {
+      await AppSettings.instance.setLanguage(choice);
+    }
+  }
+
   Future<void> _clearCachedContent(BuildContext context) async {
     await NetworkCache.instance.clearAll();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved content cleared')),
+      SnackBar(content: Text(AppStrings.of(context)['settings.cleared'])),
     );
   }
 
   Future<void> _confirmReset(BuildContext context) async {
+    final t = AppStrings.of(context);
     final shouldReset = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset class names?'),
-        content: const Text(
-          'This removes every custom name, teacher and room you entered.',
-        ),
+        title: Text(t['settings.resetTitle']),
+        content: Text(t['settings.resetBody']),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(t['settings.cancel']),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Reset'),
+            child: Text(t['settings.reset']),
           ),
         ],
       ),
@@ -211,6 +248,7 @@ class _AboutAppFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final t = AppStrings.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
       child: Column(
@@ -218,12 +256,14 @@ class _AboutAppFooter extends StatelessWidget {
         children: [
           const Divider(height: 1),
           const SizedBox(height: 8),
-          const _SectionHeader('About this app'),
+          _SectionHeader(t['settings.about']),
           Text(
-            'Westview HS (WVAA) is a student-built companion app, not an '
-            'official school or district product.',
-            style: textTheme.bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
+            t['disclaimer.title'],
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurface,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -245,23 +285,26 @@ class _AboutAppFooter extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Schedules, menus and links can be out of date or wrong. Always '
-            'confirm time-sensitive information with the school office. '
-            'Counselor contacts were last checked $supportDataVerified; the '
-            'counseling office or the school website is the authoritative '
-            'source.',
+            t['settings.verified'],
             style: textTheme.bodySmall
                 ?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
           ),
           const SizedBox(height: 10),
           Text(
-            'This app is not a crisis service and is not monitored. If you or '
-            'someone else is in danger, call 911. In an emotional crisis, call '
-            'or text 988.',
+            t['settings.notCrisis'],
             style: textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
               height: 1.5,
               fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            t['disclaimer.translationNote'],
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.45,
+              fontStyle: FontStyle.italic,
             ),
           ),
         ],
@@ -298,7 +341,7 @@ class _PrivacyDisclosure extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "What we collect (and don't)",
+                      AppStrings.of(context)['settings.collectTitle'],
                       style: Theme.of(context)
                           .textTheme
                           .titleSmall
@@ -309,14 +352,8 @@ class _PrivacyDisclosure extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Both switches above are off unless you turned them on in the '
-                'welcome dialog. When on, the app sends anonymous usage counts '
-                'and crash reports so it can be fixed — with anything you '
-                'typed into Settings removed first. It never collects your '
-                'name, student ID, contacts, location or advertising '
-                'identifiers, and it shares nothing with third parties. '
-                'Reports go only to the school\'s server '
-                '(${Uri.parse(telemetryEndpoint).host}).',
+                '${AppStrings.of(context)['settings.collectBody']} '
+                '(${Uri.parse(telemetryEndpoint).host})',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
@@ -339,16 +376,24 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              letterSpacing: 1.1,
-              fontWeight: FontWeight.bold,
-            ),
+      child: Semantics(
+        header: true,
+        child: Text(
+          // Uppercasing is a Latin-script convention and reads badly in
+          // Chinese; leave CJK headings as written.
+          _isCjk(title) ? title : title.toUpperCase(),
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
       ),
     );
   }
+
+  static bool _isCjk(String value) =>
+      RegExp(r'[\u4e00-\u9fff]').hasMatch(value);
 }
 
 /// One editable period in the "My classes" list.
@@ -424,6 +469,7 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
     return AlertDialog(
       title: Text(widget.canonicalName),
       content: SingleChildScrollView(
@@ -434,21 +480,21 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
-                labelText: 'Class name',
-                helperText: 'Leave empty to keep "${widget.canonicalName}"',
+                labelText: t['settings.editClass'],
+                helperText: t['settings.leaveEmpty'],
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _teacherController,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Teacher'),
+              decoration: InputDecoration(labelText: t['settings.teacher']),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _roomController,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(labelText: 'Room number'),
+              decoration: InputDecoration(labelText: t['settings.room']),
             ),
           ],
         ),
@@ -456,11 +502,11 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(const PeriodSettings()),
-          child: const Text('Clear'),
+          child: Text(t['settings.clearField']),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(t['settings.cancel']),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(
@@ -470,7 +516,7 @@ class _EditPeriodDialogState extends State<_EditPeriodDialog> {
               room: _roomController.text.trim(),
             ),
           ),
-          child: const Text('Save'),
+          child: Text(t['settings.save']),
         ),
       ],
     );

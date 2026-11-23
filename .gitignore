@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Python bytecode from tools/ (audit_contrast.py, render_mockups.py)
+__pycache__/

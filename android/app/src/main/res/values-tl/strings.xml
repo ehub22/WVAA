@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Westview HS</string>
+    <string name="schedule_widget_label">Kasalukuyang Period</string>
+    <string name="schedule_widget_description">Ipinapakita ang kasalukuyang period sa Westview at ang natitirang oras.</string>
+</resources>

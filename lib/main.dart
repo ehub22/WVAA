@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'calendars.dart';
+import 'l10n/strings.dart';
 import 'newsletter_page.dart';
 import 'publications.dart';
 import 'safety.dart';
@@ -69,12 +71,66 @@ class WestviewApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Westview HS',
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.system,
-      home: const _HomePage(),
+    return ListenableBuilder(
+      listenable: AppSettings.instance,
+      builder: (context, _) {
+        final language = AppSettings.instance.language;
+        return MaterialApp(
+          title: 'Westview HS',
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: ThemeMode.system,
+          // Pin the language when the student picked one, otherwise follow the
+          // device. `localeResolutionCallback` keeps the app's own translations
+          // authoritative instead of Flutter's default fallback.
+          locale: language == AppLanguage.system ? null : Locale(language.code),
+          // `fil` is included so Flutter's own delegates accept a device set
+          // to Filipino; the app resolves it to the `tl` catalogue.
+          supportedLocales: const [
+            Locale('en'),
+            Locale('es'),
+            Locale('zh'),
+            Locale('tl'),
+            Locale('fil'),
+          ],
+          localeResolutionCallback: (locale, supported) {
+            if (language != AppLanguage.system) return Locale(language.code);
+            final tag = AppLanguage.system.resolve(locale ?? const Locale('en'));
+            return Locale(tag);
+          },
+          // Without these delegates Flutter's own widgets (the date picker in
+          // Settings, "Back", the text-selection menu, semantic announcements)
+          // would stay in English even when the app copy is translated.
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          builder: (context, child) {
+            // Accessible text scaling: honour the OS setting all the way up to
+            // the largest supported size, and never let a runaway scale factor
+            // push a crisis phone number off screen. 2.0 keeps every safety
+            // action reachable while still doubling the type size.
+            final media = MediaQuery.of(context);
+            final scaler = media.textScaler.clamp(
+              minScaleFactor: 0.85,
+              maxScaleFactor: 2.0,
+            );
+            return MediaQuery(
+              data: media.copyWith(textScaler: scaler),
+              // Respect the OS "remove animations" switch (Android: Settings ▸
+              // Accessibility ▸ Remove animations; iOS: Reduce Motion). Reduced
+              // motion is a vestibular-disorder accommodation and is also what
+              // some autistic and migraine-prone students turn on.
+              child: _ReducedMotionScope(
+                enabled: media.disableAnimations,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            );
+          },
+          home: const _HomePage(),
+        );
+      },
     );
   }
 }
@@ -178,34 +234,34 @@ class _HomePageState extends State<_HomePage> {
                       onDestinationSelected: _onTabSelected,
                       labelBehavior:
                           NavigationDestinationLabelBehavior.alwaysShow,
-                      destinations: const [
+                      destinations: [
                         NavigationDestination(
-                          icon: Icon(Icons.home_outlined),
-                          selectedIcon: Icon(Icons.home),
-                          label: 'Schedule',
+                          icon: const Icon(Icons.home_outlined),
+                          selectedIcon: const Icon(Icons.home),
+                          label: AppStrings.of(context)['nav.schedule'],
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.newspaper),
-                          selectedIcon: Icon(Icons.newspaper),
-                          label: 'Newsletters',
+                          icon: const Icon(Icons.newspaper_outlined),
+                          selectedIcon: const Icon(Icons.newspaper),
+                          label: AppStrings.of(context)['nav.newsletters'],
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.play_circle_outline),
-                          selectedIcon: Icon(Icons.play_circle),
-                          label: 'Publications',
+                          icon: const Icon(Icons.play_circle_outline),
+                          selectedIcon: const Icon(Icons.play_circle),
+                          label: AppStrings.of(context)['nav.publications'],
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.calendar_month_outlined),
-                          selectedIcon: Icon(Icons.calendar_month),
-                          label: 'Calendar',
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          selectedIcon: const Icon(Icons.calendar_month),
+                          label: AppStrings.of(context)['nav.calendars'],
                         ),
                         // Always-available help: a student in a bad moment
                         // should never have to guess which tab hides the
                         // counselling and crisis resources.
                         NavigationDestination(
-                          icon: Icon(Icons.support_agent),
-                          selectedIcon: Icon(Icons.support_agent),
-                          label: 'Get help',
+                          icon: const Icon(Icons.support_agent),
+                          selectedIcon: const Icon(Icons.support_agent),
+                          label: AppStrings.of(context)['nav.getHelp'],
                         ),
                       ],
                     ),
@@ -228,27 +284,37 @@ class _DistrictDisclaimerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final text = AppStrings.of(context)['disclaimer.short'];
     return Material(
       color: scheme.surfaceContainerHighest,
       child: InkWell(
         onTap: () => openSupportPage(context),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 14, color: scheme.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  shortDisclaimer,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        height: 1.3,
-                      ),
+        // The bar is tappable; keep a comfortable target even when the
+        // translated text wraps to three lines at 200% text scale.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    text,
+                    // No maxLines: the disclaimer must never be clipped, even
+                    // at 200% text scale or in a longer translation.
+                    textAlign: TextAlign.center,
+                    semanticsLabel: text,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -263,31 +329,22 @@ class _PrivacyNoticeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
     return AlertDialog(
-      title: const Text('Your privacy'),
-      content: const SingleChildScrollView(
+      title: Text(strings['privacy.title']),
+      content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'This app can send two things to the school’s own server, and '
-              'nothing else:',
-            ),
-            SizedBox(height: 12),
-            Text('• Anonymous usage counts — which screens are opened and '
-                'whether a refresh worked. No names, no accounts.'),
-            Text('• Crash reports — the error text, with anything you typed '
-                'into Settings removed, so bugs can be fixed.'),
-            SizedBox(height: 12),
-            Text(
-              'It never collects your name, student ID, contacts, location, '
-              'or advertising identifiers, and it shares nothing with third '
-              'parties. There is no third-party analytics.',
-            ),
-            SizedBox(height: 12),
-            Text('Both are off unless you turn them on, and you can change '
-                'this any time in Settings ▸ Privacy.'),
+            Text(strings['privacy.intro']),
+            const SizedBox(height: 12),
+            Text(strings['privacy.bullet1']),
+            Text(strings['privacy.bullet2']),
+            const SizedBox(height: 12),
+            Text(strings['privacy.never']),
+            const SizedBox(height: 12),
+            Text(strings['privacy.offUntil']),
           ],
         ),
       ),
@@ -295,23 +352,44 @@ class _PrivacyNoticeDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Don’t share'),
+          child: Text(strings['privacy.dontShare']),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Share anonymously'),
+          child: Text(strings['privacy.share']),
         ),
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            'Westview HS (WVAA) is a student-built app. It is not a Poway '
-            'Unified app and is not endorsed by the District. The Get help '
-            'tab has counselors and 24/7 crisis lines — opening it is never '
-            'recorded.',
-            style: TextStyle(fontSize: 12, height: 1.4),
+            '${strings['disclaimer.short']}\n\n${strings['disclaimer.crisis']}',
+            style: const TextStyle(fontSize: 12, height: 1.4),
           ),
         ),
       ],
     );
   }
+}
+
+/// Applies Flutter's [AnimatedX] widgets at a shorter duration when the OS asks
+/// for reduced motion.
+///
+/// Flutter does not implement "remove animations" for its own [AnimatedX]
+/// widgets, so every place that animates can read [reducedMotionFor] and get a
+/// near-zero duration instead. The app itself only animates page/tab
+/// transitions and the pull-to-refresh spinner, but third-party widgets
+/// (WebViews, the countdown) should be wrapped too if they ever animate.
+class _ReducedMotionScope extends InheritedWidget {
+  const _ReducedMotionScope({required this.enabled, required super.child});
+
+  final bool enabled;
+
+  @override
+  bool updateShouldNotify(_ReducedMotionScope oldWidget) =>
+      oldWidget.enabled != enabled;
+}
+
+/// Duration to use for a decorative animation, honouring the OS setting.
+Duration reducedMotionFor(BuildContext context, Duration normal) {
+  final scope = context.dependOnInheritedWidgetOfExactType<_ReducedMotionScope>();
+  return (scope?.enabled ?? false) ? Duration.zero : normal;
 }

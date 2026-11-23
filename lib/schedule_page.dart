@@ -6,6 +6,7 @@ import 'package:live_activities/live_activities.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'data.dart';
+import 'l10n/strings.dart';
 import 'safety.dart';
 import 'settings.dart';
 import 'settings_page.dart';
@@ -268,9 +269,9 @@ class _SchedulePageState extends State<SchedulePage>
               // Thin progress line while today's special schedule is being
               // checked against the server.
               if (SpecialScheduleService.instance.isRefreshing)
-                const LinearProgressIndicator(
+                LinearProgressIndicator(
                   minHeight: 2,
-                  semanticsLabel: 'Checking for schedule updates',
+                  semanticsLabel: AppStrings.of(context)['schedule.checking'],
                 ),
               Expanded(
                 child: Padding(
@@ -286,9 +287,8 @@ class _SchedulePageState extends State<SchedulePage>
                               _specialScheduleFetchFailed)
                             _ScheduleNotice(
                               icon: Icons.cloud_off,
-                              message:
-                                  "Couldn't reach the special-schedule server, "
-                                  "so today's schedule may not be accurate.",
+                              message: AppStrings.of(context)
+                                  ['schedule.mayNotBeAccurate'],
                               background: scheme.errorContainer,
                               foreground: scheme.onErrorContainer,
                               onDismiss: () => setState(
@@ -298,8 +298,7 @@ class _SchedulePageState extends State<SchedulePage>
                               _todaySpecialSchedule != null)
                             _ScheduleNotice(
                               icon: Icons.event_note,
-                              message:
-                                  'A special schedule is in effect today.',
+                              message: AppStrings.of(context)['schedule.special'],
                               background: scheme.primaryContainer,
                               foreground: scheme.onPrimaryContainer,
                               onDismiss: () => setState(
@@ -312,12 +311,22 @@ class _SchedulePageState extends State<SchedulePage>
                               // The segments show whole-day schedules, not a
                               // transient choice, so the checkmark is noise.
                               showSelectedIcon: false,
-                              segments: const [
+                              segments: [
                                 ButtonSegment(
-                                    value: 0, label: Text('Mon/Fri')),
+                                  value: 0,
+                                  label: Text(
+                                      AppStrings.of(context)['schedule.monFri']),
+                                ),
                                 ButtonSegment(
-                                    value: 1, label: Text('Tue/Thu')),
-                                ButtonSegment(value: 2, label: Text('Wed')),
+                                  value: 1,
+                                  label: Text(
+                                      AppStrings.of(context)['schedule.tueThu']),
+                                ),
+                                ButtonSegment(
+                                  value: 2,
+                                  label:
+                                      Text(AppStrings.of(context)['schedule.wed']),
+                                ),
                               ],
                               selected: {selectedDayScheduleIndex},
                               onSelectionChanged: (selection) {
@@ -359,36 +368,60 @@ class _SchedulePageState extends State<SchedulePage>
                                                 ),
                                           ),
                                           const SizedBox(height: 4),
-                                          // The ticking digits are excluded
-                                          // from the semantic tree (they would
-                                          // re-announce every second); the
-                                          // period name above carries the
-                                          // meaning for screen readers.
-                                          ExcludeSemantics(
-                                            child: TimerCountdown(
-                                              format: CountDownTimerFormat
-                                                  .hoursMinutesSeconds,
-                                              endTime: currentPeriodEndTime,
-                                              timeTextStyle: TextStyle(
-                                                fontSize: 20,
-                                                color: scheme
-                                                    .onPrimaryContainer,
-                                              ),
-                                              onEnd: () {
-                                                // Roll straight into the next
-                                                // period's countdown without a
-                                                // visible pause.
-                                                if (mounted) {
-                                                  _updateLiveActivity();
-                                                  setState(() {});
-                                                }
-                                              },
+                                          // A screen-reader user gets the
+                                          // same information once, not a
+                                          // re-announcement every second: the
+                                          // digits are excluded and replaced
+                                          // by a short group label.
+                                          Semantics(
+                                            container: true,
+                                            excludeSemantics: true,
+                                            label: _countdownSemanticsLabel(
+                                              context,
+                                              currentPeriodName ?? '',
+                                              currentPeriodEndTime,
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                // Explicit, colour-independent
+                                                // "this is happening now" cue.
+                                                _NowBadge(
+                                                  color: scheme.onPrimaryContainer,
+                                                  label:
+                                                      AppStrings.of(context)
+                                                          ['schedule.now'],
+                                                ),
+                                                ExcludeSemantics(
+                                                  child: TimerCountdown(
+                                                    format: CountDownTimerFormat
+                                                        .hoursMinutesSeconds,
+                                                    endTime: currentPeriodEndTime,
+                                                    timeTextStyle: TextStyle(
+                                                      fontSize: 20,
+                                                      color: scheme
+                                                          .onPrimaryContainer,
+                                                    ),
+                                                    onEnd: () {
+                                                      // Roll straight into
+                                                      // the next period's
+                                                      // countdown without a
+                                                      // visible pause.
+                                                      if (mounted) {
+                                                        _updateLiveActivity();
+                                                        setState(() {});
+                                                      }
+                                                    },
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       )
                                     : Text(
-                                        'No active period',
+                                        AppStrings.of(context)
+                                            ['schedule.noActivePeriod'],
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleMedium
@@ -424,11 +457,10 @@ class _SchedulePageState extends State<SchedulePage>
                       behavior: HitTestBehavior.opaque,
                       child: FloatingActionButton.extended(
                         heroTag: 'home_help_button',
-                        tooltip: 'Get help now. Long-press to leave the app '
-                            "quickly if this screen shouldn't be seen.",
+                        tooltip: AppStrings.of(context)['schedule.helpTooltip'],
                         onPressed: () => openSupportPage(context),
                         icon: const Icon(Icons.support_agent),
-                        label: const Text('Help'),
+                        label: Text(AppStrings.of(context)['schedule.help']),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -436,7 +468,7 @@ class _SchedulePageState extends State<SchedulePage>
                     // the tooltip doubles as the screen-reader label.
                     FloatingActionButton(
                       heroTag: 'home_settings_button',
-                      tooltip: 'Settings',
+                      tooltip: AppStrings.of(context)['schedule.settings'],
                       onPressed: _openSettings,
                       child: const Icon(Icons.settings),
                     ),
@@ -448,6 +480,25 @@ class _SchedulePageState extends State<SchedulePage>
         );
       },
     );
+  }
+
+  /// One-shot screen-reader description of the live countdown, e.g.
+  /// "Period 2, 24 minutes left, ends at 9:40 AM".
+  String _countdownSemanticsLabel(
+    BuildContext context,
+    String periodName,
+    DateTime endTime,
+  ) {
+    final now = DateTime.now();
+    final remaining = endTime.difference(now);
+    final minutes = remaining.inMinutes.clamp(0, 24 * 60);
+    final time = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(endTime),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+    final displayName = _settings.displayName(periodName);
+    return '$displayName, ${AppStrings.of(context)['schedule.now']}, '
+        '$minutes min, ${AppStrings.of(context)['schedule.endsAt']} $time';
   }
 
   Widget _buildPeriodCard(BuildContext context, dynamic period) {
@@ -471,11 +522,25 @@ class _SchedulePageState extends State<SchedulePage>
           color: isNow ? scheme.onPrimaryContainer : scheme.onSurface,
         );
 
+    final strings = AppStrings.of(context);
+    final startLabel = (period['startTime'] as TimeOfDay).format(context);
+    final endLabel = (period['endTime'] as TimeOfDay).format(context);
+    // One coherent announcement per row instead of four fragments
+    // ("Period 2", "Room 210", "8:00 AM", "9:40 AM").
+    final semanticsLabel = [
+      if (isNow) strings['schedule.now'],
+      displayName,
+      if (details.isNotEmpty) details,
+      '$startLabel – $endLabel',
+    ].join(', ');
+
     return Card(
       elevation: isNow ? 5 : 0,
       color: isNow ? scheme.primaryContainer : scheme.surfaceContainerLow,
       child: Semantics(
         container: true,
+        excludeSemantics: true,
+        label: semanticsLabel,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
@@ -486,7 +551,26 @@ class _SchedulePageState extends State<SchedulePage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(displayName, style: titleStyle),
+                    Row(
+                      children: [
+                        // The word + glyph carry the "current period" state on
+                        // their own, so the primaryContainer tint is never the
+                        // only signal (WCAG 1.4.1).
+                        if (isNow) ...[
+                          Icon(Icons.play_arrow_rounded,
+                              size: 15, color: scheme.onPrimaryContainer),
+                          const SizedBox(width: 2),
+                        ],
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: titleStyle,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                     if (details.isNotEmpty)
                       Text(details, style: detailStyle),
                   ],
@@ -494,17 +578,11 @@ class _SchedulePageState extends State<SchedulePage>
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  (period['startTime'] as TimeOfDay).format(context),
-                  style: timeStyle,
-                ),
+                child: Text(startLabel, style: timeStyle),
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  (period['endTime'] as TimeOfDay).format(context),
-                  style: timeStyle,
-                ),
+                child: Text(endLabel, style: timeStyle),
               ),
             ],
           ),
@@ -565,6 +643,41 @@ int getCurrentDayOfWeek([DateTime? customNow]) {
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
+/// Explicit "now" cue on the current-period card.
+///
+/// Colour alone must never be the only thing distinguishing the current period
+/// (WCAG 1.4.1): this adds a check glyph and the word "Now" on top of the
+/// primaryContainer tint, so the state survives colour-blindness, greyscale,
+/// and a washed-out screen in sunlight.
+class _NowBadge extends StatelessWidget {
+  const _NowBadge({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.play_arrow_rounded, size: 16, color: color),
+          const SizedBox(width: 2),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Small dismissable notice banner shown above the schedule.
 class _ScheduleNotice extends StatelessWidget {
   const _ScheduleNotice({
@@ -607,7 +720,7 @@ class _ScheduleNotice extends StatelessWidget {
           ),
           // Full 48dp tap target; only the glyph is small.
           IconButton(
-            tooltip: 'Dismiss',
+            tooltip: AppStrings.of(context)['schedule.dismiss'],
             iconSize: 18,
             icon: Icon(Icons.close, color: foreground),
             onPressed: onDismiss,

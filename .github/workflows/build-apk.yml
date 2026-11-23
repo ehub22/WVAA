@@ -100,6 +100,15 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      # Fail fast on accessibility regressions before spending 10 minutes on a
+      # Gradle build: the theme's contrast pairs and the four-language string
+      # catalogue are both checked by `flutter test` + the contrast audit.
+      - name: Verify WCAG contrast of the theme
+        run: python3 tools/audit_contrast.py --strict
+
+      - name: Run Flutter tests (includes the l10n/a11y suite)
+        run: flutter test
+
       # Build a release APK. The versionCode is set to the GitHub run number so
       # each build is monotonically increasing. The APK is signed with Flutter's
       # auto-generated debug key (see android/app/build.gradle.kts). To publish

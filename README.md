@@ -25,7 +25,7 @@ A companion app for Westview High School (Poway Unified School District), built 
 - **Theming** — Material 3 light and dark themes that follow the system setting, built from the school's gold/brass palette with WCAG-AA-checked contrast pairs.
 - **Works on bad Wi-Fi** — Calendars, lunch menus and special schedules cache their last-known content on disk and keep showing it (with a "saved copy" notice) whenever the school network is down. Newsletter/publication WebViews keep their loaded pages and never blank out mid-session.
 - **Refresh everywhere** — Pull-to-refresh on calendars and lunch menus; a refresh button on newsletters and publications; retry buttons on every error screen.
-- **Accessibility** — Screen-reader labels on tabs, icons and interactive rows; 48dp minimum tap targets; full support for system font scaling (no clipped text).
+- **Accessibility** — Four languages (English, Spanish, Simplified Chinese, Filipino) covering every screen the app draws, including all crisis resources; screen-reader semantics on every control (the 911 button is read as "9 1 1"); 48dp minimum tap targets (56dp for the emergency action); font scaling honoured to 200 % with no clipped text; status never conveyed by colour alone; silent notifications; a text-first route for every crisis line. Details in [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
 - **Privacy-first telemetry** — Anonymous crash reports and usage counts, **off until you opt in**, with per-stream switch and automatic scrubbing of anything you typed. See [Privacy](#privacy) below.
 - **Safety controls** — quick exit from a long-press, and the app's last screen hidden in the Android app switcher. Class details are never shown on the lock screen.
 
@@ -80,6 +80,48 @@ decision) is in [`docs/SAFETY.md`](docs/SAFETY.md). The short version:
   lock screen, and requests no permissions beyond internet, notifications and
   what the home-screen widget needs.
 
+## Language and accessibility
+
+The app ships complete copy in **English, Spanish, Simplified Chinese and
+Filipino**. `Settings ▸ Safety ▸ Language · Idioma · 语言 · Wika` picks a language;
+each option is labelled in all four languages so it is findable from any starting
+point, and **System default** follows the phone.
+
+Safety copy is never machine-translated at runtime: every string — the 911 card,
+all six crisis lines, the counselor roster, the reporting guidance, the district
+disclaimer — is in `lib/l10n/strings.dart` and checked by `test/l10n_test.dart`,
+which fails if any language is missing a key, leaves a safety string in English,
+or references a key that does not exist. A missing key falls back to English and
+then to the key name, so a typo shows up in tests instead of as a blank label.
+
+Android also gets translated launcher/widget labels and the Android 13+ per-app
+language picker (`res/xml/locale_config.xml`).
+
+Full accessibility posture — screen readers, colour-blind safety, reduced motion,
+deaf/HoH routes, text scaling, and the known gaps — is in
+[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). Compatibility risks from a
+student, developer and administrator point of view are in
+[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+
+## Screenshots
+
+Layout mockups rendered from the app's real colour tokens
+(`lib/theme/colors.dart`) and real copy by `python3 tools/render_mockups.py`.
+They are not pixel-exact device screenshots — there is no Flutter SDK in the
+environment that renders them — but every colour and string shown is the one the
+app ships.
+
+| | |
+| --- | --- |
+| ![Get help — top](docs/screenshots/get-help-1.png) | ![Get help — crisis lines](docs/screenshots/get-help-2.png) |
+| Emergency card and counselor roster | Crisis lines, reporting routes, disclaimer |
+| ![Schedule with Help](docs/screenshots/home-with-help.png) | ![Settings safety](docs/screenshots/settings-safety.png) |
+| Help button + pinned disclaimer bar | Settings ▸ Safety, including Language |
+| ![Spanish Get help](docs/screenshots/get-help-spanish.png) | ![Language picker](docs/screenshots/language-picker.png) |
+| The same screen in Spanish | Language picker (CJK glyphs omitted: no CJK font in the mockup environment) |
+| ![Deuteranopia](docs/screenshots/get-help-deuteranopia.png) | ![Palette](docs/screenshots/palette-simulated.png) |
+| Get help under deuteranopia | Brand palette under all four vision types |
+
 ## Project layout
 
 ```
@@ -93,6 +135,7 @@ lib/
   settings_page.dart     Settings UI (notifications, privacy, classes)
   telemetry.dart         Anonymous crash reporting + analytics (opt-in, scrubbed)
   support.dart           Get-help screen: counselors, crisis lines, disclaimer
+  l10n/strings.dart      String catalogue for en/es/zh/tl + AppLanguage
   safety.dart            Quick exit + recents privacy
   network_cache.dart     Last-known-good disk cache for network content
   widget_sync.dart       Pushes schedules/settings to the Android widget
@@ -104,6 +147,10 @@ lib/
   web_page.dart          Shared WebView wrapper (loading/error/retry states)
   theme/                 App color tokens + light/dark Material 3 ThemeData
 docs/SAFETY.md           Student-safety and developer-safety design notes
+docs/ACCESSIBILITY.md    Languages, screen readers, colour, deaf/HoH, motion
+docs/COMPATIBILITY.md    Student/developer/administrator risk review
+tools/audit_contrast.py  WCAG contrast + colour-blind simulation checker
+tools/render_mockups.py  Renders docs/screenshots/ from the real tokens/copy
   widgets/
     section_selector.dart  Material 3 pill tabs + lazy keep-alive stack
     status_views.dart      Shared loading / empty / error / saved-copy states
@@ -154,7 +201,8 @@ Add the widget by long-pressing the home screen → Widgets → Westview HS → 
 
 A settings button in the bottom-right of the home screen opens:
 
-- **Safety** — Get help now, quick exit, hide preview in app switcher.
+- **Safety** — Get help now, quick exit, hide preview in app switcher, and
+  **Language** (System default, English, Español, 简体中文, Filipino).
 
 - **Notifications** — master switch; when off the app posts no notifications at all.
 - **Live activity** — ongoing countdown notification (only runs while notifications are enabled).
@@ -206,5 +254,19 @@ Configure a real signing keystore per the [Flutter signing guide](https://docs.f
 flutter test
 ```
 
-Tests cover schedule time math, settings persistence, the special-schedule parser and caching behavior (using `MockClient`), and Vimeo URL detection.
+Tests cover schedule time math, settings persistence, the special-schedule parser
+and caching behavior (using `MockClient`), Vimeo URL detection, the crisis-contact
+data, and the localization/accessibility contract (`test/l10n_test.dart`: all four
+catalogues in sync, no untranslated safety strings, every catalogue key that the
+code looks up exists, the Help screen renders in every language at 200 % text
+scale, and the 911 button announces "9 1 1").
+
+CI additionally runs the contrast audit before building:
+
+```sh
+python3 tools/audit_contrast.py --strict
+```
+
+which fails the build if any theme pair drops below WCAG AA or if the palette
+stops being distinguishable under deuteranopia, protanopia or tritanopia.
 

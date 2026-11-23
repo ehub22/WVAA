@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'l10n/strings.dart';
 import 'safety.dart';
+import 'settings.dart';
 
 // ===========================================================================
 // Verified contact data
@@ -135,6 +137,16 @@ class Hotline {
           if (smsBody != null) 'body': smsBody!,
         });
   Uri? get websiteUri => website == null ? null : Uri.parse(website!);
+
+  /// Translated display name.
+  String nameFor(AppStrings strings) => strings['hotline.$id.name'];
+
+  /// Translated one-line description.
+  String descriptionFor(AppStrings strings) => strings['hotline.$id.desc'];
+
+  /// Translated action label (`Call 988`, `Text HOME to 741741`, …).
+  String callLabelFor(AppStrings strings) => strings['hotline.$id.call'];
+  String smsLabelFor(AppStrings strings) => strings['hotline.$id.sms'];
 }
 
 /// 24/7 support lines. Order matters: the free, confidential, youth-focused
@@ -248,10 +260,11 @@ Future<void> _showManualFallback(BuildContext context, Uri uri) async {
     // Clipboard unavailable — the dialog still shows the number.
   }
   if (!context.mounted) return;
+  final strings = AppStrings.of(context);
   await showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Copy this'),
+      title: Text(strings['common.copyNumber']),
       content: SelectableText(
         dial,
         style: Theme.of(context).textTheme.headlineSmall,
@@ -259,7 +272,7 @@ Future<void> _showManualFallback(BuildContext context, Uri uri) async {
       actions: [
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
+          child: Text(strings['common.close']),
         ),
       ],
     ),
@@ -279,21 +292,29 @@ Future<void> sendSms(
   BuildContext context,
   Uri uri, {
   String? prefilledBody,
+  String? serviceName,
 }) async {
   if (prefilledBody == null) {
     await _launch(context, uri);
     return;
   }
 
+  final strings = AppStrings.of(context);
   final proceed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Send this text?'),
+      title: Text(strings['sms.confirmTitle']),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(uri.path.isEmpty ? 'To your messaging app:' : 'To ${uri.path}:'),
+          Text(
+            serviceName == null
+                ? (uri.path.isEmpty
+                    ? 'To your messaging app:'
+                    : 'To ${uri.path}:')
+                : '$serviceName (${uri.path})',
+          ),
           const SizedBox(height: 8),
           SelectableText(
             prefilledBody,
@@ -304,8 +325,7 @@ Future<void> sendSms(
           ),
           const SizedBox(height: 12),
           Text(
-            'Your messaging app will open with this message ready to send. '
-            'You can edit or add to it first.',
+            strings['sms.editNote'],
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -313,11 +333,11 @@ Future<void> sendSms(
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(strings['common.cancel']),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Open Messages'),
+          child: Text(strings['sms.openApp']),
         ),
       ],
     ),
@@ -335,12 +355,13 @@ Future<void> emailCounselor(
   BuildContext context,
   Counselor counselor,
 ) async {
+  // The subject line is pre-filled in the student's language: they can send
+  // it without composing anything in a language they may not read well.
+  final subject = AppStrings.of(context)['help.counselor.emailSubject'];
   final uri = Uri(
     scheme: 'mailto',
     path: counselor.email,
-    queryParameters: <String, String>{
-      'subject': 'Student question for my counselor',
-    },
+    queryParameters: <String, String>{'subject': subject},
   );
   final opened = await _launch(context, uri);
   if (!opened && context.mounted) {
@@ -363,12 +384,20 @@ Future<void> openSupportPage(BuildContext context) {
 
 /// Compact help entry point for any app bar.
 class HelpIconButton extends StatelessWidget {
-  const HelpIconButton({super.key, this.tooltip = 'Get help now'});
+  const HelpIconButton({super.key, this.tooltip});
 
-  final String tooltip;
+  /// Defaults to the translated "Get help now".
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    // The quick-exit hint is appended only when the gesture is actually
+    // enabled, and in the reader's own language.
+    final base = tooltip ?? strings['help.iconTooltip'];
+    final label = SafetySettings.instance.quickExitEnabled
+        ? strings['help.iconTooltipQuickExit'].replaceFirst('%s', base)
+        : base;
     return GestureDetector(
       // Long-press = quick exit (see safety.dart). No confirmation: the whole
       // point is that it is instant. Opaque so the glyph's transparent padding
@@ -376,9 +405,7 @@ class HelpIconButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onLongPress: QuickExit.longPressHandler(context),
       child: IconButton(
-        tooltip: SafetySettings.instance.quickExitEnabled
-            ? '$tooltip (long-press to leave the app quickly)'
-            : tooltip,
+        tooltip: label,
         icon: const Icon(Icons.support_agent),
         onPressed: () => openSupportPage(context),
       ),
@@ -407,12 +434,19 @@ class SupportPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: AppSettings.instance,
+      builder: (context, _) => _buildPage(context, AppStrings.of(context)),
+    );
+  }
+
+  Widget _buildPage(BuildContext context, AppStrings strings) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Get help'),
+        title: Text(strings['help.title']),
         actions: [
           IconButton(
-            tooltip: 'Counseling page on the school website',
+            tooltip: strings['help.counselor.website'],
             icon: const Icon(Icons.public),
             onPressed: () => openWebsite(
               context,
@@ -424,34 +458,72 @@ class SupportPage extends StatelessWidget {
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-          children: const [
-            _EmergencyCard(),
-            SizedBox(height: 16),
+          children: [
+            _EmergencyCard(strings: strings),
+            const SizedBox(height: 16),
             _SectionTitle(
               icon: Icons.school_outlined,
-              title: 'Talk to a counselor at Westview',
+              title: strings['help.counselor.title'],
             ),
-            _CounselorCard(),
-            SizedBox(height: 20),
+            _CounselorCard(strings: strings),
+            const SizedBox(height: 20),
             _SectionTitle(
               icon: Icons.favorite_outline,
-              title: 'Crisis lines — free, confidential, 24/7',
+              title: strings['help.crisis.title'],
             ),
-            _HotlineList(),
-            SizedBox(height: 20),
+            // Deaf and hard-of-hearing students need to know, before reading a
+            // list of phone numbers, that every line also has a text route.
+            _InfoNote(
+              icon: Icons.hearing_disabled,
+              text: strings['help.crisis.deaf'],
+            ),
+            _HotlineList(strings: strings),
+            const SizedBox(height: 20),
             _SectionTitle(
               icon: Icons.campaign_outlined,
-              title: 'Report a safety concern',
+              title: strings['help.report.title'],
             ),
-            _ReportingCard(),
-            SizedBox(height: 20),
+            _ReportingCard(strings: strings),
+            const SizedBox(height: 20),
             _SectionTitle(
               icon: Icons.info_outline,
-              title: 'About this app',
+              title: strings['help.about.title'],
             ),
-            _DisclaimerCard(),
+            _DisclaimerCard(strings: strings),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Small inline note with an icon, used for accessibility guidance.
+class _InfoNote extends StatelessWidget {
+  const _InfoNote({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -492,7 +564,9 @@ class _SectionTitle extends StatelessWidget {
 /// Immediately visible, above the fold: if someone is in danger right now,
 /// the app should not make them scroll.
 class _EmergencyCard extends StatelessWidget {
-  const _EmergencyCard();
+  const _EmergencyCard({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -513,7 +587,7 @@ class _EmergencyCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'In immediate danger?',
+                    strings['help.emergency.title'],
                     style: textTheme.titleMedium?.copyWith(
                       color: scheme.onErrorContainer,
                       fontWeight: FontWeight.w700,
@@ -524,29 +598,39 @@ class _EmergencyCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Call 911 now if you or someone else is about to be hurt, or '
-              'you need help right this minute.',
+              strings['help.emergency.body'],
               style: textTheme.bodyMedium
                   ?.copyWith(color: scheme.onErrorContainer, height: 1.4),
             ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: scheme.error,
-                  foregroundColor: scheme.onError,
-                  minimumSize: const Size.fromHeight(48),
+              child: Semantics(
+                button: true,
+                // Announce what the button dials, not just the glyph text.
+                label: '${strings['help.emergency.call']}, 9 1 1',
+                excludeSemantics: true,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                    // Larger than the 48dp minimum: this is the one control a
+                    // panicking student must hit first time.
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  onPressed: () =>
+                      callNumber(context, Uri(scheme: 'tel', path: '911')),
+                  icon: const Icon(Icons.call),
+                  label: Text(
+                    strings['help.emergency.call'],
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-                onPressed: () => callNumber(context, Uri(scheme: 'tel', path: '911')),
-                icon: const Icon(Icons.call),
-                label: const Text('Call 911'),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'If you’re not sure whether it’s an emergency, call or text 988. '
-              'Someone will answer and help you figure out next steps.',
+              strings['help.emergency.note'],
               style: textTheme.bodySmall
                   ?.copyWith(color: scheme.onErrorContainer, height: 1.4),
             ),
@@ -558,7 +642,9 @@ class _EmergencyCard extends StatelessWidget {
 }
 
 class _CounselorCard extends StatelessWidget {
-  const _CounselorCard();
+  const _CounselorCard({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -578,10 +664,7 @@ class _CounselorCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Counselors are in the Wolverine Center during the school day. '
-              'You can drop in, ask a teacher to help you get there, or email '
-              'your counselor directly — you don’t need to explain everything '
-              'to make the appointment.',
+              strings['help.counselor.body'],
               style: textTheme.bodyMedium?.copyWith(height: 1.45),
             ),
             const SizedBox(height: 12),
@@ -598,7 +681,7 @@ class _CounselorCard extends StatelessWidget {
                     Uri(scheme: 'tel', path: westviewMainPhone),
                   ),
                   icon: const Icon(Icons.call),
-                  label: const Text('Call the office'),
+                  label: Text(strings['help.counselor.callOffice']),
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
@@ -609,7 +692,7 @@ class _CounselorCard extends StatelessWidget {
                     Uri.parse(westviewCounselingPageUrl),
                   ),
                   icon: const Icon(Icons.public),
-                  label: const Text('Counseling website'),
+                  label: Text(strings['help.counselor.website']),
                 ),
               ],
             ),
@@ -624,14 +707,14 @@ class _CounselorCard extends StatelessWidget {
             Semantics(
               header: true,
               child: Text(
-                'Find your counselor',
+                strings['help.counselor.find'],
                 style: textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: 2),
             Text(
-              'By the first letter of your last name.',
+              strings['help.counselor.byLast'],
               style: textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
@@ -640,22 +723,21 @@ class _CounselorCard extends StatelessWidget {
               _CounselorTile(counselor: counselor),
             const Divider(height: 24),
             Text(
-              'College & career questions',
+              strings['help.counselor.career'],
               style: textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 2),
             Text(
-              '$collegeCareerTechName · College & Career Guidance Technician · '
+              '$collegeCareerTechName · '
+              '${strings['help.counselor.careerRole']} · '
               'ext $collegeCareerTechExtension · $collegeCareerTechEmail',
               style: textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
             ),
             const SizedBox(height: 12),
             Text(
-              'Staff and caseloads can change during the year. Check the '
-              'school website or the counseling office if your name’s letter '
-              'isn’t listed. (List checked $supportDataVerified.)',
+              strings['help.counselor.verified'],
               style: textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
             ),
@@ -718,12 +800,14 @@ class _CounselorTile extends StatelessWidget {
           ),
           // 48dp targets for both quick actions, labelled for TalkBack.
           IconButton(
-            tooltip: 'Call ${counselor.name}',
+            tooltip: AppStrings.of(context)['help.counselor.callA11y']
+                .replaceFirst('%s', counselor.name),
             icon: const Icon(Icons.call_outlined),
             onPressed: () => callNumber(context, counselor.phoneUri),
           ),
           IconButton(
-            tooltip: 'Email ${counselor.name}',
+            tooltip: AppStrings.of(context)['help.counselor.emailA11y']
+                .replaceFirst('%s', counselor.name),
             icon: const Icon(Icons.mail_outline),
             onPressed: () => emailCounselor(context, counselor),
           ),
@@ -734,22 +818,26 @@ class _CounselorTile extends StatelessWidget {
 }
 
 class _HotlineList extends StatelessWidget {
-  const _HotlineList();
+  const _HotlineList({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (final hotline in crisisHotlines) _HotlineCard(hotline: hotline),
+        for (final hotline in crisisHotlines)
+          _HotlineCard(hotline: hotline, strings: strings),
       ],
     );
   }
 }
 
 class _HotlineCard extends StatelessWidget {
-  const _HotlineCard({required this.hotline});
+  const _HotlineCard({required this.hotline, required this.strings});
 
   final Hotline hotline;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -764,59 +852,95 @@ class _HotlineCard extends StatelessWidget {
         side: BorderSide(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              hotline.name,
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              hotline.description,
-              style: textTheme.bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (hotline.callUri != null)
-                  FilledButton.tonalIcon(
-                    style:
-                        FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                    onPressed: () => callNumber(context, hotline.callUri!),
-                    icon: const Icon(Icons.call),
-                    label: Text(hotline.callDisplay ?? 'Call'),
-                  ),
-                if (hotline.smsUri != null)
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
-                    ),
-                    onPressed: () => sendSms(
-                      context,
-                      hotline.smsUri!,
-                      prefilledBody: hotline.smsBody,
-                    ),
-                    icon: const Icon(Icons.sms_outlined),
-                    label: Text(hotline.smsDisplay ?? 'Text'),
-                  ),
-                if (hotline.websiteUri != null)
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 48),
-                    ),
-                    onPressed: () => openWebsite(context, hotline.websiteUri!),
-                    icon: const Icon(Icons.open_in_new),
-                    label: Text(hotline.websiteLabel ?? 'Website'),
-                  ),
-              ],
-            ),
-          ],
+      // Each card is its own container so TalkBack reads the hotline name and
+      // description before the actions — but not merged, so every call/text
+      // button stays individually focusable.
+      child: Semantics(
+        container: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  hotline.nameFor(strings),
+                  style: textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hotline.descriptionFor(strings),
+                style: textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
+              ),
+              const SizedBox(height: 10),
+              // At large text scales a side-by-side row of "Call 1-888-724-7240"
+              // buttons would overflow, so the actions stack and go full width.
+              LayoutBuilder(
+                builder: (context, _) {
+                  final largeText =
+                      MediaQuery.textScalerOf(context).scale(13) > 13 * 1.35;
+                  final buttons = <Widget>[
+                    if (hotline.callUri != null)
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        onPressed: () => callNumber(context, hotline.callUri!),
+                        icon: const Icon(Icons.call),
+                        label: Text(hotline.callLabelFor(strings)),
+                      ),
+                    if (hotline.smsUri != null)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        onPressed: () => sendSms(
+                          context,
+                          hotline.smsUri!,
+                          prefilledBody: hotline.smsBody,
+                          serviceName: hotline.nameFor(strings),
+                        ),
+                        icon: const Icon(Icons.sms_outlined),
+                        label: Text(hotline.smsLabelFor(strings)),
+                      ),
+                    if (hotline.websiteUri != null)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        onPressed: () =>
+                            openWebsite(context, hotline.websiteUri!),
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text(
+                          hotline.websiteLabel ?? strings['common.website'],
+                        ),
+                      ),
+                  ];
+                  if (!largeText) {
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: buttons,
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final button in buttons)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: button,
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -824,7 +948,9 @@ class _HotlineCard extends StatelessWidget {
 }
 
 class _ReportingCard extends StatelessWidget {
-  const _ReportingCard();
+  const _ReportingCard({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -846,9 +972,7 @@ class _ReportingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Worried about a classmate, a threat, a weapon, or something you '
-              'saw online? Tell a trusted adult — a teacher, your counselor, a '
-              'coach, or a parent. You can also report it anonymously:',
+              strings['help.report.body'],
               style: textTheme.bodyMedium?.copyWith(height: 1.45),
             ),
             const SizedBox(height: 10),
@@ -862,7 +986,7 @@ class _ReportingCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            hotline.name,
+                            hotline.nameFor(strings),
                             style: textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
@@ -879,15 +1003,14 @@ class _ReportingCard extends StatelessWidget {
                         minimumSize: const Size(0, 48),
                       ),
                       onPressed: () => callNumber(context, hotline.callUri!),
-                      child: const Text('Call'),
+                      child: Text(strings['help.crisis.call']),
                     ),
                   ],
                 ),
               ),
             const SizedBox(height: 4),
             Text(
-              'You don’t have to be certain. Reports can be wrong and that’s '
-              'okay — the people who check them are trained for it.',
+              strings['help.report.note'],
               style: textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
             ),
@@ -903,7 +1026,9 @@ class _ReportingCard extends StatelessWidget {
 /// "Flyers – Outside Organizations" page), plus a short plain-language
 /// restatement for students.
 class _DisclaimerCard extends StatelessWidget {
-  const _DisclaimerCard();
+  const _DisclaimerCard({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -929,7 +1054,7 @@ class _DisclaimerCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'This app is not part of Poway Unified',
+                    strings['disclaimer.title'],
                     style: textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: scheme.onSurface,
@@ -958,22 +1083,27 @@ class _DisclaimerCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'In plain terms: Westview HS (WVAA) is a student-built companion '
-              'app. Poway Unified School District and Westview High School did '
-              'not make it, do not run it, and have not reviewed it. Anything '
-              'shown here may be out of date or wrong — always confirm with the '
-              'school office, your counselor, or the school website.',
+              strings['disclaimer.plain'],
               style: textTheme.bodySmall
                   ?.copyWith(height: 1.5, color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 10),
             Text(
-              'If something in this app is wrong, please tell the developers '
-              'or your school rather than relying on it. Westview HS is not '
-              'affiliated with the crisis lines listed above and receives no '
-              'payment from them.',
-              style: textTheme.bodySmall
-                  ?.copyWith(height: 1.5, color: scheme.onSurfaceVariant),
+              strings['disclaimer.crisis'],
+              style: textTheme.bodySmall?.copyWith(
+                height: 1.5,
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              strings['disclaimer.translationNote'],
+              style: textTheme.bodySmall?.copyWith(
+                height: 1.45,
+                color: scheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),

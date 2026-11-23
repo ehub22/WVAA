@@ -10,6 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Localised Material/Cupertino widget strings (date pickers, "Back",
+  # tooltips, text-selection menus) plus locale-aware number/date formatting
+  # for es/zh/tl. The app's own copy lives in lib/l10n/strings.dart.
+  flutter_localizations:
+    sdk: flutter
 
   flutter_timer_countdown: ^1.0.7
   timer_builder: ^2.0.0

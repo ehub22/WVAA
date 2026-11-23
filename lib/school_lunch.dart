@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import 'l10n/strings.dart';
 import 'network_cache.dart';
 import 'telemetry.dart';
 import 'widgets/status_views.dart';
@@ -59,7 +60,9 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   DateTime? _cachedAt;
   bool _loading = false;
   bool _showingSavedCopy = false;
-  String? _error;
+  /// Whether the last load failed with nothing cached to show. A flag (not a
+  /// message) so an on-screen error re-translates when the language changes.
+  bool _error = false;
   bool _needsScrollToToday = true;
 
   @override
@@ -72,7 +75,7 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
     if (_loading) return;
     setState(() {
       _loading = true;
-      _error = null;
+      _error = false;
     });
 
     // Serve the cached month immediately, if present and parseable.
@@ -141,8 +144,7 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
           _showingSavedCopy = true;
           Telemetry.instance.logEvent('lunch_cache_used');
         } else {
-          _error = "Couldn't reach the menu server. "
-              'Check your connection and try again.';
+          _error = true;
         }
       });
     }
@@ -301,14 +303,15 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
     return lunches;
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDate(DateTime date, AppStrings strings) {
     final now = DateTime.now();
-    if (_isSameDay(date, now)) return 'Today';
-    if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
-    const weekdays = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',    ];
-    return '${weekdays[date.weekday - 1]}, ${shortDateLabel(date)}';
+    if (_isSameDay(date, now)) return strings['calendar.today'];
+    if (_isSameDay(date, now.add(const Duration(days: 1)))) {
+      return strings['calendar.tomorrow'];
+    }
+    final weekdays = strings['calendar.weekdays'].split(',');
+    return '${weekdays[(date.weekday - 1).clamp(0, 6)]}, '
+        '${shortDateLabel(date)}';
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -322,31 +325,48 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
 
   void _showNutritionFacts(BuildContext context, String mealName) {
     Telemetry.instance.logEvent('nutrition_facts_opened');
+    final strings = AppStrings.of(context);
     final recipe = _recipes[mealName];
     if (recipe == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No nutrition facts available for $mealName')),
+        SnackBar(
+          content: Text(
+            strings['lunch.noFactsFor'].replaceFirst('%s', mealName),
+          ),
+        ),
       );
       return;
     }
 
-    var servingSizeText = '1 serving';
-    var nutritionText = 'No detailed nutrition data available.';
+    var servingSizeText =
+        '${strings['lunch.servingSize']}: ${strings['lunch.oneServing']}';
+    var nutritionText = strings['lunch.noNutrition'];
     final nutrients = recipe['nutrients'];
     if (nutrients is Map<String, dynamic>) {
       servingSizeText =
-          'Serving Size: ${nutrients['serving_size'] ?? '1 serving'}';
+          '${strings['lunch.servingSize']}: '
+          '${nutrients['serving_size'] ?? strings['lunch.oneServing']}';
       nutritionText =
-          'Calories: ${_formatNutrient(nutrients['calories_kcal'])}\n'
-          'Total Fat: ${_formatNutrient(nutrients['total_fat_grams'])}g\n'
-          '  Saturated Fat: ${_formatNutrient(nutrients['saturated_fat_grams'])}g\n'
-          '  Trans Fat: ${_formatNutrient(nutrients['trans_fat_grams'])}g\n'
-          'Cholesterol: ${_formatNutrient(nutrients['cholesterol_milligrams'])}mg\n'
-          'Sodium: ${_formatNutrient(nutrients['sodium_milligrams'])}mg\n'
-          'Carbohydrates: ${_formatNutrient(nutrients['carbohydrates_grams'])}g\n'
-          '  Dietary Fiber: ${_formatNutrient(nutrients['fiber_grams'])}g\n'
-          '  Sugars: ${_formatNutrient(nutrients['sugars_grams'])}g\n'
-          'Protein: ${_formatNutrient(nutrients['protein_grams'])}g\n\n';
+          '${strings['lunch.calories']}: '
+          '${_formatNutrient(nutrients['calories_kcal'])}\n'
+          '${strings['lunch.totalFat']}: '
+          '${_formatNutrient(nutrients['total_fat_grams'])}g\n'
+          '  ${strings['lunch.saturatedFat']}: '
+          '${_formatNutrient(nutrients['saturated_fat_grams'])}g\n'
+          '  ${strings['lunch.transFat']}: '
+          '${_formatNutrient(nutrients['trans_fat_grams'])}g\n'
+          '${strings['lunch.cholesterol']}: '
+          '${_formatNutrient(nutrients['cholesterol_milligrams'])}mg\n'
+          '${strings['lunch.sodium']}: '
+          '${_formatNutrient(nutrients['sodium_milligrams'])}mg\n'
+          '${strings['lunch.carbs']}: '
+          '${_formatNutrient(nutrients['carbohydrates_grams'])}g\n'
+          '  ${strings['lunch.fiber']}: '
+          '${_formatNutrient(nutrients['fiber_grams'])}g\n'
+          '  ${strings['lunch.sugars']}: '
+          '${_formatNutrient(nutrients['sugars_grams'])}g\n'
+          '${strings['lunch.protein']}: '
+          '${_formatNutrient(nutrients['protein_grams'])}g\n\n';
     }
 
     final scheme = Theme.of(context).colorScheme;
@@ -396,7 +416,7 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
               ),
               const Divider(height: 32),
               Text(
-                'Nutrition Facts',
+                AppStrings.of(context)['lunch.nutritionFacts'],
                 style: Theme.of(context)
                     .textTheme
                     .titleSmall
@@ -502,14 +522,14 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
         itemBuilder: (context, index) =>
             _buildLunchCard(context, lunches[index], scheme),
       );
-    } else if (_error != null) {
+    } else if (_error) {
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 80),
           ErrorStatusView(
-            title: "Couldn't load the lunch menu",
-            message: _error!,
+            title: AppStrings.of(context)['lunch.errorTitle'],
+            message: AppStrings.of(context)['lunch.errorBody'],
             onRetry: () => _load(force: true),
           ),
         ],
@@ -517,22 +537,23 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
     } else if (_loading) {
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          LoadingStatusView(label: 'Loading the menu…'),
+        children: [
+          const SizedBox(height: 120),
+          LoadingStatusView(
+            label: AppStrings.of(context)['lunch.loading'],
+          ),
         ],
       );
     } else {
+      final emptyStrings = AppStrings.of(context);
       content = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 80),
+        children: [
+          const SizedBox(height: 80),
           EmptyStatusView(
             icon: Icons.restaurant_menu,
-            title: 'No lunch menu published',
-            message:
-                "This month's menu hasn't been published yet. Pull down to "
-                'refresh.',
+            title: emptyStrings['lunch.emptyTitle'],
+            message: emptyStrings['lunch.emptyBody'],
           ),
         ],
       );
@@ -544,7 +565,9 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
         children: [
           if (_showingSavedCopy && _cachedAt != null)
             SavedCopyNotice(
-                label: 'Saved menu from ${shortDateLabel(_cachedAt!)}'),
+              label:
+                  '${AppStrings.of(context)['lunch.savedCopy']} ${shortDateLabel(_cachedAt!)}',
+            ),
           Expanded(child: content),
         ],
       ),
@@ -559,7 +582,7 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
         Padding(
           padding: const EdgeInsets.only(top: 20, bottom: 10),
           child: Text(
-            _formatDate(lunch.date),
+            _formatDate(lunch.date, AppStrings.of(context)),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: scheme.primary,
                   letterSpacing: 1.2,
@@ -584,7 +607,8 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          lunch.dayOffReason ?? 'No School',
+                          lunch.dayOffReason ??
+                              AppStrings.of(context)['lunch.noSchool'],
                           style: Theme.of(context)
                               .textTheme
                               .titleSmall
@@ -596,11 +620,26 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildMenuSection(context, 'Lunch Entrees', lunch.entrees),
                       _buildMenuSection(
-                          context, 'Vegetables', lunch.vegetables),
-                      _buildMenuSection(context, 'Fruit & Juice', lunch.fruit),
-                      _buildMenuSection(context, 'Milk Choice', lunch.milk),
+                        context,
+                        AppStrings.of(context)['lunch.entrees'],
+                        lunch.entrees,
+                      ),
+                      _buildMenuSection(
+                        context,
+                        AppStrings.of(context)['lunch.vegetables'],
+                        lunch.vegetables,
+                      ),
+                      _buildMenuSection(
+                        context,
+                        AppStrings.of(context)['lunch.fruit'],
+                        lunch.fruit,
+                      ),
+                      _buildMenuSection(
+                        context,
+                        AppStrings.of(context)['lunch.milk'],
+                        lunch.milk,
+                      ),
                     ],
                   ),
           ),

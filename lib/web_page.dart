@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import 'l10n/strings.dart';
 import 'widgets/status_views.dart';
 
 /// Reusable WebView wrapper with explicit loading, error and retry states.
@@ -109,6 +110,7 @@ class WebPageViewState extends State<WebPageView> {
     final bg =
         widget.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
     final scheme = Theme.of(context).colorScheme;
+    final strings = AppStrings.of(context);
 
     return Stack(
       children: [
@@ -117,17 +119,16 @@ class WebPageViewState extends State<WebPageView> {
           ColoredBox(
             color: bg,
             child: ErrorStatusView(
-              title: "Couldn't open this page",
-              message: 'The page could not be loaded. Check your connection '
-                  'and try again.',
+              title: strings['web.errorTitle'],
+              message: strings['web.errorBody'],
               onRetry: reload,
-              retryLabel: 'Try again',
+              retryLabel: strings['web.retry'],
             ),
           )
         else if (!_hasLoadedOnce && _loading < 100)
           ColoredBox(
             color: bg,
-            child: const LoadingStatusView(label: 'Loading page…'),
+            child: LoadingStatusView(label: strings['web.loading']),
           )
         else if (_loading < 100)
           const Positioned(
@@ -153,8 +154,7 @@ class WebPageViewState extends State<WebPageView> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        "Couldn't refresh — still showing the last loaded "
-                        'page.',
+                        strings['web.stale'],
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -163,7 +163,7 @@ class WebPageViewState extends State<WebPageView> {
                     ),
                     // Full 48dp tap target; only the glyph is small.
                     IconButton(
-                      tooltip: 'Dismiss',
+                      tooltip: strings['common.dismiss'],
                       iconSize: 18,
                       color: scheme.onErrorContainer,
                       icon: const Icon(Icons.close),
