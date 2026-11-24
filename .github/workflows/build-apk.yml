@@ -31,12 +31,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java (Temurin 17)
-        # AGP 8.9 / Gradle 8.12 / Kotlin 2.1 require Java 17.
+      - name: Set up Java (Temurin 21)
+        # Android Gradle Plugin 9.3.1's lint toolchain uses Java 21 APIs
+        # (including List.removeLast). Running it on Java 17 makes lint crash
+        # with NoSuchMethodError during lintVitalAnalyzeRelease.
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
         
 
       - name: Set up Flutter (latest stable)
