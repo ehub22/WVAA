@@ -5,14 +5,18 @@ import 'package:simple_pip_mode/simple_pip.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import 'l10n/strings.dart';
+import 'support.dart';
 import 'telemetry.dart';
 import 'vimeo_pip.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
 class _Publication {
-  const _Publication(this.title, this.url);
-  final String title;
+  const _Publication(this.titleKey, this.url);
+
+  /// Catalogue key, so the tab labels follow the app language.
+  final String titleKey;
   final String url;
 }
 
@@ -27,9 +31,9 @@ class _PublicationsPageState extends State<PublicationsPage> {
   int selectedIndex = 0;
 
   static const List<_Publication> _publications = [
-    _Publication('Westview Nexus', 'https://wvnexus.org/category/news/'),
+    _Publication('publications.nexus', 'https://wvnexus.org/category/news/'),
     _Publication(
-        'Westview Newscast', 'https://vimeo.com/channels/westviewnewscast'),
+        'publications.newscast', 'https://vimeo.com/channels/westviewnewscast'),
   ];
 
   /// One key per publication so the header refresh button can reach the
@@ -41,18 +45,21 @@ class _PublicationsPageState extends State<PublicationsPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance.logEvent('view_section',
-        {'screen': 'publications', 'section': _publications[index].title});
+    Telemetry.instance.logEvent('view_section', {
+      'screen': 'publications',
+      'section': _publications[index].titleKey,
+    });
   }
 
   void _refreshCurrent() {
-    Telemetry.instance.logEvent(
-        'publication_refresh', {'section': _publications[selectedIndex].title});
+    Telemetry.instance.logEvent('publication_refresh',
+        {'section': _publications[selectedIndex].titleKey});
     _webKeys[selectedIndex].currentState?.reload();
   }
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
     return ValueListenableBuilder<bool>(
       valueListenable: vimeoPipActive,
       builder: (context, isPipActive, _) {
@@ -76,18 +83,20 @@ class _PublicationsPageState extends State<PublicationsPage> {
                         Expanded(
                           child: SectionSelector(
                             labels: [
-                              for (final p in _publications) p.title
+                              for (final p in _publications)
+                                strings[p.titleKey],
                             ],
                             selectedIndex: selectedIndex,
                             onSelected: _onItemTapped,
                           ),
                         ),
                         IconButton.filledTonal(
-                          tooltip: 'Refresh page',
+                          tooltip: strings['common.refresh'],
                           onPressed: _refreshCurrent,
                           icon: const Icon(Icons.refresh),
                         ),
-                        const SizedBox(width: 8),
+                        const HelpIconButton(),
+                        const SizedBox(width: 4),
                       ],
                     ),
                   ),
@@ -359,6 +368,7 @@ class PublicationWebViewState extends State<PublicationWebView>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final strings = AppStrings.of(context);
 
     return ColoredBox(
       color: Colors.black,
@@ -367,14 +377,13 @@ class PublicationWebViewState extends State<PublicationWebView>
           WebViewWidget(controller: _controller),
           if (_initialLoadFailed)
             ErrorStatusView(
-              title: "Couldn't open this page",
-              message: 'The page could not be loaded. Check your connection '
-                  'and try again.',
+              title: strings['web.errorTitle'],
+              message: strings['web.errorBody'],
               onRetry: reload,
-              retryLabel: 'Try again',
+              retryLabel: strings['web.retry'],
             )
           else if (!_hasLoadedOnce && _loading < 100)
-            const LoadingStatusView(label: 'Loading page…')
+            LoadingStatusView(label: strings['web.loading'])
           else if (_loading < 100)
             const Positioned(
               top: 0,
@@ -399,8 +408,7 @@ class PublicationWebViewState extends State<PublicationWebView>
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "Couldn't refresh — still showing the last loaded "
-                          'page.',
+                          strings['web.stale'],
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
@@ -408,7 +416,7 @@ class PublicationWebViewState extends State<PublicationWebView>
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Dismiss',
+                        tooltip: strings['common.dismiss'],
                         iconSize: 18,
                         color: scheme.onErrorContainer,
                         icon: const Icon(Icons.close),

@@ -36,7 +36,7 @@ object ScheduleNotificationManager {
     /** Bumped whenever the channel parameters change so existing installs
      *  pick up the new importance/visibility settings. */
     private const val CHANNEL_VERSION_KEY = "schedule_channel_version"
-    private const val CURRENT_CHANNEL_VERSION = 2
+    private const val CURRENT_CHANNEL_VERSION = 3
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -60,18 +60,25 @@ object ScheduleNotificationManager {
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     // IMPORTANCE_LOW is the right level for an ongoing
-                    // silent countdown (no sound, no heads-up, but visible on
-                    // the lock screen when visibility is PUBLIC).
+                    // silent countdown: no sound, no heads-up, no badge churn.
                     description = "Westview HS ongoing period countdown notification"
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    // Lock-screen text is deliberately generic: the channel
+                    // used to post the full public version (period name plus
+                    // teacher and room) on a locked phone. A passing stranger
+                    // should not be able to read a student's timetable, so the
+                    // notification is SECRET on the lock screen and only shows
+                    // class details once the phone is unlocked. There is no
+                    // opt-out: a timetable on the lock screen is never worth
+                    // the risk of the wrong person reading it.
+                    lockscreenVisibility = Notification.VISIBILITY_SECRET
                     setShowBadge(true)
                     enableVibration(false)
                     enableLights(false)
                 }
                 notificationManager.createNotificationChannel(channel)
                 prefs.edit().putInt(CHANNEL_VERSION_KEY, CURRENT_CHANNEL_VERSION).apply()
-            } else if (existing.lockscreenVisibility != Notification.VISIBILITY_PUBLIC) {
-                existing.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            } else if (existing.lockscreenVisibility != Notification.VISIBILITY_SECRET) {
+                existing.lockscreenVisibility = Notification.VISIBILITY_SECRET
                 existing.setShowBadge(true)
                 notificationManager.createNotificationChannel(existing)
             }
@@ -163,7 +170,8 @@ object ScheduleNotificationManager {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setShowWhen(false)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            // SECRET: nothing about the schedule is visible until unlock.
+            .setVisibility(Notification.VISIBILITY_SECRET)
             .setCategory(Notification.CATEGORY_STATUS)
             .setOnlyAlertOnce(true)
             .setLocalOnly(true)
@@ -185,14 +193,10 @@ object ScheduleNotificationManager {
                         R.mipmap.launcher_icon,
                     ),
                 )
+                // Public (lock-screen / redacted) version: period name only.
+                // Teacher, room and course name stay behind the lock screen.
                 .setContentTitle(currentPeriod.name)
-                .setContentText(
-                    if (currentPeriod.detail.isNotBlank()) {
-                        currentPeriod.detail
-                    } else {
-                        "In progress"
-                    },
-                )
+                .setContentText("In progress")
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)

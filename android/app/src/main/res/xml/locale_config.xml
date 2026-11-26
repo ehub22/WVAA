@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+ per-app language picker: lets a student set the app's language
+     from Settings > Apps > Westview HS > Language, independently of the device
+     language. Must stay in sync with AppLanguage in lib/l10n/strings.dart. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en"/>
+    <locale android:name="es"/>
+    <locale android:name="zh"/>
+    <locale android:name="tl"/>
+</locale-config>

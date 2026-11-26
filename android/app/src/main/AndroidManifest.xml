@@ -6,15 +6,17 @@
     <!-- Home screen widget: precise alarms for period transitions (Android 12+;
          the widget falls back to inexact alarms if this is not granted). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Allow the countdown notification to appear over the lock screen (e.g. on
-         OEM skins that hide low-priority notifications while the device is locked). -->
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- NOTE: USE_FULL_SCREEN_INTENT was deliberately removed. This app never
+         needs to take over the whole screen, and a countdown timer must never
+         be able to slam a full-screen activity over whatever the student was
+         doing (including over the lock screen). -->
     <!-- Wake the CPU briefly at period transitions so the notification and widget
          can be updated even when the device is dozing. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
-        android:label="Westview HS"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locale_config"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
@@ -25,7 +27,7 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
-            android:showWhenLocked="true"
+            android:showWhenLocked="false"
             android:turnScreenOn="false"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -84,6 +86,25 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Get-help screen (url_launcher): the dialer, SMS composer and mail
+             apps must be resolvable on Android 11+ or `launchUrl` returns
+             false and the crisis call/text buttons do nothing. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="sms"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="smsto"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="mailto"/>
         </intent>
     </queries>
 </manifest>

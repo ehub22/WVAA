@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
+
 /// Shared placeholder states so every network screen (calendars, lunches,
 /// newsletters, publications) presents loading, empty and error consistently.
 ///
@@ -7,9 +9,10 @@ import 'package:flutter/material.dart';
 /// generously sized retry button where an action is possible.
 
 class LoadingStatusView extends StatelessWidget {
-  const LoadingStatusView({super.key, this.label = 'Loading…'});
+  const LoadingStatusView({super.key, this.label});
 
-  final String label;
+  /// Defaults to the translated "Loading…" when not supplied.
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +23,7 @@ class LoadingStatusView extends StatelessWidget {
           const CircularProgressIndicator(),
           const SizedBox(height: 16),
           Text(
-            label,
+            label ?? AppStrings.of(context)['common.loading'],
             textAlign: TextAlign.center,
             style: Theme.of(context)
                 .textTheme
@@ -36,16 +39,16 @@ class LoadingStatusView extends StatelessWidget {
 class ErrorStatusView extends StatelessWidget {
   const ErrorStatusView({
     super.key,
-    this.title = "Can't load this right now",
+    this.title,
     required this.message,
     this.onRetry,
-    this.retryLabel = 'Retry',
+    this.retryLabel,
   });
 
-  final String title;
+  final String? title;
   final String message;
   final VoidCallback? onRetry;
-  final String retryLabel;
+  final String? retryLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +62,7 @@ class ErrorStatusView extends StatelessWidget {
             Icon(Icons.cloud_off, size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              title,
+              title ?? AppStrings.of(context)['common.errorTitle'],
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
@@ -80,7 +83,9 @@ class ErrorStatusView extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: Text(retryLabel),
+                label: Text(
+                  retryLabel ?? AppStrings.of(context)['common.retry'],
+                ),
               ),
             ],
           ],

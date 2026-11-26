@@ -48,18 +48,25 @@ void main() {
     expect(selected, findsOneWidget);
     expect(unselected, findsOneWidget);
 
+    // `getSemantics` returns a SemanticsNode; its accessibility flags live in
+    // `getSemanticsData().flagsCollection`, and `isSelected` is a Tristate
+    // value that is not exported from the public API — comparing its string
+    // form keeps this working across Flutter versions.
+    String selectedState(Finder finder) => tester
+        .getSemantics(finder)
+        .getSemanticsData()
+        .flagsCollection
+        .isSelected
+        .toString();
+
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Counseling').first)
-          .flags
-          .contains(SemanticsFlag.isSelected),
-      isTrue,
+      selectedState(find.bySemanticsLabel('Counseling').first),
+      'Tristate.isTrue',
       reason: 'the active section must be announced as selected',
     );
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Weekly Newsletter').first)
-          .flags
-          .contains(SemanticsFlag.isSelected),
-      isFalse,
+      selectedState(find.bySemanticsLabel('Weekly Newsletter').first),
+      'Tristate.isFalse',
     );
 
     handle.dispose();

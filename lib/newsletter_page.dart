@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'l10n/strings.dart';
+import 'support.dart';
 import 'telemetry.dart';
 import 'web_page.dart';
 import 'widgets/section_selector.dart';
@@ -20,19 +22,23 @@ class NewsletterPage extends StatefulWidget {
 class _NewsletterPageState extends State<NewsletterPage> {
   int selectedIndex = 0;
 
+  /// Stable, language-independent section id for analytics (never the
+  /// translated label, so metrics stay comparable across languages).
+  String get _sectionId => _newsletters[selectedIndex].titleKey;
+
   static const List<_Newsletter> _newsletters = [
     _Newsletter(
-      'Weekly Newsletter',
+      'newsletter.weekly',
       'https://www.canva.com/design/DAHAfg0kzy4/j0rtuhnsLlGu4XMtz5mqRA/view'
       '?utm_content=DAHAfg0kzy4&utm_campaign=designshare&utm_medium=link2'
       '&utm_source=uniquelinks&utlId=hf1baa97a03',
     ),
     _Newsletter(
-      'Counseling Newsletters',
+      'newsletter.counseling',
       'https://westview.powayusd.com/apps/pages/newsletters',
     ),
     _Newsletter(
-      'Den Announcements',
+      'newsletter.den',
       'https://docs.google.com/presentation/d/1Q6zH31VmOOnrPJMprtT6IL9rH8tEMmlKyBovYB0Ukq4/edit',
     ),
   ];
@@ -46,17 +52,18 @@ class _NewsletterPageState extends State<NewsletterPage> {
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
     Telemetry.instance
-        .logEvent('view_section', {'screen': 'newsletters', 'section': _newsletters[index].title});
+        .logEvent('view_section', {'screen': 'newsletters', 'section': _newsletters[index].titleKey});
   }
 
   void _refreshCurrent() {
-    Telemetry.instance.logEvent('newsletter_refresh',
-        {'section': _newsletters[selectedIndex].title});
+    Telemetry.instance
+        .logEvent('newsletter_refresh', {'section': _sectionId});
     _webKeys[selectedIndex].currentState?.reload();
   }
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
     return SafeArea(
       child: Column(
         children: [
@@ -64,7 +71,9 @@ class _NewsletterPageState extends State<NewsletterPage> {
             children: [
               Expanded(
                 child: SectionSelector(
-                  labels: [for (final n in _newsletters) n.title],
+                  labels: [
+                    for (final n in _newsletters) strings[n.titleKey],
+                  ],
                   selectedIndex: selectedIndex,
                   onSelected: _onItemTapped,
                 ),
@@ -73,11 +82,13 @@ class _NewsletterPageState extends State<NewsletterPage> {
               // this tab (and Publications) gets an explicit refresh button.
               // The tooltip doubles as the screen-reader label.
               IconButton.filledTonal(
-                tooltip: 'Refresh page',
+                tooltip: strings['common.refresh'],
                 onPressed: _refreshCurrent,
                 icon: const Icon(Icons.refresh),
               ),
-              const SizedBox(width: 8),
+              // Help is reachable from every tab, not just the home screen.
+              const HelpIconButton(),
+              const SizedBox(width: 4),
             ],
           ),
           const Divider(height: 1),
@@ -98,7 +109,9 @@ class _NewsletterPageState extends State<NewsletterPage> {
 }
 
 class _Newsletter {
-  const _Newsletter(this.title, this.url);
-  final String title;
+  const _Newsletter(this.titleKey, this.url);
+
+  /// Catalogue key, so the tab labels follow the app language.
+  final String titleKey;
   final String url;
 }

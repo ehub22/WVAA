@@ -103,6 +103,19 @@ ThemeData _baseTheme({
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    // Reduced motion: when the OS asks for animation-free UI, route changes
+    // still *work*, they just appear instantly instead of sliding. Flutter
+    // honours `MediaQuery.disableAnimations` for implicit animations, but page
+    // transitions are driven by the theme, so they are switched here.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: <TargetPlatform, PageTransitionsBuilder>{
+        TargetPlatform.android: _AccessiblePageTransitionsBuilder(),
+        TargetPlatform.iOS: _AccessiblePageTransitionsBuilder(),
+        TargetPlatform.linux: _AccessiblePageTransitionsBuilder(),
+        TargetPlatform.macOS: _AccessiblePageTransitionsBuilder(),
+        TargetPlatform.windows: _AccessiblePageTransitionsBuilder(),
+      },
+    ),
     colorScheme: colorScheme,
     scaffoldBackgroundColor: scaffoldBackground,
     canvasColor: colorScheme.surface,
@@ -226,3 +239,37 @@ final ThemeData darkTheme = _baseTheme(
   outlineVariant: outlineVariantDark,
   surfaceContainerLow: surfaceContainerLowDark,
 );
+
+/// Platform default page transition, but instant when the OS asks for reduced
+/// motion.
+///
+/// A vestibular-disorder accommodation: a student who has turned off
+/// animations system-wide should not get a full-width slide every time they
+/// open the Help screen.
+class _AccessiblePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _AccessiblePageTransitionsBuilder();
+
+  // ZoomPageTransitionsBuilder is Material's Android default and has been
+  // stable across Flutter versions (FadeForwards is newer).
+  static const _fallback = ZoomPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      return child;
+    }
+    return _fallback.buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
+    );
+  }
+}

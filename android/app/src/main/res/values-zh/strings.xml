@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Westview HS</string>
+    <string name="schedule_widget_label">当前课程</string>
+    <string name="schedule_widget_description">显示 Westview 当前课时以及剩余时间。</string>
+</resources>

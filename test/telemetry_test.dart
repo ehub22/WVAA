@@ -16,6 +16,10 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     settings.resetForTesting();
     await settings.load();
+    // Telemetry is opt-in now: these tests exercise the reporting pipeline, so
+    // consent is granted explicitly (exactly as the first-run dialog does).
+    await settings.setAnalyticsEnabled(true);
+    await settings.setCrashReportingEnabled(true);
   });
 
   tearDown(() {
@@ -82,6 +86,73 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final stored = jsonDecode(prefs.getString('telemetry_queue_v1')!) as List;
     expect(stored, isEmpty);
+  });
+
+  test('nothing is collected before consent (opt-in default)', () async {
+    // Fresh install: the student has not answered the first-run dialog yet.
+    settings.resetForTesting();
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await settings.load();
+    // Guard the premise of this test: a reset must really mean "no consent".
+    expect(settings.analyticsEnabled, isFalse);
+    expect(settings.crashReportingEnabled, isFalse);
+
+    var sent = 0;
+    Telemetry.instance.resetForTesting(
+      client: MockClient((request) async {
+        sent++;
+        return http.Response('ok', 200);
+      }),
+    );
+
+    Telemetry.instance.logEvent('screen_view', {'screen': 'schedule'});
+    Telemetry.instance.logError(StateError('boom'), StackTrace.current);
+    await Telemetry.instance.flush();
+
+    expect(sent, 0);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('telemetry_queue_v1'), anyOf(isNull, '[]'));
+  });
+
+  test('crash text is scrubbed of anything the student typed', () async {
+    http.Request? captured;
+    Telemetry.instance.resetForTesting(
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response('ok', 200);
+      }),
+    );
+
+    await settings.setPeriodSettings(
+      'Period 1',
+      const PeriodSettings(
+        customName: 'Human Body Systems',
+        teacher: 'Mr. Smith',
+        room: '402',
+      ),
+    );
+
+    Telemetry.instance.logError(
+      StateError(
+        'Failed for Human Body Systems with Mr. Smith in 402; '
+        'contact jane.doe@example.com or 858-555-1234',
+      ),
+      StackTrace.current,
+      context: 'test',
+    );
+    await Telemetry.instance.flush();
+
+    final body = jsonDecode(captured!.body) as Map<String, dynamic>;
+    final crash =
+        (body['events'] as List).cast<Map<String, dynamic>>().single;
+    final error = crash['error'] as String;
+    expect(error, isNot(contains('Human Body Systems')));
+    expect(error, isNot(contains('Mr. Smith')));
+    expect(error, isNot(contains('jane.doe@example.com')));
+    expect(error, isNot(contains('858-555-1234')));
+    expect(error, contains('[text]'));
+    expect(error, contains('[email]'));
+    expect(error, contains('[phone]'));
   });
 
   test('opting out stops analytics events and crash reports', () async {

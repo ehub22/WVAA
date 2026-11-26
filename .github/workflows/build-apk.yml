@@ -70,7 +70,13 @@ jobs:
           set -e
 
       - name: Show Flutter version
-        run: flutter --version
+        shell: bash
+        run: |
+          flutter --version | tee /tmp/versions.log
+          python3 - "$(head -1 /tmp/versions.log)" <<'PY'
+          import sys
+          print(f"::notice title=Flutter::{sys.argv[1]}")
+          PY
 
              # Configure Gradle caching. We keep the fast part of the Gradle cache
       # (downloaded dependencies, wrapper distributions, transforms, compiled
@@ -100,12 +106,61 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      # Fail fast on accessibility regressions before spending 10 minutes on a
+      # Gradle build: the theme's contrast pairs and the four-language string
+      # catalogue are both checked by `flutter test` + the contrast audit.
+      - name: Verify WCAG contrast of the theme
+        run: python3 tools/audit_contrast.py --strict
+
+      # The string catalogue is a large hand-edited Dart map; a stray comma
+      # there is a *compile* error that surfaces as "the Dart compiler exited
+      # unexpectedly" 200 lines later. Check its structure directly so the
+      # failure names the offending line.
+      - name: Check the string catalogue
+        run: python3 tools/check_strings.py
+
+      - name: Run Flutter tests (includes the l10n/a11y suite)
+        # Failure text is re-emitted as GitHub *annotations* (see
+        # tools/annotate_ci.py): annotations are small and readable through the
+        # check-run API even where the full step log download is not.
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter expanded > /tmp/test.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/test.log test
+          cat /tmp/test.log
+          exit $status
+
       # Build a release APK. The versionCode is set to the GitHub run number so
       # each build is monotonically increasing. The APK is signed with Flutter's
       # auto-generated debug key (see android/app/build.gradle.kts). To publish
       # on Google Play, configure a real keystore (see the README).
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }}
+        # Same trick as the test step: re-emit the interesting lines of the
+        # build output as annotations, which stay readable when the full step
+        # log cannot be downloaded.
+        shell: bash
+        run: |
+          set +e
+          flutter build apk --release --build-number=${{ github.run_number }} \
+            > /tmp/build.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/build.log build
+          tail -n 120 /tmp/build.log
+          exit $status
+
+      # The step log cannot be downloaded in every review environment, and
+      # annotations are capped in size, so keep the full build log as the
+      # authoritative record of a failed build.
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: /tmp/build.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload APK as a build artifact
         uses: actions/upload-artifact@v4

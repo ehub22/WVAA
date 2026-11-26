@@ -28,8 +28,18 @@ const String telemetryEndpoint =
 /// advertising/device identifiers, or any content the student typed. There are
 /// no third-party SDKs; reports go only to the endpoint above.
 ///
-/// Both streams are opt-out from Settings ▸ Privacy, and are also surfaced in
-/// a first-run disclosure dialog.
+/// Both streams are **opt-in**: nothing is queued or sent until the student
+/// chooses "Share anonymous data" in the first-run dialog (or turns the
+/// matching switch on in Settings ▸ Privacy). The default is off, so a crash
+/// on first launch never sends anything before consent exists.
+///
+/// Reports are additionally scrubbed before leaving the device:
+///  * text the student typed into Settings (class names, teachers, rooms) is
+///    redacted from error strings and stack traces;
+///  * the crash `context` is a fixed, developer-authored label, never user
+///    input;
+///  * there is intentionally no device model, IDFA/GAID, or installation id in
+///    the payload — only a session id that is regenerated every launch.
 class Telemetry {
   Telemetry._({http.Client? client}) : _client = client ?? http.Client();
 
@@ -83,8 +93,9 @@ class Telemetry {
     if (!_crashReportingEnabled) return;
     _enqueue(<String, Object?>{
       'type': 'crash',
-      'error': _truncate(error.toString(), _maxErrorLength),
-      'stack': _truncate(stackTrace?.toString() ?? '', _maxStackLength),
+      'error': _truncate(_scrub(error.toString()), _maxErrorLength),
+      'stack':
+          _truncate(_scrub(stackTrace?.toString() ?? ''), _maxStackLength),
       if (context != null) 'context': _truncate(context, _maxParamLength),
     });
   }
@@ -148,6 +159,27 @@ class Telemetry {
       await _saveQueue();
     }
   }
+
+  /// Removes anything the student typed into their own settings from a free
+  /// text payload. A crash message that happens to quote a renamed class or a
+  /// teacher's name is exactly the kind of detail this app promises never to
+  /// collect.
+  String _scrub(String value) {
+    var scrubbed = value;
+    for (final period in AppSettings.instance.userTypedValues) {
+      scrubbed = scrubbed.replaceAll(period, '[text]');
+    }
+    // Anything that still looks like an e-mail address or a phone number is
+    // masked too — a stray address must never reach the server.
+    scrubbed = scrubbed.replaceAll(_emailPattern, '[email]');
+    scrubbed = scrubbed.replaceAll(_phonePattern, '[phone]');
+    return scrubbed;
+  }
+
+  static final RegExp _emailPattern =
+      RegExp(r'[\w.+-]+@[\w-]+\.[\w.-]+');
+  static final RegExp _phonePattern =
+      RegExp(r'(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}');
 
   Map<String, Object?> _sanitizeProperties(Map<String, Object?> properties) {
     final sanitized = <String, Object?>{};

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Westview HS</string>
     <string name="schedule_widget_label">Current Period</string>
     <string name="schedule_widget_description">Shows the current Westview class period and how much time is left.</string>
 </resources>
