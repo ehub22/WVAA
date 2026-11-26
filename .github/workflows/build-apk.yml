@@ -40,15 +40,18 @@ jobs:
         
 
       - name: Set up Flutter (pinned stable)
-        # Pinned for reproducible builds: `live_activities` is locked to
-        # 2.4.7 (see pubspec.yaml) because 2.5.0 needs Flutter 3.44+ and
-        # renames its Kotlin package. Bump this version and the
-        # live_activities pin together, and update CustomLiveActivityManager.kt
-        # / MainActivity.kt imports in the same change.
+        # Pinned for reproducible builds. Must satisfy pubspec.yaml
+        # (Dart ^3.11.4): Flutter 3.38.4 ships Dart 3.10.3 and fails version
+        # solving, while 3.50.1 (the version android/settings.gradle.kts
+        # already targets) resolves. `live_activities` is locked to 2.4.7
+        # (see pubspec.yaml) because 2.5.0 renames its Kotlin package.
+        # Bump this version and the live_activities pin together, and
+        # update CustomLiveActivityManager.kt / MainActivity.kt imports
+        # in the same change.
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.38.4"
+          flutter-version: "3.50.1"
           cache: true
 
       - name: Set up Android SDK
