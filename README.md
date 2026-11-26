@@ -142,17 +142,20 @@ GET https://studycs.org/westview/special_schedule2/{month}/{day}
 
 ### Caching
 
-Whether a date has a special schedule or not, the app caches the result on the device for **at least two days** (three days in storage to leave some buffer). Because of that cache window, the app won't hit the server more than once per date, which keeps everyone opening the app before first period from overloading the server at the same time. If the server can't be reached at all, the app keeps using the last saved answer and puts up a warning banner saying today's schedule might be out of date. Everything is stored in `SharedPreferences`, so it stays intact across app restarts.
+Whether a date has a special schedule or not, the app caches the result **for that date** on the device for **three days** (`specialScheduleCacheTtl`). Because of that cache window, the app won't hit the server more than once per date, which keeps everyone opening the app before first period from overloading the server at the same time. A new day always fetches its own answer — one day's schedule is never reused for another day. If the server can't be reached at all, the app keeps using the last saved answer and puts up a warning banner saying today's schedule might be out of date. Everything is stored in `SharedPreferences`, so it stays intact across app restarts.
 
 ### Backup sources
 
-If `studycs.org` goes down, `SpecialScheduleService` can walk through backup URLs in `fallbackUrls` (which is empty by default). You can point a fallback URL at any static file host, such as a public Google Drive direct-download link, with optional `{month}` and `{day}` placeholders:
+If `studycs.org` goes down, `SpecialScheduleService` can walk through backup URLs in `fallbackUrls` (which is empty by default and has no in-app setting — it is a code-only extension point for the maintainer). To use one, edit `lib/special_schedule.dart` and add a URL at any static file host, such as a public Google Drive direct-download link, with optional `{month}` and `{day}` placeholders:
 
 ```dart
+// In lib/special_schedule.dart, inside SpecialScheduleService:
 fallbackUrls.add(
   'https://drive.google.com/uc?export=download&id=YOUR_PUBLIC_FILE_ID',
 );
 ```
+
+Users cannot configure this from Settings; the shipped app uses only `studycs.org`.
 
 ## Home-screen widget (Android)
 

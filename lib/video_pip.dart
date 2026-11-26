@@ -229,11 +229,27 @@ const String videoPipScript = r'''
     return null;
   }
 
+  // Target origin for outbound player messages: the frame's own origin
+  // when it can be derived from src, so messages are not broadcast to
+  // whatever happens to be listening. Falls back to '*' only when the
+  // frame has no src yet (lazy iframe) — inbound messages are still
+  // origin-checked in the listener below.
+  function frameOrigin(frame) {
+    try {
+      var src = frame.getAttribute('src') || '';
+      if (!src) return '*';
+      var origin = new URL(src, window.location.href).origin;
+      return origin && origin !== 'null' ? origin : '*';
+    } catch (_) {
+      return '*';
+    }
+  }
+
   function post(frame, method, value) {
     try {
       var message = {method: method};
       if (value !== undefined) message.value = value;
-      frame.contentWindow.postMessage(message, '*');
+      frame.contentWindow.postMessage(message, frameOrigin(frame));
     } catch (_) {}
   }
 
@@ -241,7 +257,8 @@ const String videoPipScript = r'''
   function postYouTube(frame, eventName) {
     try {
       frame.contentWindow.postMessage(
-        JSON.stringify({event: eventName, id: '__westview'}), '*');
+        JSON.stringify({event: eventName, id: '__westview'}),
+        frameOrigin(frame));
     } catch (_) {}
   }
 
@@ -257,7 +274,8 @@ const String videoPipScript = r'''
         return;
       }
       frame.contentWindow.postMessage(
-        JSON.stringify({event: 'listening', id: '__westview'}), '*');
+        JSON.stringify({event: 'listening', id: '__westview'}),
+        frameOrigin(frame));
     } catch (_) {}
   }
 

@@ -48,7 +48,7 @@ The app does not depend on Firebase, Google Play Services libraries, or third-pa
 
 ### B4. Local Storage Growth [done]
 
-`NetworkCache` stores only the latest response per cache key, caps individual entries at 2 MB, evicts entries older than 60 days, and lets students wipe all saved copies from `Settings > Saved content`. Special-schedule cache entries similarly prune old dates automatically.
+`NetworkCache` stores only the latest response per cache key, evicts entries older than 30 days (`NetworkCache.maxAge`), and lets students wipe all saved copies from `Settings > Saved content`. Special-schedule cache entries prune old dates after 60 days (`lib/special_schedule.dart`). There is currently no per-entry size cap; feeds are small text (`.ics`/JSON), so this is a known limitation if a feed ever grows large.
 
 ### B5. Mobile Data Usage [done]
 
@@ -78,9 +78,9 @@ Running these steps ahead of `flutter build apk` catches contrast regressions, m
 
 `pubspec.yaml` pins `live_activities` to exact version `2.4.7` because version `2.5.0` requires a newer Flutter SDK and renames its Kotlin package (`com.example.live_activities` to `com.istornz.live_activities`), which would break `CustomLiveActivityManager.kt` and `MainActivity.kt`. Other dependencies use standard caret ranges and should be checked periodically with `flutter pub outdated` when upgrading Flutter's stable channel.
 
-### C3. Static Analysis Step (`flutter analyze`) in CI [todo]
+### C3. Static Analysis Step (`flutter analyze`) in CI [done]
 
-Adding `flutter analyze` alongside `flutter test` in `.github/workflows/build-apk.yml` would catch lint warnings, unused imports, and `const` mistakes earlier during pull requests. `tools/annotate_ci.py` already includes an `analyze` mode ready to format its output.
+`flutter analyze` runs in `.github/workflows/build-apk.yml` before `flutter test`, with output formatted via `tools/annotate_ci.py` (`analyze` mode), so lint warnings, unused imports, and `const` mistakes fail the build early.
 
 ### C4. Android System WebView Differences [known]
 
@@ -95,7 +95,7 @@ The iOS project directory compiles in code, and `lib/publications.dart` preserve
 ### C6. Release Signing and Versioning [todo]
 
 - **Signing key:** Release APKs in `android/app/build.gradle.kts` currently sign with the debug keystore so students can sideload CI artifacts easily. Before publishing to Google Play, or distributing long-lived sideloaded releases from multiple machines, configure a dedicated upload keystore via GitHub Secrets so updates can install over previous builds without requiring an uninstall.
-- **Version policy:** `pubspec.yaml` currently stays at `1.0.0+1` while CI passes `--build-number=${{ github.run_number }}` for `versionCode`; bumping `versionName` on tagged releases (`vX.Y.Z`) will make bug reports easier to match to builds.
+- **Version policy:** `pubspec.yaml` stays at `1.0.0+1` while CI passes `--build-number=${{ github.run_number }}` for `versionCode`. On a `vX.Y.Z` tag, CI now also passes `--build-name=X.Y.Z` so `versionName` matches the tag and bug reports can be mapped to a release. Signing (above) remains TODO.
 
 ---
 

@@ -3,4 +3,14 @@
     <string name="app_name">Westview HS</string>
     <string name="schedule_widget_label">Cours en cours</string>
     <string name="schedule_widget_description">Affiche le cours en cours à Westview et le temps qu\'il reste.</string>
+    <string name="widget_ends_in">Se termine dans</string>
+    <string name="widget_starts_in">Commence dans</string>
+    <string name="widget_school_out">C\'est fini pour aujourd\'hui</string>
+    <string name="widget_no_school">Pas d\'école aujourd\'hui</string>
+    <string name="widget_last_period">Dernier cours de la journée</string>
+    <string name="widget_in_progress">En cours</string>
+    <string name="notification_channel_name">Compte à rebours des cours</string>
+    <string name="widget_see_you">À %1$s</string>
+    <string name="widget_next">Suivant : %1$s · %2$s</string>
+    <string name="widget_school_starts">Les cours commencent à %1$s</string>
 </resources>

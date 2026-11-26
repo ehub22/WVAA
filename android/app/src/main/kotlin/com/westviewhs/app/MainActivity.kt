@@ -1,6 +1,10 @@
 package com.westviewhs.app
 
+import android.app.AlarmManager
+import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
+import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -56,6 +60,13 @@ class MainActivity : FlutterActivity() {
                             applyRecentsPrivacy()
                             result.success(null)
                         }
+                        "canScheduleExactAlarms" -> {
+                            result.success(canScheduleExactAlarms())
+                        }
+                        "requestScheduleExactAlarms" -> {
+                            requestScheduleExactAlarms()
+                            result.success(null)
+                        }
                         else -> result.notImplemented()
                     }
                 } catch (e: Throwable) {
@@ -98,6 +109,34 @@ class MainActivity : FlutterActivity() {
         inPictureInPicture = isInPictureInPictureMode
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         applyRecentsPrivacy()
+    }
+
+    /// Whether the app may schedule exact alarms (Android 12+). Before
+    /// Android 12 exact alarms are always allowed.
+    private fun canScheduleExactAlarms(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
+    }
+
+    /// Opens the system screen where the student can allow exact alarms.
+    /// Without this, widget/notification transitions silently fall back to
+    /// inexact alarms and can lag by minutes on Android 14+.
+    private fun requestScheduleExactAlarms() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:$packageName")))
+            } catch (_: Throwable) {
+                // OEM builds without this screen: fall back to app settings.
+                try {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     override fun onResume() {

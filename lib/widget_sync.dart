@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -20,6 +21,7 @@ const String _keyMonFri = 'schedule_monfri';
 const String _keyTueThu = 'schedule_tuethu';
 const String _keyWed = 'schedule_wed';
 const String _keySpecial = 'schedule_special';
+const String _keySpecialTomorrow = 'schedule_special_tomorrow';
 
 int _minutesOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
 
@@ -55,21 +57,51 @@ Future<void> syncHomeWidget() async {
     await HomeWidget.saveWidgetData(
         _keyWed, jsonEncode(_periodsToJson(wedSchedule)));
 
-    // Today's special schedule override — always overwrite so a stale
-    // yesterday entry can't leak through.
+    // Today's + tomorrow's special schedule overrides — always overwrite
+    // so a stale yesterday entry can't leak through. Tomorrow is pre-fetched
+    // so the widget is correct tomorrow morning before the app is opened.
     await SpecialScheduleService.instance.init();
+    final now = DateTime.now();
+    String dateOf(DateTime d) => '${d.year}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
     final special = SpecialScheduleService.instance.todaySchedule;
     if (special != null && special.isNotEmpty) {
-      final now = DateTime.now();
-      final date = '${now.year}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
       await HomeWidget.saveWidgetData(
         _keySpecial,
-        jsonEncode({'date': date, 'periods': _periodsToJson(special)}),
+        jsonEncode({'date': dateOf(now), 'periods': _periodsToJson(special)}),
       );
     } else {
       await HomeWidget.saveWidgetData(_keySpecial, '');
+    }
+
+    final tomorrow = now.add(const Duration(days: 1));
+    // Pre-fetch tomorrow in the background (never block startup/widget
+    // sync on the network): if it isn't cached yet, kick off a fetch and
+    // re-sync when it lands. The re-sync sees the cached answer and does
+    // not fetch again.
+    if (!SpecialScheduleService.instance.hasCachedAnswerFor(tomorrow)) {
+      unawaited(() async {
+        try {
+          await SpecialScheduleService.instance.refreshForDate(tomorrow);
+          await syncHomeWidget();
+        } catch (_) {
+          // Best effort: widget falls back to the regular schedule tomorrow.
+        }
+      }());
+    }
+    final tomorrowSpecial =
+        SpecialScheduleService.instance.scheduleForDate(tomorrow);
+    if (tomorrowSpecial != null && tomorrowSpecial.isNotEmpty) {
+      await HomeWidget.saveWidgetData(
+        _keySpecialTomorrow,
+        jsonEncode({
+          'date': dateOf(tomorrow),
+          'periods': _periodsToJson(tomorrowSpecial),
+        }),
+      );
+    } else {
+      await HomeWidget.saveWidgetData(_keySpecialTomorrow, '');
     }
 
     await HomeWidget.saveWidgetData(

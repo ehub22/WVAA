@@ -132,7 +132,10 @@ void main() {
       expect(service.todaySchedule, isNull);
     });
 
-    test('treats a body without .json as "no special schedule"', () async {
+    test('treats a body without .json as a fetch failure, not "none"',
+        () async {
+      // An HTML error page / captive portal must not be cached as a
+      // confirmed "no special schedule" for the whole TTL.
       final client = MockClient(
         (request) async => http.Response('nothing today', 200),
       );
@@ -143,18 +146,38 @@ void main() {
 
       await service.refreshToday();
 
-      expect(service.lastFetchFailed, isFalse);
+      expect(service.lastFetchFailed, isTrue);
       expect(service.todaySchedule, isNull);
+      expect(service.hasCachedAnswerFor(DateTime(2026, 8, 18)), isFalse);
     });
 
-    test('caches for at least 2 days without asking the server again', () async {
+    test('rejects absolute or traversing .json paths from the server',
+        () async {
+      for (final evil in [
+        'https://evil.example.com/x.json',
+        '//evil.example.com/x.json',
+        '/westview/../secret.json',
+        '/westview/special.json extra',
+      ]) {
+        final client = MockClient(
+          (request) async => http.Response(evil, 200),
+        );
+        final service = SpecialScheduleService(
+          client: client,
+          clock: () => DateTime(2026, 8, 18, 9),
+        );
+        await service.refreshToday();
+        expect(service.lastFetchFailed, isTrue, reason: evil);
+        expect(service.todaySchedule, isNull, reason: evil);
+      }
+    });
+
+    test('caches per-day: same day reuses, a new day fetches its own answer',
+        () async {
       var requests = 0;
       final client = MockClient((request) async {
         requests++;
-        if (request.url.path.endsWith('/westview/special_schedule2/8/18')) {
-          return http.Response('', 200); // no special schedule
-        }
-        return http.Response('not found', 404);
+        return http.Response('', 200); // no special schedule for any day
       });
       var now = DateTime(2026, 8, 18, 9);
       final service = SpecialScheduleService(client: client, clock: () => now);
@@ -167,15 +190,45 @@ void main() {
       await service.refreshToday();
       expect(requests, 1);
 
-      // Two days later the cache is still fresh (TTL is 3 days).
+      // A new day must fetch its own answer — Monday's "none" says nothing
+      // about Wednesday, and Monday's special schedule must not leak.
       now = now.add(const Duration(days: 2));
       await service.refreshToday();
-      expect(requests, 1);
+      expect(requests, 2);
 
-      // Once the TTL has passed, the server is asked again.
-      now = now.add(const Duration(days: 1, minutes: 1));
+      // Same (new) day again: cached.
       await service.refreshToday();
       expect(requests, 2);
+
+      // A different year with the same month/day must not reuse last year's
+      // answer (cache key includes the year).
+      now = DateTime(2027, 8, 20, 9);
+      await service.refreshToday();
+      expect(requests, 3);
+    });
+
+    test('does not leak one day\'s special schedule into the next day',
+        () async {
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/westview/special_schedule2/8/18')) {
+          return http.Response('/westview/special/0818.json', 200);
+        }
+        if (request.url.path.endsWith('.json')) {
+          return http.Response(sampleSpecialScheduleJson, 200);
+        }
+        // 8/19: no special schedule.
+        return http.Response('', 200);
+      });
+      var now = DateTime(2026, 8, 18, 9);
+      final service = SpecialScheduleService(client: client, clock: () => now);
+
+      await service.refreshToday();
+      expect(service.todaySchedule, isNotNull);
+
+      now = DateTime(2026, 8, 19, 9);
+      await service.refreshToday();
+      expect(service.todaySchedule, isNull);
+      expect(service.scheduleForDate(DateTime(2026, 8, 18)), isNotNull);
     });
 
     test('survives restarts through the persisted cache', () async {

@@ -9,9 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// `GET <endpoint>/<month>/<day>` (e.g. `/westview/special_schedule2/8/18`)
 /// answers either with an empty body ("no special schedule") or with a
-/// plain-text path containing ".json", which must then be downloaded from
-/// `https://studycs.org/<path>`. Any response without ".json" is treated as
-/// "no special schedule".
+/// plain-text relative path containing ".json", which must then be downloaded
+/// from `https://studycs.org/<path>`. Any other body (HTML error page,
+/// captive portal, proxy block) is a fetch failure, not a confirmed "none" —
+/// caching it as "none" would hide a real special schedule for the TTL.
 const String _specialScheduleBaseUrl = 'https://studycs.org';
 const String _specialScheduleEndpoint =
     '$_specialScheduleBaseUrl/westview/special_schedule2';
@@ -151,14 +152,22 @@ class SpecialScheduleService extends ChangeNotifier {
   bool _isRefreshing = false;
   bool get isRefreshing => _isRefreshing;
 
-  /// Today's special schedule when the cache has one — including a stale one,
-  /// which is still better than the regular schedule while the server is
-  /// down. Returns null when the server confirmed there is none, or when
-  /// nothing has been fetched yet.
-  List<Map<String, dynamic>>? get todaySchedule {
-    final entry = _cache[_dayKey(_clock())];
-    return entry?.periods;
-  }
+  /// Today's special schedule when the cache has one — including a stale one
+  /// for *today*, which is still better than the regular schedule while the
+  /// server is down. Returns null when the server confirmed there is none,
+  /// or when nothing has been fetched for today yet. Entries for other days
+  /// are never substituted: Monday's special schedule must not leak into
+  /// Tuesday.
+  List<Map<String, dynamic>>? get todaySchedule =>
+      scheduleForDate(_clock());
+
+  /// The special schedule cached for [day], or null when the server
+  /// confirmed none or nothing was fetched for that day.
+  List<Map<String, dynamic>>? scheduleForDate(DateTime day) =>
+      _cache[_dayKey(day)]?.periods;
+
+  /// Whether a cached answer exists for [day] (special or confirmed none).
+  bool hasCachedAnswerFor(DateTime day) => _cache.containsKey(_dayKey(day));
 
   /// Loads previously cached answers from disk. Fast, makes no network
   /// requests, and never throws.
@@ -172,7 +181,9 @@ class SpecialScheduleService extends ChangeNotifier {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
       decoded.forEach((key, value) {
-        if (key is String) {
+        // Drop legacy keys without a year ("8/18"): they cannot be matched
+        // to a specific date and would otherwise be re-persisted forever.
+        if (key is String && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(key)) {
           final entry = SpecialScheduleResult.fromJson(value);
           if (entry != null) _cache[key] = entry;
         }
@@ -188,69 +199,62 @@ class SpecialScheduleService extends ChangeNotifier {
   ///
   /// Never throws: on failure the previous (even stale) cached answer is kept
   /// and [lastFetchFailed] is set so the UI can warn the user.
-  Future<void> refreshToday({bool force = false}) {
+  Future<void> refreshToday({bool force = false}) =>
+      refreshForDate(_clock(), force: force);
+
+  /// Makes sure the answer for [day] is available, asking the network only
+  /// when there is no cached answer for that exact day or it is older than
+  /// [specialScheduleCacheTtl]. Used by the widget sync to pre-fetch
+  /// tomorrow's schedule so the widget is correct before the app is opened.
+  Future<void> refreshForDate(DateTime day, {bool force = false}) {
     final pending = _inFlight;
     if (pending != null) return pending;
-    final future = _refreshToday(force: force);
+    final future = _refreshForDay(day, force: force);
     _inFlight = future.whenComplete(() => _inFlight = null);
     return future;
   }
 
-  Future<void> _refreshToday({required bool force}) async {
+  Future<void> _refreshForDay(DateTime day, {required bool force}) async {
     await init();
     final now = _clock();
-    final key = _dayKey(now);
+    final isToday =
+        day.year == now.year && day.month == now.month && day.day == now.day;
+    final key = _dayKey(day);
     final cached = _cache[key];
 
-    // A fresh answer is reused verbatim, so the server is never asked more
-    // than once per date within the cache TTL (>= 2 days).
-    //
-    // Note the lookup above is by *day*: if the cache holds an answer for
-    // 8/18, asking again on 8/20 finds nothing under "8/20" and would hit
-    // the network on every day after the first. So any answer that is still
-    // inside the TTL window is reused for the current day too — that is what
-    // makes the TTL mean "don't poll the server", which matters on school
-    // Wi-Fi and on the maintenance side of the endpoint.
-    if (!force) {
-      final fresh = cached != null && cached.isFresh(now)
-          ? cached
-          : _freshestWithinTtl(now);
-      if (fresh != null) {
+    // A fresh answer *for this day* is reused verbatim, so the server is
+    // never asked more than once per date within the cache TTL. Answers for
+    // other days are never reused: a special schedule for 8/18 says nothing
+    // about 8/20, and reusing it would hide 8/20's own special schedule.
+    if (!force && cached != null && cached.isFresh(now)) {
+      if (isToday) {
         _lastFetchFailed = false;
         notifyListeners();
-        return;
       }
+      return;
     }
 
-    _isRefreshing = true;
-    notifyListeners();
+    // Only today's refresh drives the progress line / failure banner;
+    // pre-fetching tomorrow for the widget must not clobber today's state.
+    if (isToday) {
+      _isRefreshing = true;
+      notifyListeners();
+    }
     try {
-      final fetched = await _fetchForDay(now);
+      final fetched = await _fetchForDay(day);
       _cache[key] = fetched;
-      _lastFetchFailed = false;
+      if (isToday) _lastFetchFailed = false;
       _prune(now);
       await _persist();
     } catch (error) {
-      // Unreachable: keep whatever we had (even stale) and warn the UI.
+      // Unreachable: keep whatever we had for this day (even stale) and
+      // warn the UI. Never substitute another day's schedule.
       debugPrint('Special schedule fetch failed: $error');
-      _lastFetchFailed = true;
+      if (isToday) _lastFetchFailed = true;
     } finally {
-      _isRefreshing = false;
+      if (isToday) _isRefreshing = false;
     }
-    notifyListeners();
-  }
-
-  /// The most recent cached answer that is still inside the TTL, whatever day
-  /// it was fetched for. Returns null when everything is stale.
-  SpecialScheduleResult? _freshestWithinTtl(DateTime now) {
-    SpecialScheduleResult? best;
-    for (final entry in _cache.values) {
-      if (!entry.isFresh(now)) continue;
-      if (best == null || entry.fetchedAt.isAfter(best.fetchedAt)) {
-        best = entry;
-      }
-    }
-    return best;
+    if (isToday) notifyListeners();
   }
 
   /// Clears all state (used by tests).
@@ -263,6 +267,10 @@ class SpecialScheduleService extends ChangeNotifier {
     _lastFetchFailed = false;
     _isRefreshing = false;
   }
+
+  /// Closes the underlying HTTP client. The singleton lives for the app's
+  /// lifetime so this is only needed in tests / hot-restart cleanup.
+  void closeClient() => _client.close();
 
   // ----------------------------------------------------------------- network
 
@@ -292,9 +300,9 @@ class SpecialScheduleService extends ChangeNotifier {
         'No special-schedule source reachable (${urls.join(', ')}): $lastError');
   }
 
-  /// The StudyCS contract: an empty body, or any body without ".json", means
-  /// "no special schedule"; otherwise the body is a path whose content is the
-  /// schedule JSON, downloaded from the same server.
+  /// The StudyCS contract: an empty body means "no special schedule";
+  /// otherwise the body is a relative path whose content is the schedule
+  /// JSON, downloaded from the same server. Any other body is a failure.
   Future<SpecialScheduleResult?> _fetchFromStudyCs(
       String url, DateTime day) async {
     final response = await _client.get(Uri.parse(url)).timeout(_requestTimeout);
@@ -303,23 +311,46 @@ class SpecialScheduleService extends ChangeNotifier {
     }
     final body = response.body.trim();
 
-    if (body.isEmpty || !body.contains('.json')) {
-      return SpecialScheduleResult(fetchedAt: day, periods: null);
+    if (body.isEmpty) {
+      return SpecialScheduleResult(fetchedAt: _clock(), periods: null);
     }
-
-    var path = body;
-    if (!path.startsWith('/')) path = '/$path';
-    final jsonResponse = await _client
-        .get(Uri.parse('$_specialScheduleBaseUrl$path'))
-        .timeout(_requestTimeout);
+    if (!body.contains('.json')) {
+      throw Exception(
+          'StudyCS endpoint returned unexpected body (not empty, not a .json path)');
+    }
+    final jsonUri = _resolveJsonPath(body);
+    final jsonResponse =
+        await _client.get(jsonUri).timeout(_requestTimeout);
     if (jsonResponse.statusCode != 200) {
       throw Exception(
           'Special schedule file returned HTTP ${jsonResponse.statusCode}');
     }
     return SpecialScheduleResult(
-      fetchedAt: day,
+      fetchedAt: _clock(),
       periods: parseSpecialScheduleJson(jsonResponse.body),
     );
+  }
+
+  /// Resolves a server-supplied ".json" path against the StudyCS origin.
+  ///
+  /// The body is untrusted network data: reject absolute URLs,
+  /// protocol-relative URLs, whitespace, and parent-directory traversal so a
+  /// compromised or spoofed response cannot redirect the fetch elsewhere.
+  Uri _resolveJsonPath(String body) {
+    final trimmed = body.trim();
+    if (trimmed.isEmpty ||
+        trimmed.contains(RegExp(r'\s')) ||
+        trimmed.contains('://') ||
+        trimmed.startsWith('//') ||
+        trimmed.split('/').contains('..')) {
+      throw FormatException('Invalid special-schedule path: $trimmed');
+    }
+    final path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    final uri = Uri.tryParse('$_specialScheduleBaseUrl$path');
+    if (uri == null || uri.host != 'studycs.org') {
+      throw FormatException('Invalid special-schedule path: $trimmed');
+    }
+    return uri;
   }
 
   /// Backup sources serve the schedule JSON directly; the ".json" path
@@ -335,23 +366,20 @@ class SpecialScheduleService extends ChangeNotifier {
 
     if (body.startsWith('[') || body.startsWith('{')) {
       return SpecialScheduleResult(
-        fetchedAt: day,
+        fetchedAt: _clock(),
         periods: parseSpecialScheduleJson(body),
       );
     }
 
     if (body.contains('.json')) {
-      var path = body;
-      if (!path.startsWith('/')) path = '/$path';
-      final jsonResponse = await _client
-          .get(Uri.parse('$_specialScheduleBaseUrl$path'))
-          .timeout(_requestTimeout);
+      final jsonResponse =
+          await _client.get(_resolveJsonPath(body)).timeout(_requestTimeout);
       if (jsonResponse.statusCode != 200) {
         throw Exception(
             'Fallback schedule file returned HTTP ${jsonResponse.statusCode}');
       }
       return SpecialScheduleResult(
-        fetchedAt: day,
+        fetchedAt: _clock(),
         periods: parseSpecialScheduleJson(jsonResponse.body),
       );
     }
@@ -360,7 +388,10 @@ class SpecialScheduleService extends ChangeNotifier {
 
   // ------------------------------------------------------------------ cache
 
-  String _dayKey(DateTime day) => '${day.month}/${day.day}';
+  /// Cache key includes the year so last year's 8/18 answer is never reused
+  /// for this year's 8/18.
+  String _dayKey(DateTime day) =>
+      '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
 
   Future<void> _persist() async {
     try {

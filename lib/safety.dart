@@ -142,6 +142,26 @@ class QuickExit {
     return () => _exitFrom(context);
   }
 
+  /// Whether exact alarms are allowed (Android 12+). Returns true on
+  /// platforms without the concept so callers don't nag non-Android users.
+  static Future<bool> canScheduleExactAlarms() async {
+    try {
+      final result = await channel.invokeMethod<bool>('canScheduleExactAlarms');
+      return result ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Opens the system exact-alarm permission screen (Android 12+).
+  static Future<void> requestScheduleExactAlarms() async {
+    try {
+      await channel.invokeMethod<void>('requestScheduleExactAlarms');
+    } catch (_) {
+      // Platform doesn't implement it: nothing to do.
+    }
+  }
+
   static Future<void> _exitFrom(BuildContext context) async {
     // Clear the navigation stack first so the help screen is not the state the
     // app restores to, then leave. No animation, no confirmation.

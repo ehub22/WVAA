@@ -3,4 +3,14 @@
     <string name="app_name">Westview HS</string>
     <string name="schedule_widget_label">Current Period</string>
     <string name="schedule_widget_description">Shows the current Westview class period and how much time is left.</string>
+    <string name="widget_ends_in">Ends in</string>
+    <string name="widget_starts_in">Starts in</string>
+    <string name="widget_school_out">School\'s out</string>
+    <string name="widget_no_school">No school today</string>
+    <string name="widget_last_period">Last period of the day</string>
+    <string name="widget_in_progress">In progress</string>
+    <string name="notification_channel_name">Schedule Countdown</string>
+    <string name="widget_see_you">See you %1$s</string>
+    <string name="widget_next">Next: %1$s · %2$s</string>
+    <string name="widget_school_starts">School starts at %1$s</string>
 </resources>

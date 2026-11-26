@@ -109,6 +109,58 @@ void main() {
       expect(events[3]['summary'], 'Boys Basketball (JV) Winter Classic');
     });
 
+    test('drops EXDATE occurrences (cancelled/moved days)', () {
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART;VALUE=DATE:20261127\n'
+        'DTEND;VALUE=DATE:20261128\n'
+        'RDATE;VALUE=DATE:20261128,20261129\n'
+        'EXDATE;VALUE=DATE:20261128\n'
+        'SUMMARY:Cancelled middle day\n'
+        'END:VEVENT',
+      );
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
+      expect(
+        events.map((e) => (e['displayDate'] as DateTime).day).toList(),
+        <int>[27, 29],
+      );
+    });
+
+    test('expands RRULE WEEKLY with COUNT', () {
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART;VALUE=DATE:20261127\n'
+        'DTEND;VALUE=DATE:20261128\n'
+        'RRULE:FREQ=WEEKLY;COUNT=3\n'
+        'SUMMARY:Weekly assembly\n'
+        'END:VEVENT',
+      );
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
+      expect(
+        events.map((e) => (e['displayDate'] as DateTime).day).toList(),
+        <int>[27, 4, 11],
+      );
+    });
+
+    test('expands RRULE DAILY with UNTIL and drops EXDATE inside it', () {
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART:20261127T170000Z\n'
+        'DTEND:20261127T180000Z\n'
+        'RRULE:FREQ=DAILY;UNTIL=20261129T235959Z\n'
+        'EXDATE:20261128T170000Z\n'
+        'SUMMARY:Daily practice\n'
+        'END:VEVENT',
+      );
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
+      // 27th kept, 28th excluded, 29th kept (times shift by zone, days don't).
+      expect(events.map((e) => e['summary']).toSet(), {'Daily practice'});
+      expect(
+        events.map((e) => (e['displayDate'] as DateTime).day).toList(),
+        <int>[27, 29],
+      );
+    });
+
     test('an empty feed parses to an empty list', () {
       expect(CalendarEventsViewState.parseEvents(feed(''), now: now), isEmpty);
       expect(CalendarEventsViewState.parseEvents('', now: now), isEmpty);
@@ -164,6 +216,29 @@ void main() {
       expect(lunches[1].date, DateTime(2026, 9, 2));
       expect(lunches[1].entrees, ['Pizza']);
       expect(lunches[1].fruit, ['Apple Slices']);
+    });
+
+    test('one malformed day does not kill the whole month', () {
+      final goodDay = {
+        'day': '2026-09-02',
+        'setting': jsonEncode({
+          'current_display': [
+            {'type': 'category', 'name': 'Lunch Entree'},
+            {'type': 'recipe', 'name': 'Pizza'},
+          ],
+        }),
+      };
+      final badDay = {'day': '2026-09-03', 'setting': 'not json{{{'};
+      final notObjectDay = {'day': '2026-09-04', 'setting': '[1,2,3]'};
+
+      final lunches = SchoolLunchViewState.parseLunchData(
+        jsonEncode({
+          'data': [badDay, goodDay, notObjectDay],
+        }),
+      );
+
+      expect(lunches, hasLength(1));
+      expect(lunches.single.entrees, ['Pizza']);
     });
 
     test('days without entrees are dropped', () {

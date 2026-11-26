@@ -39,13 +39,16 @@ jobs:
           java-version: "21"
         
 
-      - name: Set up Flutter (latest stable)
-        # pubspec.yaml requires Dart SDK >= 3.11.4, so we install the latest
-        # stable Flutter channel, which always ships a compatible (newer) Dart.
-        # For fully reproducible builds, pin a version, e.g. flutter-version: "3.32.0".
+      - name: Set up Flutter (pinned stable)
+        # Pinned for reproducible builds: `live_activities` is locked to
+        # 2.4.7 (see pubspec.yaml) because 2.5.0 needs Flutter 3.44+ and
+        # renames its Kotlin package. Bump this version and the
+        # live_activities pin together, and update CustomLiveActivityManager.kt
+        # / MainActivity.kt imports in the same change.
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.38.4"
           cache: true
 
       - name: Set up Android SDK
@@ -113,6 +116,16 @@ jobs:
       - name: Check string translations
         run: python3 tools/check_strings.py
 
+      - name: Run static analysis
+        shell: bash
+        run: |
+          set +e
+          flutter analyze > /tmp/analyze.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/analyze.log analyze
+          cat /tmp/analyze.log
+          exit $status
+
       - name: Run Flutter tests (includes the l10n/a11y suite)
         # Emit failures as GitHub annotations via `tools/annotate_ci.py` so
         # error details show up directly in the check-run API even when raw logs
@@ -127,15 +140,22 @@ jobs:
           exit $status
 
       # Build the release APK using `github.run_number` for `versionCode` so
-      # every CI build gets a higher version number automatically. Sideload
-      # builds use Flutter's debug signing config (`android/app/build.gradle.kts`).
+      # every CI build gets a higher version number automatically. On a
+      # vX.Y.Z tag, also pass --build-name so versionName matches the tag
+      # and bug reports can be mapped to a release. Sideload builds use
+      # Flutter's debug signing config (`android/app/build.gradle.kts`).
       - name: Build release APK
         # Emit key Gradle/Dart error lines as GitHub annotations just like the
         # test step above.
         shell: bash
         run: |
           set +e
-          flutter build apk --release --build-number=${{ github.run_number }} \
+          BUILD_NAME=""
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            BUILD_NAME="--build-name=${{ github.ref_name }}"
+            BUILD_NAME="${BUILD_NAME#v}"
+          fi
+          flutter build apk --release $BUILD_NAME --build-number=${{ github.run_number }} \
             > /tmp/build.log 2>&1
           status=$?
           python3 tools/annotate_ci.py /tmp/build.log build

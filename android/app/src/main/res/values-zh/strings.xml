@@ -3,4 +3,14 @@
     <string name="app_name">Westview HS</string>
     <string name="schedule_widget_label">当前课程</string>
     <string name="schedule_widget_description">显示 Westview 当前课时以及剩余时间。</string>
+    <string name="widget_ends_in">剩余</string>
+    <string name="widget_starts_in">开始于</string>
+    <string name="widget_school_out">已放学</string>
+    <string name="widget_no_school">今天不上课</string>
+    <string name="widget_last_period">今天最后一节课</string>
+    <string name="widget_in_progress">进行中</string>
+    <string name="notification_channel_name">课程倒计时</string>
+    <string name="widget_see_you">%1$s 见</string>
+    <string name="widget_next">下一节：%1$s · %2$s</string>
+    <string name="widget_school_starts">上课时间 %1$s</string>
 </resources>

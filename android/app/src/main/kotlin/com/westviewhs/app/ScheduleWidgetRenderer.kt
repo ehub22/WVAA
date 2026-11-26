@@ -52,6 +52,7 @@ object ScheduleWidgetRenderer {
      * matches the day being rendered; otherwise the regular schedules apply.
      */
     private const val KEY_SPECIAL = "schedule_special"
+    private const val KEY_SPECIAL_TOMORROW = "schedule_special_tomorrow"
 
     /**
      * A single period of the school day, times in minutes since midnight.
@@ -180,7 +181,14 @@ object ScheduleWidgetRenderer {
 
     /** Returns the special (modified) schedule for [day], or null when none applies. */
     private fun specialScheduleFor(context: Context, day: LocalDate): List<Period>? {
-        val json = HomeWidgetPlugin.getData(context).getString(KEY_SPECIAL, null)
+        val prefs = HomeWidgetPlugin.getData(context)
+        // Today is written under KEY_SPECIAL, tomorrow (pre-fetched by the
+        // Flutter sync) under KEY_SPECIAL_TOMORROW; check both so tomorrow
+        // is correct before the app is opened.
+        val json = prefs.getString(KEY_SPECIAL, null)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { if (it.contains(day.toString())) it else null }
+            ?: prefs.getString(KEY_SPECIAL_TOMORROW, null)
             ?: return null
         return try {
             val obj = JSONObject(json)
@@ -284,38 +292,38 @@ object ScheduleWidgetRenderer {
             is WidgetState.Current -> {
                 views.setTextViewText(R.id.widget_period, state.period.name)
                 showDetail(views, state.period.detail)
-                views.setTextViewText(R.id.widget_timer_label, "Ends in")
+                views.setTextViewText(R.id.widget_timer_label, context.getString(R.string.widget_ends_in))
                 showCountdown(views, state.targetMillis)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    state.next?.let { "Next: ${it.name} · ${formatTime(it.startMinutes)}" }
-                        ?: "Last period of the day",
+                    state.next?.let { context.getString(R.string.widget_next, it.name, formatTime(it.startMinutes)) }
+                        ?: context.getString(R.string.widget_last_period),
                 )
             }
 
             is WidgetState.Upcoming -> {
                 views.setTextViewText(R.id.widget_period, state.period.name)
                 showDetail(views, state.period.detail)
-                views.setTextViewText(R.id.widget_timer_label, "Starts in")
+                views.setTextViewText(R.id.widget_timer_label, context.getString(R.string.widget_starts_in))
                 showCountdown(views, state.targetMillis)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    "School starts at ${formatTime(state.period.startMinutes)}",
+                    context.getString(R.string.widget_school_starts, formatTime(state.period.startMinutes)),
                 )
             }
 
             is WidgetState.Done -> {
-                views.setTextViewText(R.id.widget_period, "School's out")
+                views.setTextViewText(R.id.widget_period, context.getString(R.string.widget_school_out))
                 showDetail(views, "")
                 hideCountdown(views)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    "See you ${dayName(state.nextSchoolDay)}",
+                    context.getString(R.string.widget_see_you, dayName(state.nextSchoolDay)),
                 )
             }
 
             is WidgetState.NoSchool -> {
-                views.setTextViewText(R.id.widget_period, "No school today")
+                views.setTextViewText(R.id.widget_period, context.getString(R.string.widget_no_school))
                 showDetail(views, "")
                 hideCountdown(views)
                 views.setTextViewText(

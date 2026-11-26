@@ -3,4 +3,14 @@
     <string name="app_name">Westview HS</string>
     <string name="schedule_widget_label">Kasalukuyang Period</string>
     <string name="schedule_widget_description">Ipinapakita ang kasalukuyang period sa Westview at ang natitirang oras.</string>
+    <string name="widget_ends_in">Matatapos sa</string>
+    <string name="widget_starts_in">Magsisimula sa</string>
+    <string name="widget_school_out">Tapos na ang klase</string>
+    <string name="widget_no_school">Walang klase ngayon</string>
+    <string name="widget_last_period">Huling period ng araw</string>
+    <string name="widget_in_progress">Kasalukuyan</string>
+    <string name="notification_channel_name">Countdown ng Iskedyul</string>
+    <string name="widget_see_you">Kita-kits sa %1$s</string>
+    <string name="widget_next">Susunod: %1$s · %2$s</string>
+    <string name="widget_school_starts">Magsisimula ang klase sa %1$s</string>
 </resources>

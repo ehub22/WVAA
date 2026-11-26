@@ -228,8 +228,11 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   }
 
   static List<DailyLunch> _parseLunchData(String jsonString) {
-    final data = json.decode(jsonString) as Map<String, dynamic>;
-    final days = (data['data'] as List<dynamic>?) ?? const [];
+    final decoded = json.decode(jsonString);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Lunch menu must be a JSON object');
+    }
+    final days = (decoded['data'] as List<dynamic>?) ?? const [];
     final lunches = <DailyLunch>[];
 
     for (final dayData in days) {
@@ -241,7 +244,12 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
       final date = DateTime.tryParse(day);
       if (date == null) continue;
 
-      final setting = json.decode(settingStr) as Map<String, dynamic>;
+      // One malformed day must not kill the whole month: skip it and keep
+      // the remaining days. (The top-level decode above still throws so a
+      // completely invalid response shows the error view.)
+      final settingDecoded = _tryDecodeSetting(settingStr);
+      if (settingDecoded == null) continue;
+      final setting = settingDecoded;
       final daysOff = setting['days_off'];
 
       var isDayOff = false;
@@ -297,6 +305,17 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
     }
     lunches.sort((a, b) => a.date.compareTo(b.date));
     return lunches;
+  }
+
+  /// Decodes one day's `setting` JSON, returning null on any malformation
+  /// (bad JSON, not an object) so the caller can skip just that day.
+  static Map<String, dynamic>? _tryDecodeSetting(String settingStr) {
+    try {
+      final decoded = json.decode(settingStr);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   String _formatDate(DateTime date, AppStrings strings) {
@@ -461,7 +480,8 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
                 // Keep a 48dp row height with a TalkBack label explaining that
                 // tapping opens nutrition facts.
                 child: Semantics(
-                  label: '$item, view nutrition facts',
+                  label:
+                      '$item, ${AppStrings.of(context)['lunch.viewNutrition']}',
                   excludeSemantics: true,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 48),

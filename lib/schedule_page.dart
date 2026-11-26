@@ -49,11 +49,19 @@ class _SchedulePageState extends State<SchedulePage>
   bool _isActivityActive = false;
   bool _liveActivitiesReady = false;
   bool _notificationPermissionRequested = false;
+  bool _exactAlarmChecked = false;
 
   final AppSettings _settings = AppSettings.instance;
 
   /// End-time of the period the widget was last synced for.
   DateTime? _lastWidgetPeriodEnd;
+
+  /// Last minute the page rebuilt for. The 1-second ticker only needs to
+  /// rebuild when the active period changes or the "minutes left" semantics
+  /// label rolls over — the visible countdown (`TimerCountdown`) ticks on
+  /// its own. Rebuilding the whole scroll view every second wastes battery
+  /// and churns TalkBack.
+  int? _lastRebuildMinute;
 
   @override
   void initState() {
@@ -63,17 +71,25 @@ class _SchedulePageState extends State<SchedulePage>
     _initSpecialSchedules();
     unawaited(_initLiveActivities());
 
-    // Ticker drives the per-second countdown and widget/notification updates.
+    // Ticker drives period-transition detection and widget/notification
+    // updates. It does NOT rebuild the page every second: TimerCountdown
+    // ticks the visible digits itself, so we only rebuild when the active
+    // period changes or the minute rolls over (semantics label).
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       _checkForNewDay();
       final currentPeriodEnd = _getCurrentPeriodEndTime();
-      if (currentPeriodEnd != _lastWidgetPeriodEnd) {
+      final periodChanged = currentPeriodEnd != _lastWidgetPeriodEnd;
+      if (periodChanged) {
         _lastWidgetPeriodEnd = currentPeriodEnd;
         unawaited(syncHomeWidget());
       }
       _updateLiveActivity();
-      setState(() {});
+      final minute = DateTime.now().minute;
+      if (periodChanged || minute != _lastRebuildMinute) {
+        _lastRebuildMinute = minute;
+        setState(() {});
+      }
     });
   }
 
@@ -125,6 +141,23 @@ class _SchedulePageState extends State<SchedulePage>
       _checkForNewDay();
       unawaited(SpecialScheduleService.instance.refreshToday());
       unawaited(_ensureNotificationPermission());
+      unawaited(_ensureExactAlarmPermission());
+    }
+  }
+
+  /// On Android 14+ exact alarms are denied by default for sideloaded apps,
+  /// which makes widget/notification transitions lag. Ask once per process
+  /// (only when the widget/notification is actually used) and let the
+  /// student allow it in system settings; the native side falls back to
+  /// inexact alarms until then.
+  Future<void> _ensureExactAlarmPermission() async {
+    if (_exactAlarmChecked) return;
+    _exactAlarmChecked = true;
+    try {
+      if (await QuickExit.canScheduleExactAlarms()) return;
+      await QuickExit.requestScheduleExactAlarms();
+    } catch (_) {
+      // Best effort (desktop/iOS/tests).
     }
   }
 
@@ -142,18 +175,29 @@ class _SchedulePageState extends State<SchedulePage>
     } catch (_) {}
     _liveActivitiesReady = true;
     await _ensureNotificationPermission();
+    await _ensureExactAlarmPermission();
     _updateLiveActivity();
   }
 
-  /// Asks Android 13+ for POST_NOTIFICATIONS once per process lifetime, but
-  /// only when the live activity is actually enabled (default: on).
+  /// Asks Android 13+ for POST_NOTIFICATIONS, but only when the live
+  /// activity is actually enabled (default: on).
+  ///
+  /// A plain denial is re-asked on the next resume (the user may have
+  /// dismissed the prompt by accident); a permanent denial opens system
+  /// settings once per process instead of silently never showing the
+  /// countdown notification.
   Future<void> _ensureNotificationPermission() async {
     if (!_settings.liveActivityActive) return;
-    if (_notificationPermissionRequested) return;
-    _notificationPermissionRequested = true;
     try {
       final status = await Permission.notification.status;
-      if (status.isDenied || status.isRestricted) {
+      if (status.isGranted || status.isLimited) return;
+      if (status.isPermanentlyDenied || status.isRestricted) {
+        if (_notificationPermissionRequested) return;
+        _notificationPermissionRequested = true;
+        await openAppSettings();
+        return;
+      }
+      if (status.isDenied) {
         await Permission.notification.request();
       }
     } catch (_) {

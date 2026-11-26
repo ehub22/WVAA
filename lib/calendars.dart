@@ -210,12 +210,20 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
           ? end.value.subtract(const Duration(seconds: 1))
           : start.value;
 
-      // A repeating event lists the extra days explicitly.
+      // A repeating event lists extra days explicitly (RDATE) and/or via a
+      // recurrence rule (RRULE). EXDATE lists occurrences that were
+      // cancelled or moved and must be dropped.
+      final excludedDays = <DateTime>{
+        for (final raw in event.multiDates['EXDATE'] ?? const <String>[])
+          if (_parseIcsDate(raw) case final _IcsDate date)
+            _dayOnly(date.value),
+      };
       final starts = <_IcsDate>[
         start,
         for (final raw in event.multiDates['RDATE'] ?? const <String>[])
           if (_parseIcsDate(raw) case final _IcsDate date) date,
-      ];
+        ..._rruleStarts(start, event.values['RRULE'], now ?? DateTime.now()),
+      ].where((d) => !excludedDays.contains(_dayOnly(d.value))).toList();
 
       for (final occurrence in starts) {
         final span = occurrence == start
@@ -288,6 +296,122 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     );
     if (span == Duration.zero) return null;
     return _IcsDate(start.value.add(span), start.hasTime);
+  }
+
+  /// Expands a simple `RRULE` (DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL,
+  /// COUNT, UNTIL, BYDAY for weekly, BYMONTHDAY for monthly) into occurrence
+  /// starts after [start]. Unsupported parts (BYSETPOS, negative
+  /// BYMONTHDAY, BYMONTH, etc.) fall back to the DTSTART weekday/day/month
+  /// so the event still recurs at a sensible cadence instead of vanishing.
+  /// Expansion is capped at 366 occurrences and one year past [now] so a
+  /// malformed rule cannot hang the parser.
+  static List<_IcsDate> _rruleStarts(
+      _IcsDate start, String? raw, DateTime now) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    final parts = <String, String>{};
+    for (final piece in raw.split(';')) {
+      final kv = piece.split('=');
+      if (kv.length == 2) parts[kv[0].trim().toUpperCase()] = kv[1].trim();
+    }
+    final freq = parts['FREQ']?.toUpperCase();
+    if (freq == null || !{'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'}.contains(freq)) {
+      return const [];
+    }
+    final interval = int.tryParse(parts['INTERVAL'] ?? '') ?? 1;
+    if (interval < 1) return const [];
+    final count = int.tryParse(parts['COUNT'] ?? '');
+    DateTime? until;
+    final untilRaw = parts['UNTIL'];
+    if (untilRaw != null) {
+      final parsed = _parseIcsDate(untilRaw);
+      if (parsed != null) until = parsed.value;
+    }
+    final horizon = now.add(const Duration(days: 366));
+    final limit = until != null && until.isBefore(horizon) ? until : horizon;
+
+    const weekdayByCode = {
+      'MO': DateTime.monday,
+      'TU': DateTime.tuesday,
+      'WE': DateTime.wednesday,
+      'TH': DateTime.thursday,
+      'FR': DateTime.friday,
+      'SA': DateTime.saturday,
+      'SU': DateTime.sunday,
+    };
+    final byDay = (parts['BYDAY'] ?? '')
+        .split(',')
+        .map((c) => weekdayByCode[c.trim().toUpperCase()])
+        .whereType<int>()
+        .toSet();
+    final byMonthDay = int.tryParse(parts['BYMONTHDAY'] ?? '');
+
+    final results = <_IcsDate>[];
+    var produced = 1; // DTSTART itself counts toward COUNT.
+    bool done() => (count != null && produced >= count) || results.length >= 366;
+
+    DateTime atSameTime(DateTime day) => DateTime(
+          day.year,
+          day.month,
+          day.day,
+          start.value.hour,
+          start.value.minute,
+          start.value.second,
+        );
+
+    if (freq == 'DAILY') {
+      var day = _dayOnly(start.value).add(Duration(days: interval));
+      while (!day.isAfter(limit) && !done()) {
+        results.add(_IcsDate(atSameTime(day), start.hasTime));
+        produced++;
+        day = day.add(Duration(days: interval));
+      }
+    } else if (freq == 'WEEKLY') {
+      final days = byDay.isEmpty ? {start.value.weekday} : byDay;
+      var weekStart = _dayOnly(start.value)
+          .subtract(Duration(days: start.value.weekday - DateTime.monday));
+      while (!weekStart.isAfter(limit) && !done()) {
+        for (final wd in days.toList()..sort()) {
+          if (done()) break;
+          final day = weekStart.add(Duration(days: wd - DateTime.monday));
+          if (!day.isAfter(start.value) || day.isAfter(limit)) continue;
+          if (_dayOnly(day) == _dayOnly(start.value)) continue;
+          results.add(_IcsDate(atSameTime(day), start.hasTime));
+          produced++;
+        }
+        weekStart = weekStart.add(Duration(days: 7 * interval));
+      }
+    } else if (freq == 'MONTHLY') {
+      var cursor = DateTime(start.value.year, start.value.month, 1);
+      while (!cursor.isAfter(limit) && !done()) {
+        final dayOfMonth = (byMonthDay != null && byMonthDay > 0)
+            ? byMonthDay
+            : start.value.day;
+        final lastDay = DateTime(cursor.year, cursor.month + 1, 0).day;
+        if (dayOfMonth <= lastDay) {
+          final day = DateTime(cursor.year, cursor.month, dayOfMonth);
+          if (day.isAfter(start.value) && !day.isAfter(limit)) {
+            results.add(_IcsDate(atSameTime(day), start.hasTime));
+            produced++;
+          }
+        }
+        cursor = DateTime(cursor.year, cursor.month + interval, 1);
+      }
+    } else {
+      // YEARLY: same month/day each year.
+      var year = start.value.year + interval;
+      while (year <= limit.year && !done()) {
+        final lastDay = DateTime(year, start.value.month + 1, 0).day;
+        if (start.value.day <= lastDay) {
+          final day = DateTime(year, start.value.month, start.value.day);
+          if (!day.isAfter(limit)) {
+            results.add(_IcsDate(atSameTime(day), start.hasTime));
+            produced++;
+          }
+        }
+        year += interval;
+      }
+    }
+    return results;
   }
 
   /// Splits the feed into one parsed `VEVENT` at a time.

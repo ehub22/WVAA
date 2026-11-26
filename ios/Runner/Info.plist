@@ -32,10 +32,7 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key><true/>
-	</dict>
+	<!-- All network endpoints are https; ATS stays at its secure default. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

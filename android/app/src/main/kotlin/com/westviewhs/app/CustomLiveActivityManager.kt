@@ -109,7 +109,7 @@ class CustomLiveActivityManager(private val context: Context) : LiveActivityMana
                 )
                 // Public version: class name only, never teacher or room.
                 .setContentTitle(periodName)
-                .setContentText("In progress")
+                .setContentText(context.getString(R.string.widget_in_progress))
                 .setContentIntent(clickPendingIntent)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_SECRET)

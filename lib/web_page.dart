@@ -1,8 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'l10n/strings.dart';
 import 'widgets/status_views.dart';
+
+/// Whether a WebView navigation should be allowed inside the app.
+///
+/// Only https pages (and the blank page) may load. `http`, `file`,
+/// `javascript:`, `data:`, `intent:`, `tel:`, `mailto:` and friends are
+/// blocked inside the WebView so a compromised or linked page cannot load
+/// local files, downgrade to cleartext, or smuggle an external scheme past
+/// the app. External actions belong in the phone's own apps via
+/// `url_launcher` (see `support.dart`), not in an embedded browser.
+@visibleForTesting
+bool isAllowedWebNavigation(Uri uri) {
+  if (uri.scheme == 'about') return true;
+  return uri.scheme == 'https' && uri.host.isNotEmpty;
+}
 
 /// Shared WebView wrapper with loading, error, and retry states.
 ///
@@ -39,6 +54,12 @@ class WebPageViewState extends State<WebPageView> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) {
+            final uri = Uri.tryParse(request.url);
+            return uri != null && isAllowedWebNavigation(uri)
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          },
           onPageStarted: (_) {
             if (!mounted) return;
             setState(() {

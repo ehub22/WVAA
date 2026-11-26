@@ -9,6 +9,7 @@ import 'l10n/strings.dart';
 import 'newscast_page.dart';
 import 'support.dart';
 import 'video_pip.dart';
+import 'web_page.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
@@ -212,6 +213,12 @@ class PublicationWebViewState extends State<PublicationWebView>
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) {
+            final uri = Uri.tryParse(request.url);
+            return uri != null && isAllowedWebNavigation(uri)
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          },
           onPageStarted: (_) {
             if (!mounted) return;
             setState(() {

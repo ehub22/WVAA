@@ -55,7 +55,7 @@ object ScheduleNotificationManager {
 
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "Schedule Countdown",
+                    context.getString(R.string.notification_channel_name),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     // IMPORTANCE_LOW keeps the ongoing timer silent without
@@ -190,7 +190,7 @@ object ScheduleNotificationManager {
                 // Public (lock-screen / redacted) version: period name only.
                 // Teacher, room and course name stay behind the lock screen.
                 .setContentTitle(currentPeriod.name)
-                .setContentText("In progress")
+                .setContentText(context.getString(R.string.widget_in_progress))
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
