@@ -4,18 +4,14 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'l10n/strings.dart';
 import 'widgets/status_views.dart';
 
-/// Reusable WebView wrapper with explicit loading, error and retry states.
+/// Shared WebView wrapper with loading, error, and retry states.
 ///
-/// Behavior on flaky networks:
-///  * the first load shows a full-screen loading state, and a main-frame
-///    failure replaces it with a retry screen;
-///  * a *refresh* of an already loaded page never destroys the content: a slim
-///    progress bar runs at the top, and a failure just shows a dismissible
-///    notice above the last-known page.
-///
-/// PiP support for the Publications tab lives in `publications.dart`; this
-/// widget is intentionally simple so Newsletter and Calendar tabs stay
-/// lightweight.
+/// How it handles bad Wi-Fi:
+///  * If the initial load fails on the main frame, it shows a full-screen retry
+///    view.
+///  * Once a page has loaded at least once, a failed refresh keeps the loaded
+///    page on screen and shows a small dismissible banner at the top instead of
+///    wiping out what you were reading.
 class WebPageView extends StatefulWidget {
   const WebPageView({super.key, required this.url, this.backgroundColor});
 

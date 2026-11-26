@@ -8,6 +8,7 @@
 		<string>es</string>
 		<string>zh-Hans</string>
 		<string>tl</string>
+		<string>fr</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

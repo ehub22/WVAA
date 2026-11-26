@@ -1,203 +1,123 @@
 # Accessibility
 
-Westview HS (WVAA) is used by whoever happens to need it — a student with low
-vision, a parent who reads Spanish at home, a deaf student in a loud hallway, a
-student whose phone is set to giant text. The app is built so that none of those
-students has to ask anyone for help to use it.
+Westview HS (WVAA) serves students and families with different language, vision, hearing, and motor needs, such as parents reading Spanish at home, students using screen readers or enlarged system fonts, and deaf or hard-of-hearing students reaching support in a loud hallway. Because those situations are common across a public high school, the app builds translations, contrast checks, screen-reader labels, and non-voice crisis options directly into its standard screens.
 
-This document records **what is implemented, where it lives, and what is still
-missing**, so a future maintainer does not undo it by accident.
+This document records what is implemented today, which files enforce each behavior, and which gaps still need testing or upstream support.
 
 ---
 
 ## 1. Languages
 
-| Language | Code | Scope |
+| Language | Code | Coverage |
 | --- | --- | --- |
 | English | `en` | Complete |
 | Spanish | `es` | Complete |
 | Simplified Chinese | `zh` | Complete |
 | Filipino / Tagalog | `tl` | Complete |
+| French | `fr` | Complete |
 
-**Every screen the app draws itself is translated**, including every
-safety-critical string: the 911 card, all six crisis lines, the counselor
-roster, reporting guidance, the district disclaimer, the Settings screen, the
-navigation bar, loading/error/empty states, the calendar and lunch-menu labels,
-and the SMS confirmation dialog.
+Every screen drawn by the Flutter app is translated across all five languages, including all safety-related text: the 911 card, all six crisis lines, the counselor list, reporting instructions, the plain-language disclaimer summary, Settings, bottom navigation labels, loading/error/empty views, calendar and lunch headings, and the SMS confirmation dialog.
 
-`lib/l10n/strings.dart` holds the catalogue:
+All app translations live in `lib/l10n/strings.dart`:
 
-- `AppLanguage` — `system`, `english`, `spanish`, `chinese`, `tagalog`, with
-  BCP-47 codes and a `resolve(Locale)` that maps the device locale (`fil` →
-  `tl`).
-- `AppStrings` — a plain lookup with `operator []`. A missing key **falls back
-  to English**, and then to the key name itself, so a typo is visible in tests
-  instead of rendering a blank label on a safety screen.
-- `AppStrings.of(context)` resolves `AppSettings.instance.language` first, then
-  the device locale, so an explicit choice pins the app and `System default`
-  follows the phone.
+- **`AppLanguage`:** Defines `system`, `english`, `spanish`, `chinese`, and `tagalog`, mapping device locales (including `fil` to `tl`) to supported BCP-47 tags.
+- **`AppStrings`:** Provides string lookup via `operator []`. If a lookup ever misses in a non-English map, it falls back to English and then to the key string itself so that an automated test catches the mistake instead of leaving a safety button blank.
+- **`AppStrings.of(context)`:** Checks `AppSettings.instance.language` before checking the device locale, allowing a student on a shared family phone to lock the app to one language while letting `System default` follow the operating system.
 
-Why hand-rolled instead of `intl`/ARB generation: there is no build-time code
-generation in this repo, the catalogue is small enough to review by hand, and
-`flutter test` (not a `build_runner` step) enforces it. `flutter_localizations`
-*is* included, so Material's own widgets (date pickers, "Back", the text
-selection menu, semantic announcements) are translated too.
+Instead of using `intl` `.arb` code generation, the repository keeps the five maps in one Dart file validated by `tools/check_strings.py` and `test/l10n_test.dart`. Because the catalog has roughly two hundred keys, keeping them in plain Dart avoids a `build_runner` step while letting unit tests check key parity directly. At the same time, `flutter_localizations` is still enabled so Material widgets (such as back buttons, selection menus, and system tooltips) localize properly in `en`, `es`, `zh`, `tl`, and `fr`.
 
-**Picker design.** Settings ▸ Safety ▸ *Language · Idioma · 语言 · Wika* opens a
-sheet where every option is labelled in all four languages
-(`Español · Spanish · 西班牙语 · Espanyol`), so a student who cannot yet read the
-current UI language can still find theirs. A shared family phone can pin a
-language; `System default` returns to the phone's setting.
+### Language Picker and System Integration
 
-**Android below the app.** `android/app/src/main/res/values-{es,zh,tl}/strings.xml`
-translate the launcher and home-screen-widget labels, and
-`res/xml/locale_config.xml` opts into Android 13+'s per-app language picker
-(*Settings ▸ Apps ▸ Westview HS ▸ Language*). iOS declares the same four
-languages via `CFBundleLocalizations`.
+Under `Settings > Safety > English · Español · 中文 · Filipino · Français`, the setting row lists every supported language, and each option inside the bottom sheet repeats that list on its subtitle line (for example, `Español · Spanish · 西班牙语 · Espanyol · Espagnol`). Naming every language on every row allows a user to find their own language even if the app was previously set to one they cannot read.
 
-### What is *not* translated, deliberately
+Outside Flutter, `android/app/src/main/res/values-{es,zh,tl,fr}/strings.xml` translates the launcher and home-screen widget descriptions, while `res/xml/locale_config.xml` registers all five locales with Android 13's system per-app language menu (`Settings > Apps > Westview HS > Language`). On iOS, `Info.plist` declares the same five locales in `CFBundleLocalizations`.
 
-The embedded WebViews (newsletters, publications, Nexus, Vimeo) render the
-school's own pages in whatever language those pages use. The app cannot
-translate third-party content, and it must not fake a translation of a legal
-disclaimer — so the PUSD-required English and Spanish disclaimer wording is
-shown **verbatim**, with the app's own plain-language explanation translated
-underneath plus a note that the official wording governs.
+### Content Left Untranslated
+
+Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display external webpages controlled by school groups, so the app cannot translate their contents. In addition, the official Poway Unified disclaimer is kept verbatim in English and Spanish rather than translated informally into Chinese, Filipino, or French, because legal disclaimer text should not be paraphrased as if the district wrote that translation; instead, the app translates its own plain-language explanation underneath and notes that the official district text governs.
 
 ---
 
-## 2. Colour and vision
+## 2. Color and Contrast
 
-- **Never colour alone (WCAG 1.4.1).** The current period is marked by a
-  `primaryContainer` tint **plus** a play glyph **plus** the word "Now" — see
-  `_NowBadge` in `lib/schedule_page.dart`. The live period row repeats the
-  glyph. Status is legible in greyscale and in bright sunlight.
-- **Contrast.** `tools/audit_contrast.py` checks every text/background pair the
-  app actually uses against WCAG AA. Current results (worst case):
+- **Status never relies on color alone (WCAG 1.4.1):** On the Schedule tab, the active period card combines a `primaryContainer` background tint with a left accent bar and an explicit "Now" pill (`_NowBadge` in `lib/schedule_page.dart`). The bar and the word mean students viewing the screen in grayscale or bright outdoor glare can still tell which period is running, and neither element is shaped like a control, so the card never looks tappable.
+- **Verified WCAG AA contrast:** `tools/audit_contrast.py` calculates contrast ratios for every foreground/background token pair used in `lib/theme/colors.dart`:
 
-  | Pair | Light | Dark | AA (4.5:1) |
+  | Token Pair | Light Theme | Dark Theme | WCAG AA (4.5:1) |
   | --- | --- | --- | --- |
-  | body on surface | 16.31:1 | 14.42:1 | pass |
-  | onSurfaceVariant on surface | 8.87:1 | — | pass |
-  | onPrimary on primary | 6.47:1 | 9.41:1 | pass |
-  | primary text on surface | 6.14:1 | — | pass |
-  | onErrorContainer on errorContainer | 13.26:1 | 7.24:1 | pass |
-  | outline (borders) | 4.26:1 | 6.11:1 | pass |
+  | `onSurface` on `surface` | 16.31:1 | 14.42:1 | Pass |
+  | `onSurfaceVariant` on `surface` | 8.87:1 | 11.11:1 | Pass |
+  | `onPrimary` on `primary` | 6.47:1 | 9.41:1 | Pass |
+  | `primary` on `surface` | 6.14:1 | 13.30:1 | Pass |
+  | `onErrorContainer` on `errorContainer` | 13.26:1 | 7.24:1 | Pass |
+  | `outline` on `surface` (3.0:1 non-text target) | 4.26:1 | 6.11:1 | Pass |
 
-  Run `python3 tools/audit_contrast.py` (or `--strict` in CI) after touching
-  `lib/theme/colors.dart`.
-- **Colour-blind safe palette.** The brand gold/brass and the red error family
-  were simulated under deuteranopia, protanopia and tritanopia
-  (`tools/audit_contrast.py --simulate`, images in `docs/screenshots/`). The
-  "now" card stays distinguishable from a normal card by ΔE ≥ 20 in every
-  simulation (light) and ≥ 63 (dark), and it additionally carries text and a
-  glyph, so even a total loss of colour is not a loss of meaning.
-- **Icons always accompany colour**: warning triangle + text on the emergency
-  card, cloud-off + text on offline notices, check + text on selected options.
+  Any change to `lib/theme/colors.dart` should be checked locally with `python3 tools/audit_contrast.py --strict`, which also runs automatically in GitHub Actions.
+- **Color-vision deficiency separation:** `tools/audit_contrast.py` simulates deuteranopia, protanopia, and tritanopia to confirm that the active-period card (`primaryContainer`) remains visually distinct from standard period cards (`surfaceContainerLow`). Across all three simulations, separation stays at `ΔE >= 20.3` in light mode and `ΔE >= 63.2` in dark mode, reinforced by a left accent bar and the "Now" label, neither of which looks like a button.
+- **Paired icons on status cards:** Emergency cards pair red error fills with a warning icon and heading text, offline banners pair container tints with a `cloud_off` or `offline_bolt` icon, and language selections pair highlight colors with a checkmark icon.
 
 ---
 
-## 3. Deaf and hard of hearing
+## 3. Deaf and Hard-of-Hearing Access
 
-- **Every crisis option has a non-voice route**, and the app says so *before*
-  listing phone numbers: the note above the hotline list ("Hard of hearing, or
-  can't speak on the phone? … 988 and the Crisis Text Line are text-first, and
-  San Diego County's line can be reached through a relay operator: dial 711.")
-  is a normally-translated catalogue key (`help.crisis.deaf`).
-- Tap-to-text is a first-class action, not a footnote: 988, Crisis Text Line
-  (741741), and The Trevor Project (678678) all have text buttons next to the
-  call buttons.
-- The SMS flow **shows the trigger word** (`HOME`, `START`) and asks for
-  confirmation before opening the messaging app, because sending the wrong word
-  to a crisis line is a silent failure that looks like being ignored.
-- **No audio is required anywhere.** Nothing in the app speaks, plays a tone, or
-  relies on a ringtone. The live countdown is visual and textual.
-- **Notifications are silent by design**: the channel is created with
-  `IMPORTANCE_LOW`, so the period-change notification never makes a sound or
-  vibrates in class. See `ScheduleNotificationManager.kt`.
-- **Video**: the Publications tab embeds Vimeo. Captions come from the source
-  video, not the app — see §6 for what to tell the newscast team.
+- **Text and relay options appear above phone numbers:** At the top of the crisis-lines section, a translated notice (`help.crisis.deaf`) points out that 988 and Crisis Text Line support texting directly and that San Diego County's crisis line can be reached through 711 relay if speaking on a call is not possible.
+- **Side-by-side text buttons:** For 988, Crisis Text Line (`741741`), and The Trevor Project (`678678`), tap-to-text buttons sit directly beside tap-to-call buttons at the same visual prominence.
+- **Explicit SMS keyword confirmation:** Before opening the phone's messaging app for a keyword-triggered hotline (`HOME` or `START`), the app displays a confirmation dialog showing the number and keyword and copies the keyword if needed, since sending a blank message to an automated shortcode can fail to start a session.
+- **No audio-only cues:** No feature in the app depends on sound effects or spoken prompts, and the period countdown is entirely visual and text-based.
+- **Silent ongoing notifications:** `ScheduleNotificationManager.kt` registers the countdown channel with `IMPORTANCE_LOW`, which prevents period transitions from playing alert tones or vibrating during class.
+- **Embedded video captions:** Westview Newscast episodes play through a single-video YouTube embed, so closed captions depend on the caption tracks the Newscast team uploads to YouTube (see Section 7). The episode list shows each video's title and date as ordinary text, so a student never has to read a thumbnail to know what an episode is.
 
 ---
 
-## 4. Screen readers (TalkBack / VoiceOver)
+## 4. Screen Readers (TalkBack and VoiceOver)
 
-- Every interactive row, icon button and FAB has a `tooltip` or `semanticsLabel`;
-  tooltips double as the accessibility label.
-- The **911 button** is wrapped in
-  `Semantics(button: true, label: 'Call 911, 9 1 1')` so the number is spoken
-  digit by digit instead of "nine hundred eleven".
-- Schedule period rows announce **one sentence**
-  ("Period 2, Algebra 2, Mr. Smith · Rm 402, 8:00 AM – 9:40 AM") instead of
-  four separate fragments, via `Semantics(container: true, excludeSemantics: true)`.
-- The live countdown is **excluded** from the semantic tree (it would
-  re-announce every second) and replaced by a single label that includes the
-  minutes remaining and the end time.
-- Section headings use `Semantics(header: true)` so TalkBack's heading navigation
-  works; `SectionSelector` exposes the selected tab.
-- Offline/cached banners announce "… Pull down to refresh" once.
+- **Labeled controls:** Icon buttons, action buttons, and floating action buttons provide either a `tooltip` or an explicit `Semantics` label so screen readers never announce an unlabeled button.
+- **Digit-by-digit 911 label:** The emergency button wraps its child in `Semantics(button: true, label: '..., 9 1 1')` so TalkBack and VoiceOver read "nine one one" rather than "nine hundred eleven."
+- **Grouped schedule rows:** Each period card uses `Semantics(container: true, excludeSemantics: true)` to combine the period label, custom class name, teacher/room details, and start–end times into a single spoken sentence rather than four separate focus stops.
+- **Stable countdown announcements:** The per-second visual timer is hidden from the accessibility tree so TalkBack does not interrupt itself every second; instead, the summary card exposes a single semantic label stating the remaining minutes and end time.
+- **Heading and selection states:** Section titles declare `Semantics(header: true)` for heading-by-heading navigation, `SectionSelector` marks its pills with `button: true` and `selected: ...`, and `SavedCopyNotice` announces the saved date alongside `"Pull down to refresh."`
 
 ---
 
-## 5. Motor, low vision and cognitive load
+## 5. Motor Access, Low Vision, and Clear Language
 
-- **Text scaling** is honoured up to **200 %** and floored at 85 %
-  (`MediaQuery.textScaler.clamp` in `lib/main.dart`). The clamp exists so a
-  runaway scale factor cannot push a crisis phone number off screen — every
-  safety action stays reachable at the maximum size.
-- **No text is clipped**: transcript, disclaimer and crisis copy never use
-  `maxLines`; the always-visible disclaimer bar wraps and grows.
-- **Touch targets**: 48 dp minimum everywhere, 56 dp for the 911 and primary
-  crisis actions. Buttons are full-width where a mis-tap would be costly.
-- **Reduced motion**: the OS "Remove animations"/"Reduce Motion" flag is read in
-  `lib/main.dart` and exposed to the tree via `_ReducedMotionScope` +
-  `reducedMotionFor(context, duration)`; Material's own animation-scale setting
-  is respected. The app itself does not animate anything decorative.
-- **Plain language** is a requirement, not a nicety: no jargon ("psychiatric
-  emergency", "MCRT", "ACL") is shown without a plain-English gloss, phone
-  numbers are spaced for reading aloud, and each crisis line gets a one-line
-  description of what it is *for*.
-- **No timers or forced flows**: nothing auto-dismisses, autoplays, or requires a
-  response within N seconds. The quick-exit long-press is the only gesture
-  shortcut, and every one of its outcomes is also reachable from Settings.
+- **Font scaling up to 200%:** `lib/main.dart` clamps `MediaQuery.textScaler` between `0.85` and `2.0`. Supporting up to `2.0` honors large system text settings while preventing extreme scale multipliers from pushing emergency phone buttons off the viewport.
+- **Unclipped safety text:** Crisis descriptions, counselor cards, and disclaimers avoid fixed `maxLines` limits so enlarged text wraps onto additional lines instead of truncating with ellipses.
+- **Generous touch targets:** Interactive controls enforce a minimum 48dp height across the app, while the 911 emergency button uses a 56dp full-width target to reduce mis-taps under stress.
+- **Reduced motion:** `lib/theme/theme.dart` checks `MediaQuery.maybeDisableAnimationsOf(context)` inside `_AccessiblePageTransitionsBuilder` and switches route transitions to instant swaps when system animations are disabled, while `reducedMotionFor` in `lib/main.dart` zeroes out in-app animation durations.
+- **Plain descriptions over clinical acronyms:** Crisis-line descriptions explain what each service helps with in everyday words (for example, explaining mobile crisis response in plain sentences rather than leaving acronyms like "MCRT" or "ACL" unexplained), and phone numbers include spaces or hyphens so they are easier to read aloud.
+- **No timed prompts:** Banners, dialogs, and navigation flows never auto-dismiss on a timer. Quick exit uses a long-press shortcut on Help buttons, and the same settings remain reachable through standard taps in Settings.
 
 ---
 
-## 6. Tests that keep this true
+## 6. Automated Accessibility Checks
 
-`test/l10n_test.dart`:
+`test/l10n_test.dart` and `tools/check_strings.py` verify localization and layout rules on every test run:
 
-- all four catalogues define exactly the same key set (no silent English
-  fallback in a shipped language);
-- no value is empty;
-- every `help.*` and `disclaimer.*` key is present **and actually different**
-  from English in `es`/`zh`/`tl`;
-- every `hotline.<id>.name/desc/call/sms` key exists for every hotline;
-- every catalogue lookup in `lib/` exists in the English catalogue (catches
-  typo'd keys that would render as `settings.xyz`);
-- language resolution (`fil` → `tl`, unknown → `en`, explicit choice wins) and
-  persistence of the choice;
-- the Get-help screen renders without layout exceptions in all four languages
-  and at **200 % text scale** in Spanish (the longest), and asserts Spanish copy
-  rather than English fallbacks;
-- the 911 button's screen-reader label.
+- All five language maps (`en`, `es`, `zh`, `tl`, `fr`) contain identical, non-empty key sets.
+- Every `help.*` and `disclaimer.*` key (apart from shared proper-noun constants) differs from English in `es`, `zh`, and `tl`, preventing untranslated safety copy from slipping through.
+- Every hotline defined in `lib/support.dart` has matching name, description, call, and SMS keys across all five languages.
+- Every literal `strings['...']` lookup in `lib/` resolves to an existing key in `lib/l10n/strings.dart`.
+- Locale resolution maps `fil` to `tl`, falls back cleanly for unsupported tags, and persists explicit language selections.
+- `SupportPage` renders without overflow or layout exceptions in all five languages and at **200% text scale** in Spanish.
+- The 911 action exposes its `"..., 9 1 1"` screen-reader label in the semantics tree.
 
-`tools/audit_contrast.py` covers colour; run it with `--strict` in CI.
+Separately, `python3 tools/audit_contrast.py --strict` verifies light and dark contrast ratios and colorblind separation before CI builds the APK.
 
 ---
 
-## 7. Known gaps (and the plan)
+## 7. Known Gaps and Follow-Up Work
 
-| Gap | Impact | Plan |
+| Gap | Effect on Users | Planned Follow-Up |
 | --- | --- | --- |
-| No real-device TalkBack/VoiceOver pass | Semantics order is designed but not verified by ear | Test on a physical Android device with TalkBack before the next release; record the walkthrough in `docs/` |
-| Chinese translations are unreviewed | Could read awkwardly to a native speaker | Have a Chinese-speaking student or staff member review `zh`; until then the catalogue is marked for review in code comments |
-| Filipino (`tl`) uses the Tagalog standard, not Ilocano/Cebuano | Some Filipino students speak another language at home | Documented; `en` remains complete for everyone |
-| WebView content is untranslated | Newsletters/publications are English-only | Ask ASB/counseling to publish Spanish summaries; the app cannot fix upstream content |
-| No captions on the newscast | Deaf students cannot follow video | Request captions from the Westview Newscast team (Vimeo supports uploading SRT) |
-| No high-contrast ("forced colours") theme | Some low-vision students need more than AA | Follows Material 3 dynamic contrast settings on Android 12+; a `highContrastTheme` is a candidate follow-up |
-| Landscape large-text layout untested | Possible overflow on tablets | `flutter test` at 200 % covers the phone case; add a tablet widget test |
+| No manual TalkBack or VoiceOver walkthrough recorded yet | Reading order is tested structurally in widget tests rather than by ear on a phone | Run a full TalkBack pass on a physical Android device and document any focus-order fixes in `docs/` |
+| Simplified Chinese (`zh`) strings have not had native-speaker review | Phrasing is accurate in meaning but may sound stiff in places | Ask a fluent Chinese-speaking Westview student or staff member to review the `zh` map in `lib/l10n/strings.dart` |
+| Filipino (`tl`) uses Tagalog phrasing rather than Ilocano or Cebuano | Students whose home language is another Philippine language will rely on Tagalog or English | Keep English available alongside `tl` and expand only if native reviewers are available |
+| French (`fr`) strings have not had native-speaker review | Wording follows standard metropolitan French and should read correctly, though phrasing may sound formal to some students | Ask a fluent French-speaking student or staff member to review the `fr` map in `lib/l10n/strings.dart` |
+| Embedded newsletters and publications are English-only | WebViews show external school pages as published | Suggest short multilingual summaries to ASB or counseling; cannot be solved inside the app alone |
+| Newscast videos may lack closed captions | Deaf and hard-of-hearing students cannot follow uncaptioned broadcasts | Ask the Westview Newscast editors to enable YouTube's automatic captions or upload their own |
+| The Newscast list comes from YouTube's upload feed | If the feed format changes, the tab shows a retry view instead of the episode list | The parser is covered by `test/newscast_feed_test.dart` against the real feed shape |
+| No dedicated high-contrast (`forced-colors`) theme yet | Users needing contrast well above WCAG AA rely on standard light/dark palettes | Add `highContrastLight` and `highContrastDark` `ThemeData` variants in `lib/theme/theme.dart` |
+| Tablet landscape layout at 200% text scale is untested | Dialogs with open keyboards could crowd vertical space on wide screens | Add widget tests covering an `800x1280` landscape viewport at `2.0` text scale |
 
-The mockup images in `docs/screenshots/` (rendered by `tools/render_mockups.py`
-from the real colour tokens and real catalogue strings) include
-`get-help-spanish.png` and `language-picker.png`.
+`tools/render_mockups.py` renders preview mockups from `lib/theme/colors.dart` and `lib/l10n/strings.dart` and writes them to `docs/screenshots/`, including `get-help-spanish.png`, `language-picker.png`, `get-help-deuteranopia.png`, and `palette-simulated.png`.

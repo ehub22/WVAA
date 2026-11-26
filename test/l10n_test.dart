@@ -8,10 +8,9 @@ import 'package:westview_app/l10n/strings.dart';
 import 'package:westview_app/settings.dart';
 import 'package:westview_app/support.dart';
 
-/// Guarantees that every language ships the same keys, that the
-/// safety-critical screens are actually translated rather than silently
-/// falling back to English, and that the Help screen survives 200% text scale
-/// in the longest language.
+/// Checks that every language map defines identical keys, safety strings are
+/// translated rather than left in English, every key referenced in `lib/`
+/// exists, and the Get help screen lays out cleanly at 200% text scale.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,12 +20,12 @@ void main() {
     await AppSettings.instance.load();
   });
 
-  group('catalogue completeness', () {
-    test('all four languages define exactly the same keys', () {
+  group('string catalog completeness', () {
+    test('every language defines exactly the same keys', () {
       final english = AppStrings.catalog['en']!.keys.toSet();
       expect(english, isNotEmpty);
 
-      for (final language in ['es', 'zh', 'tl']) {
+      for (final language in ['es', 'zh', 'tl', 'fr']) {
         final keys = AppStrings.catalog[language]!.keys.toSet();
         expect(
           keys.difference(english),
@@ -61,7 +60,7 @@ void main() {
       expect(critical, contains('disclaimer.title'));
       expect(critical, contains('disclaimer.short'));
 
-      for (final language in ['es', 'zh', 'tl']) {
+      for (final language in ['es', 'zh', 'tl', 'fr']) {
         final strings = AppStrings.forTag(language);
         for (final key in critical) {
           expect(strings.isMissing(key), isFalse,
@@ -83,11 +82,11 @@ void main() {
       }
     });
 
-    test('hotline keys exist for every hotline in the catalogue', () {
+    test('hotline keys exist for every hotline in the catalog', () {
       for (final hotline in crisisHotlines) {
         for (final suffix in ['name', 'desc']) {
           final key = 'hotline.${hotline.id}.$suffix';
-          for (final language in ['en', 'es', 'zh', 'tl']) {
+          for (final language in ['en', 'es', 'zh', 'tl', 'fr']) {
             expect(AppStrings.forTag(language).isMissing(key), isFalse,
                 reason: '$language missing $key');
           }
@@ -110,23 +109,30 @@ void main() {
       expect(AppStrings.forTag('xx')['nav.getHelp'], 'Get help');
     });
 
-    test('the language picker shows every language name four ways', () {
+    test('the language picker shows every language name in each language', () {
+      final shipped = AppLanguage.values
+          .where((l) => l != AppLanguage.system)
+          .map((l) => l.code)
+          .toList();
+      expect(shipped, ['en', 'es', 'zh', 'tl', 'fr']);
+      // Every option is named once per shipped language, so a student can find
+      // their language without reading the current UI language.
       for (final language in AppLanguage.values) {
-        // Each label names the language in all four shipped languages, so a
-        // student can find it without reading the current UI language.
-        expect(language.pluralLabel.split('·').length, 4,
+        expect(language.nativeName, isNotEmpty,
+            reason: 'name for ${language.code}');
+        if (language == AppLanguage.system) continue;
+        expect(language.pluralLabel.split('·').length, shipped.length,
             reason: 'label for ${language.code}');
       }
     });
 
-    test('every catalogue key used in the app exists', () {
-      // Cheap guard against a typo'd key silently rendering as "settings.xyz"
-      // on a safety screen. Only catalogue lookups are matched (not JSON map
-      // access), and the `hotline.$id.*` families are built at runtime.
+    test('every string key used in the app exists', () {
+      // Catch mistyped keys before they show up as raw `settings.xyz` labels on
+      // screen. Only `strings[...]` / `t[...]` / `AppStrings.of(context)[...]`
+      // lookups are matched, skipping JSON maps and dynamic `hotline.$id.*` keys.
       final english = AppStrings.catalog['en']!;
       final lookup = RegExp(
-        // Negative lookbehind so `event['start']` is not read as a catalogue
-        // lookup through the `t` alias.
+        // Negative lookbehind so `event['start']` isn't matched through `t`.
         r"(?<![A-Za-z0-9_.])(?:strings|t|AppStrings\.of\(context\))"
         r"\[\s*'([^']+)'\s*\]",
       );
@@ -156,6 +162,7 @@ void main() {
       expect(AppLanguage.system.resolve(const Locale('zh', 'CN')), 'zh');
       expect(AppLanguage.system.resolve(const Locale('fil', 'PH')), 'tl');
       expect(AppLanguage.system.resolve(const Locale('tl')), 'tl');
+      expect(AppLanguage.system.resolve(const Locale('fr', 'CA')), 'fr');
       expect(AppLanguage.system.resolve(const Locale('de')), 'en');
     });
 
@@ -206,6 +213,7 @@ void main() {
         AppLanguage.spanish,
         AppLanguage.chinese,
         AppLanguage.tagalog,
+        AppLanguage.french,
       ]) {
         await pumpHelp(tester, language);
         // A RenderFlex overflow would be reported as an exception.
@@ -235,13 +243,12 @@ void main() {
       final handle = tester.ensureSemantics();
       await pumpHelp(tester, AppLanguage.english);
       final label = '${AppStrings.forTag('en')['help.emergency.call']}, 9 1 1';
-      // Assert the *declared* label on the Semantics widget: that is the
-      // contract with TalkBack, and it does not depend on how the engine
-      // merges the button's own node.
+      // Check the explicit label on the Semantics widget directly so the test
+      // doesn't depend on how Flutter merges child button nodes.
       final matches = tester
           .widgetList<Semantics>(find.byType(Semantics))
           .where((widget) => widget.properties.label == label);
-      expect(matches, isNotEmpty, reason: 'expected a Semantics labelled "$label"');
+      expect(matches, isNotEmpty, reason: 'expected a Semantics labeled "$label"');
       handle.dispose();
     });
   });

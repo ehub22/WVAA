@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#FEF8F2",
     "theme_color": "#695E32",
-    "description": "Westview High School companion app — schedules, calendars, newsletters, and more.",
+    "description": "Student-built Westview High School app for bell schedules, calendars, newsletters, publications, and daily lunch menus.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -144,12 +144,12 @@ class EmptyStatusView extends StatelessWidget {
   }
 }
 
-/// Slim banner shown above cached lists: tells the student they are looking at
-/// a saved copy (typically because school Wi-Fi is down) and how to refresh.
+/// Banner shown above cached lists when campus Wi-Fi fails so you know you're
+/// viewing a saved copy and can pull down to refresh.
 class SavedCopyNotice extends StatelessWidget {
   const SavedCopyNotice({super.key, required this.label});
 
-  /// Human-readable description, e.g. "Saved copy from Aug 29".
+  /// Short description, such as "Saved copy from Aug 29".
   final String label;
 
   @override
@@ -173,7 +173,7 @@ class SavedCopyNotice extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '$label — pull down to refresh.',
+                '$label. Pull down to refresh.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSecondaryContainer,
                       fontWeight: FontWeight.w500,

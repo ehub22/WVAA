@@ -78,9 +78,8 @@ class _SelectorPill extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      // The semantics node must be the *outermost* wrapper of the tappable
-      // area, otherwise the label and the selected state belong to an inner
-      // node that screen readers and tests cannot find as one control.
+      // Keep `Semantics` as the outermost wrapper around the pill so TalkBack
+      // and widget tests see one button with both its label and selected state.
       child: Semantics(
         button: true,
         selected: selected,

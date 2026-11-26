@@ -97,4 +97,37 @@ void main() {
     expect(settings.displayName('Period 4'), 'Ceramics');
     expect(settings.detailsFor('Period 4'), 'Ms. Lee');
   });
+
+  test('the first-launch notice is shown once and then stays dismissed',
+      () async {
+    expect(settings.safetyNoticeSeen, isFalse);
+
+    await settings.setSafetyNoticeSeen();
+    expect(settings.safetyNoticeSeen, isTrue);
+
+    // Reload from the stored payload rather than the in-memory object.
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('westview_settings_v1');
+    expect(raw, isNotNull);
+    SharedPreferences.setMockInitialValues(
+      <String, Object>{'westview_settings_v1': raw!},
+    );
+    settings.resetForTesting();
+    await settings.load();
+    expect(settings.safetyNoticeSeen, isTrue);
+  });
+
+  test('settings from an older build show the notice again', () async {
+    // A payload written before the current settings version has no
+    // safetyNoticeSeen flag, so the notice is not assumed to be dismissed.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'westview_settings_v1': jsonEncode(<String, dynamic>{
+        'privacyNoticeSeen': true,
+      }),
+    });
+    settings.resetForTesting();
+    await settings.load();
+
+    expect(settings.safetyNoticeSeen, isFalse);
+  });
 }

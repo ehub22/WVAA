@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'l10n/strings.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'web_page.dart';
 import 'widgets/section_selector.dart';
 
-/// The newsletters tab: weekly newsletter, counseling newsletters and DEN
-/// announcements, each in an embedded WebView.
+/// The newsletters tab: the weekly newsletter and the counseling newsletters,
+/// each in an embedded WebView.
 ///
 /// Each newsletter keeps its own WebView alive (lazy IndexedStack) so content
 /// loaded once stays on screen when switching sections — and keeps rendering
@@ -22,24 +21,16 @@ class NewsletterPage extends StatefulWidget {
 class _NewsletterPageState extends State<NewsletterPage> {
   int selectedIndex = 0;
 
-  /// Stable, language-independent section id for analytics (never the
-  /// translated label, so metrics stay comparable across languages).
-  String get _sectionId => _newsletters[selectedIndex].titleKey;
-
   static const List<_Newsletter> _newsletters = [
     _Newsletter(
       'newsletter.weekly',
-      'https://www.canva.com/design/DAHAfg0kzy4/j0rtuhnsLlGu4XMtz5mqRA/view'
+      'https://www.canva.com/design/DAHAfg0kzy4/I_JhwzEhBL8HMWSlQmZH3g/view'
       '?utm_content=DAHAfg0kzy4&utm_campaign=designshare&utm_medium=link2'
-      '&utm_source=uniquelinks&utlId=hf1baa97a03',
+      '&utm_source=uniquelinks&utlId=he2477552fc',
     ),
     _Newsletter(
       'newsletter.counseling',
       'https://westview.powayusd.com/apps/pages/newsletters',
-    ),
-    _Newsletter(
-      'newsletter.den',
-      'https://docs.google.com/presentation/d/1Q6zH31VmOOnrPJMprtT6IL9rH8tEMmlKyBovYB0Ukq4/edit',
     ),
   ];
 
@@ -51,13 +42,9 @@ class _NewsletterPageState extends State<NewsletterPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance
-        .logEvent('view_section', {'screen': 'newsletters', 'section': _newsletters[index].titleKey});
   }
 
   void _refreshCurrent() {
-    Telemetry.instance
-        .logEvent('newsletter_refresh', {'section': _sectionId});
     _webKeys[selectedIndex].currentState?.reload();
   }
 
@@ -111,7 +98,7 @@ class _NewsletterPageState extends State<NewsletterPage> {
 class _Newsletter {
   const _Newsletter(this.titleKey, this.url);
 
-  /// Catalogue key, so the tab labels follow the app language.
+  /// Key in `strings.dart` for the translated tab label.
   final String titleKey;
   final String url;
 }

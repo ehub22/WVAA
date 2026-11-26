@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Offline accessibility audit for the WVAA palettes.
+"""Offline contrast and colorblindness audit for `lib/theme/colors.dart`.
 
-Checks two things that a screenshot cannot:
+Checks two things directly from the light and dark color tokens:
 
-1. WCAG 2.1 contrast for every text/background pair the app actually paints.
-2. Colour-vision-deficiency (CVD) separation for the one place the UI uses
-   colour to carry meaning: the "this period is happening now" card
-   (primaryContainer) versus an ordinary period card (surfaceContainerLow).
+1. WCAG 2.1 contrast ratios for every foreground/background pair the app uses.
+2. Colorblindness (CVD) ΔE separation between the active "Now" period card
+   (`primaryContainer`) and an ordinary period card (`surfaceContainerLow`).
 
 Run from the repo root:  python3 tools/audit_contrast.py [--strict]
-Exits non-zero under --strict if any pair fails, so CI can enforce it.
+Exits non-zero under --strict if any pair fails so CI can block regressions.
 """
 
 from __future__ import annotations
@@ -153,7 +152,7 @@ def main() -> int:
         type=float,
         default=10.0,
         help="minimum ΔE(76) between the 'now' card and a normal card under CVD "
-             "(below this the difference is effectively colour-only)",
+             "(below this the difference is effectively color-only)",
     )
     args = parser.parse_args()
 
@@ -175,10 +174,10 @@ def main() -> int:
             note = "" if minimum > 1.0 else " (informational)"
             print(f"  {flag} {label:<48} {ratio:5.2f}:1  (min {minimum}){note}")
 
-        # Colour-only meaning check: the current-period card vs a normal card.
+        # Colorblindness check: active period card vs a normal period card.
         highlights = t["primaryContainer"]
         normal = t["surfaceContainerLow"]
-        print("  --- 'now' card vs normal card (colour-only check) ---")
+        print("  --- 'now' card vs normal card (colorblindness check) ---")
         for kind in (None, "deutan", "protan", "tritan"):
             h = simulate_cvd(highlights, kind)
             n = simulate_cvd(normal, kind)
@@ -190,7 +189,7 @@ def main() -> int:
             print(f"  {'PASS' if ok else 'FAIL'} {label:<14} ΔE={d:5.1f}"
                   f"  (min {args.delta_e_min})")
             if not ok:
-                print("        -> colour alone cannot convey 'now'; keep the "
+                print("        -> color alone cannot convey 'now'; keep the "
                       "explicit label/icon cue on the card.")
 
     print()

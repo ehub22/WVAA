@@ -18,23 +18,23 @@ import java.time.ZoneId
 /**
  * Manages the ongoing school period countdown notification on Android.
  *
- * The notification uses a transparent monochrome Wolverine small icon
- * ([R.drawable.ic_notification]), a large launcher icon, and a live
- * Chronometer countdown. The channel is created with IMPORTANCE_DEFAULT
- * so it is visible on the lock screen (LOW/HIGH/MAX produce either hidden
- * or noisy behaviour depending on the OEM skin).
+ * The notification shows a monochrome Wolverine status icon
+ * ([R.drawable.ic_notification]), the launcher icon, and a live `Chronometer`
+ * countdown. The channel uses `IMPORTANCE_LOW` so period transitions stay
+ * silent during class, and `VISIBILITY_SECRET` so your class schedule doesn't
+ * show up on a locked screen.
  *
- * When each period ends, AlarmManager wakes [ScheduleWidgetAlarmReceiver]
- * so the next period's notification starts automatically, even when the
- * phone is locked and the app is in the background.
+ * When each period ends, `AlarmManager` wakes [ScheduleWidgetAlarmReceiver] so
+ * the next period's countdown starts automatically even while the phone is
+ * locked or the app is closed.
  */
 object ScheduleNotificationManager {
 
     const val CHANNEL_ID = "schedule_countdown_channel"
     const val NOTIFICATION_ID = 4202
 
-    /** Bumped whenever the channel parameters change so existing installs
-     *  pick up the new importance/visibility settings. */
+    /** Bumped whenever channel settings change so existing installs recreate
+     *  the channel with the updated importance and lock-screen visibility. */
     private const val CHANNEL_VERSION_KEY = "schedule_channel_version"
     private const val CURRENT_CHANNEL_VERSION = 3
 
@@ -47,9 +47,8 @@ object ScheduleNotificationManager {
 
             val existing = notificationManager.getNotificationChannel(CHANNEL_ID)
             if (existing == null || installedVersion < CURRENT_CHANNEL_VERSION) {
-                // Delete a stale channel so the new importance is honoured
-                // (Android does not let you raise importance on an existing
-                // channel without deleting and recreating it).
+                // Delete the old channel first because Android ignores changes
+                // to channel importance unless the channel is recreated.
                 if (existing != null) {
                     notificationManager.deleteNotificationChannel(CHANNEL_ID)
                 }
@@ -59,17 +58,12 @@ object ScheduleNotificationManager {
                     "Schedule Countdown",
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    // IMPORTANCE_LOW is the right level for an ongoing
-                    // silent countdown: no sound, no heads-up, no badge churn.
+                    // IMPORTANCE_LOW keeps the ongoing timer silent without
+                    // sounds, vibration, or heads-up popups during class.
                     description = "Westview HS ongoing period countdown notification"
-                    // Lock-screen text is deliberately generic: the channel
-                    // used to post the full public version (period name plus
-                    // teacher and room) on a locked phone. A passing stranger
-                    // should not be able to read a student's timetable, so the
-                    // notification is SECRET on the lock screen and only shows
-                    // class details once the phone is unlocked. There is no
-                    // opt-out: a timetable on the lock screen is never worth
-                    // the risk of the wrong person reading it.
+                    // Keep the countdown hidden on a locked screen so someone
+                    // walking past your phone can't read your class schedule,
+                    // teacher, or room number; details only show after unlock.
                     lockscreenVisibility = Notification.VISIBILITY_SECRET
                     setShowBadge(true)
                     enableVibration(false)

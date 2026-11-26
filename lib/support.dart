@@ -10,27 +10,27 @@ import 'settings.dart';
 // Verified contact data
 // ===========================================================================
 //
-// Every number, caseload and e-mail address below was copied from the
-// Westview High School counseling page on westview.powayusd.com
-// (verified November 2025). Caseloads and staff change from year to year, so the UI
-// always shows a "verify this list" note and links to the live page, and the
-// screen never pretends to be the school's system of record.
+// I copied every phone number, caseload range, and email address below from
+// Westview High School's counseling page on westview.powayusd.com (checked
+// November 2025). Because counselor assignments can shift between school years,
+// the screen always shows when this list was checked and links to the live
+// counseling webpage so students know to double-check there if needed.
 //
-// If you change a value here, update `support_resources_test.dart` too — the
-// tests pin the hotline digits so a typo can't silently ship to students.
+// If you update any contact here, update `support_resources_test.dart` too so
+// the test suite keeps pinning the exact digits.
 
 /// Westview High School main / counseling office line.
 const String westviewMainPhone = '8587802000';
 const String westviewMainPhoneDisplay = '(858) 780-2000';
 const String westviewAddress = '13500 Camino del Sur, San Diego, CA 92129';
 
-/// Where the live, authoritative counselor list lives.
+/// Live Westview counseling staff webpage.
 const String westviewCounselingPageUrl =
     'https://westview.powayusd.com/apps/pages/counseling-staff';
 
-/// The district's anonymous "See Something, Say Something" tip line, printed
-/// on the back of every secondary student ID card. Monitored 24/7 by law
-/// enforcement (not a mental-health line).
+/// Poway Unified's anonymous "See Something, Say Something" tip line, printed
+/// on the back of student ID cards and monitored 24/7 by law enforcement
+/// rather than mental-health counselors.
 const String pusdTipLine = '18447873747'; // 1-844-PUSD-TIP
 const String pusdTipLineDisplay = '1-844-PUSD-TIP';
 
@@ -149,15 +149,15 @@ class Hotline {
   String smsLabelFor(AppStrings strings) => strings['hotline.$id.sms'];
 }
 
-/// 24/7 support lines. Order matters: the free, confidential, youth-focused
-/// options come before the law-enforcement-monitored tip line.
+/// 24/7 support lines. I put the free, confidential youth crisis lines ahead
+/// of the law-enforcement tip line so support resources show up first.
 const List<Hotline> crisisHotlines = <Hotline>[
   Hotline(
     id: '988',
     name: '988 Suicide & Crisis Lifeline',
     description:
-        'Free, confidential support for anyone in emotional distress or '
-        'suicidal crisis. Call or text any time, day or night.',
+        'Free, confidential 24/7 support by phone or text for anyone '
+        'experiencing emotional distress or a suicidal crisis.',
     callNumber: '988',
     callDisplay: 'Call 988',
     smsNumber: '988',
@@ -170,9 +170,9 @@ const List<Hotline> crisisHotlines = <Hotline>[
     id: 'sdaocl',
     name: 'San Diego Access & Crisis Line',
     description:
-        'San Diego County’s 24/7 line for mental health and substance use '
-        'crises, for you or someone you’re worried about. Free interpreters '
-        'in 200+ languages. They can also send a Mobile Crisis Response Team.',
+        'San Diego County\'s 24/7 line for mental health or substance-use '
+        'crises affecting you or someone you know, with free interpreters in '
+        'over 200 languages and mobile crisis response teams when needed.',
     callNumber: '18887247240',
     callDisplay: 'Call 1-888-724-7240',
     website: 'https://www.sandiegocounty.gov/content/sdc/hhsa/programs/bhs/'
@@ -183,8 +183,8 @@ const List<Hotline> crisisHotlines = <Hotline>[
     id: 'crisistext',
     name: 'Crisis Text Line',
     description:
-        'Prefer typing to talking? Text a trained volunteer about anything '
-        'that’s weighing on you. Free, 24/7, and confidential.',
+        'Connects you by text with a trained crisis counselor at any hour if '
+        'typing is easier than speaking on a call. Free and confidential.',
     smsNumber: '741741',
     smsBody: 'HOME',
     smsDisplay: 'Text HOME to 741741',
@@ -195,8 +195,8 @@ const List<Hotline> crisisHotlines = <Hotline>[
     id: 'trevor',
     name: 'The Trevor Project',
     description:
-        'Crisis and suicide-prevention support for LGBTQ+ young people, '
-        '24/7. You deserve to be taken seriously.',
+        'Free, confidential 24/7 crisis and suicide-prevention support for '
+        'LGBTQ+ youth by phone or text.',
     callNumber: '18664887386',
     callDisplay: 'Call 1-866-488-7386',
     smsNumber: '678678',
@@ -209,9 +209,9 @@ const List<Hotline> crisisHotlines = <Hotline>[
     id: 'sandyhook',
     name: 'Say Something Anonymous Reporting',
     description:
-        'Anonymous way to report threats, weapons, or someone who may be in '
-        'danger — run by Sandy Hook Promise and answered by crisis counselors. '
-        'Good for “I’m worried about a classmate,” not just emergencies.',
+        'Anonymous reporting line run by Sandy Hook Promise and answered by '
+        'crisis counselors for threats, weapons, or concern that a classmate '
+        'may be at risk of harm.',
     callNumber: '18445729669',
     callDisplay: 'Call 1-844-5-SAYNOW',
     website: 'https://www.saysomething.net/',
@@ -219,30 +219,30 @@ const List<Hotline> crisisHotlines = <Hotline>[
   ),
   Hotline(
     id: 'pusdtip',
-    name: 'PUSD “See Something, Say Something” Tip Line',
+    name: 'PUSD "See Something, Say Something" Tip Line',
     description:
-        'Poway Unified’s 24-hour anonymous tip line, monitored by law '
-        'enforcement, for school threats and safety concerns. The number is '
-        'on the back of your student ID.',
+        'Poway Unified\'s 24-hour anonymous tip line monitored by law '
+        'enforcement for campus threats and safety concerns (also printed on '
+        'the back of student IDs).',
     callNumber: pusdTipLine,
     callDisplay: 'Call $pusdTipLineDisplay',
   ),
 ];
 
 // ===========================================================================
-// Launcher helpers (every action fails soft — never crashes, never blocks)
+// Launcher helpers (fall back cleanly without crashing if no app can open)
 // ===========================================================================
 
-/// Opens [uri] in the right external app (dialer, SMS composer, browser).
+/// Opens [uri] in the external dialer, messaging app, mail app, or browser.
 ///
-/// Fails soft: if nothing can handle the URI the student gets the number to
-/// dial manually instead of a dead end. Never throws.
+/// If the phone doesn't have an app installed for that URI, this shows the
+/// number or address on screen and copies it so you don't hit a dead end.
 Future<bool> _launch(BuildContext context, Uri uri) async {
   try {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (opened) return true;
   } catch (_) {
-    // Fall through to the manual fallback below.
+    // Fall through to the copyable dialog below.
   }
   if (context.mounted) {
     await _showManualFallback(context, uri);
@@ -250,14 +250,14 @@ Future<bool> _launch(BuildContext context, Uri uri) async {
   return false;
 }
 
-/// Last-resort helper: shows the number (or address) and copies it, so the
-/// student can still make contact if no app could be launched.
+/// Backup dialog that displays and copies the number or address when launching
+/// an external app fails.
 Future<void> _showManualFallback(BuildContext context, Uri uri) async {
   final dial = uri.path.isEmpty ? uri.toString() : uri.path;
   try {
     await Clipboard.setData(ClipboardData(text: dial));
   } catch (_) {
-    // Clipboard unavailable — the dialog still shows the number.
+    // Even if clipboard access fails, the dialog still displays the text.
   }
   if (!context.mounted) return;
   final strings = AppStrings.of(context);
@@ -282,12 +282,11 @@ Future<void> _showManualFallback(BuildContext context, Uri uri) async {
 Future<void> callNumber(BuildContext context, Uri uri) =>
     _launch(context, uri);
 
-/// Composes an SMS in the student's own messaging app.
+/// Opens the phone's messaging app with the hotline's keyword filled in.
 ///
-/// For the crisis lines the app pre-fills the trigger word the service expects
-/// (HOME, START, …) but *shows it* first: sending the wrong word to a crisis
-/// line is a silent failure that looks like being ignored, so the student gets
-/// one tap to confirm or edit what will be sent.
+/// Automated text lines expect a specific keyword like `HOME` or `START` to
+/// open a chat, so showing a quick confirmation dialog first keeps someone
+/// from accidentally erasing the keyword and getting no response.
 Future<void> sendSms(
   BuildContext context,
   Uri uri, {
@@ -355,8 +354,8 @@ Future<void> emailCounselor(
   BuildContext context,
   Counselor counselor,
 ) async {
-  // The subject line is pre-filled in the student's language: they can send
-  // it without composing anything in a language they may not read well.
+  // Pre-fill the subject line in the current app language so a student doesn't
+  // have to write a subject from scratch first.
   final subject = AppStrings.of(context)['help.counselor.emailSubject'];
   final uri = Uri(
     scheme: 'mailto',
@@ -365,43 +364,40 @@ Future<void> emailCounselor(
   );
   final opened = await _launch(context, uri);
   if (!opened && context.mounted) {
-    // Some devices have no mail app configured: at least let them copy the
-    // address instead of hitting a dead end.
+    // If no mail app is configured on the phone, copy the address so they can
+    // still paste it into webmail.
     try {
       await Clipboard.setData(ClipboardData(text: counselor.email));
     } catch (_) {}
   }
 }
 
-/// Opens the in-app help screen. Reached from the Help button on the schedule,
-/// the Help icon in the Newsletters/Publications/Calendars headers, and
-/// Settings, so a student never has to hunt for it.
+/// Pushes the Get help screen onto the navigator from the Schedule button,
+/// tab headers, or Settings.
 Future<void> openSupportPage(BuildContext context) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(builder: (_) => const SupportPage()),
   );
 }
 
-/// Compact help entry point for any app bar.
+/// Help button placed in tab headers across the app.
 class HelpIconButton extends StatelessWidget {
   const HelpIconButton({super.key, this.tooltip});
 
-  /// Defaults to the translated "Get help now".
+  /// Defaults to the translated "Get help now" label.
   final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    // The quick-exit hint is appended only when the gesture is actually
-    // enabled, and in the reader's own language.
+    // Only include the hold-to-exit hint in the tooltip when quick exit is on.
     final base = tooltip ?? strings['help.iconTooltip'];
     final label = SafetySettings.instance.quickExitEnabled
         ? strings['help.iconTooltipQuickExit'].replaceFirst('%s', base)
         : base;
     return GestureDetector(
-      // Long-press = quick exit (see safety.dart). No confirmation: the whole
-      // point is that it is instant. Opaque so the glyph's transparent padding
-      // still counts as part of the button.
+      // Holding down triggers quick exit immediately without a confirmation
+      // popup (`HitTestBehavior.opaque` makes the icon padding count too).
       behavior: HitTestBehavior.opaque,
       onLongPress: QuickExit.longPressHandler(context),
       child: IconButton(
@@ -414,21 +410,19 @@ class HelpIconButton extends StatelessWidget {
 }
 
 // ===========================================================================
-// The help screen
+// Get help screen
 // ===========================================================================
 
-/// Student-facing support screen: counselors, crisis lines, how to report a
-/// safety concern, and the district disclaimer.
+/// Support screen with Westview counselors, 24/7 crisis lines, anonymous
+/// reporting links, and the Poway Unified disclaimer.
 ///
-/// Design notes (deliberate, safety-driven):
-///  * nothing here is hidden behind a menu, a login, or a network request —
-///    all contact details are compiled into the app, so they work offline and
-///    on the school's bad Wi-Fi;
-///  * phone/SMS actions use the platform dialer, so no call audio or message
-///    content ever touches this app;
-///  * this screen is deliberately kept out of analytics: the app never
-///    records that a student opened help resources, so `telemetry.dart` is
-///    not imported here at all.
+/// Key choices here:
+///  * Nothing sits behind a login or network call; all contact numbers are
+///    compiled into the app so they still load when campus Wi-Fi drops.
+///  * Calls, texts, and emails hand off to the phone's own apps, so WVAA never
+///    sees call audio or message text.
+///  * Nothing here reports analytics or writes a log line, so opening Get help
+///    leaves no trace on the device.
 class SupportPage extends StatelessWidget {
   const SupportPage({super.key});
 
@@ -798,7 +792,7 @@ class _CounselorTile extends StatelessWidget {
               ],
             ),
           ),
-          // 48dp targets for both quick actions, labelled for TalkBack.
+          // 48dp targets for both buttons, with explicit labels for TalkBack.
           IconButton(
             tooltip: AppStrings.of(context)['help.counselor.callA11y']
                 .replaceFirst('%s', counselor.name),
@@ -1139,8 +1133,8 @@ class Disclaimers {
 
 const Disclaimers disclaimers = Disclaimers._();
 
-/// One-line version used in compact places (splash, first-run screen, app
-/// bars, the schedule footer).
+/// One-line disclaimer shown in the pinned bottom bar and first-launch dialog.
 const String shortDisclaimer =
-    'Not a Poway Unified app. Not sponsored or endorsed by Poway Unified '
-    'School District or Westview High School.';
+    'Not a Poway Unified app. Built independently by students and not '
+    'sponsored or endorsed by Poway Unified School District or Westview High '
+    'School.';

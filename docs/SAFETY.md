@@ -1,51 +1,36 @@
-# Student safety design (and developer safety)
+# Student Safety and Developer Safeguards
 
-This document is for anyone reviewing, shipping or maintaining Westview HS
-(WVAA). It records **what the app does to keep students safe while they use it**,
-**what it deliberately refuses to do**, and the **legal/administrative posture**
-for the developer. Every claim below maps to code; file names are given so a
-reviewer can check them.
+This document records how Westview HS (WVAA) protects student privacy and safety, what data and permissions the app avoids collecting, and what boundaries protect the student maintainer from administrative or legal misunderstandings. Every claim below points to the source files that enforce it so a reviewer can verify each rule directly in the codebase.
 
-> Scope note: this is a school-information app. It is **not** a crisis service,
-> it is **not** affiliated with Poway Unified School District (PUSD), and it is
-> **not** a substitute for a counselor, a parent or 911.
+> Scope note: WVAA is an independent school-information app. It is **not** a crisis service, it is **not** affiliated with Poway Unified School District (PUSD), and it does **not** replace a school counselor, a parent or guardian, or 911.
 
 ---
 
-## 1. Crisis and counseling resources (Get help tab)
+## 1. Crisis and Counseling Resources (Get Help Tab)
 
 `lib/support.dart`
 
-A permanent **Get help** tab sits in the bottom navigation bar on every screen,
-and the same screen is reachable from the big **Help** button on the Schedule
-tab and from Settings ▸ Safety ▸ Get help now. A student in a bad moment never
-has to guess where resources live.
+The app keeps a permanent **Get help** tab in the bottom navigation bar across the entire app, while also providing a **Help** button on the Schedule screen and an entry under `Settings > Safety > Get help now`. Keeping those entry points in fixed locations ensures that a student looking for support does not have to search through menus first.
 
-Screen order is deliberate — someone in danger should not have to scroll:
+Within the Get help screen, sections appear in order of urgency so that immediate emergencies sit at the top without requiring scrolling:
 
-1. **In immediate danger?** — a full-width *Call 911* button (`tel:911`).
-2. **Talk to a counselor at Westview** — the school office number, the
-   counseling page, and every counselor with their caseload, extension and
-   e-mail. Each row has 48dp call and e-mail buttons.
-3. **Crisis lines — free, confidential, 24/7**, each with tap-to-call,
-   tap-to-text and a website link:
-   - 988 Suicide & Crisis Lifeline — call/text 988
-   - San Diego Access & Crisis Line — 1-888-724-7240
-   - Crisis Text Line — text HOME to 741741
-   - The Trevor Project — 1-866-488-7386 / text START to 678678
-   - Say Something Anonymous Reporting (Sandy Hook Promise) — 1-844-5-SAYNOW
-   - PUSD "See Something, Say Something" tip line — 1-844-PUSD-TIP
-4. **Report a safety concern** — what to do if you are worried about a
-   classmate, plus the two anonymous reporting routes.
-5. **About this app** — the district disclaimer in English and Spanish and a
-   plain-language explanation of the app's limits.
+1. **In immediate danger?:** A full-width **Call 911** button (`tel:911`).
+2. **Talk to a counselor at Westview:** The main school phone number, a link to the school's counseling page, and every Westview counselor listed by last-name caseload alongside 48dp call and email buttons.
+3. **24/7 free, confidential crisis lines:** Direct call, text, and website buttons for six public resources:
+   - 988 Suicide & Crisis Lifeline (call or text 988)
+   - San Diego Access & Crisis Line (1-888-724-7240)
+   - Crisis Text Line (text `HOME` to 741741)
+   - The Trevor Project (1-866-488-7386 or text `START` to 678678)
+   - Say Something Anonymous Reporting / Sandy Hook Promise (1-844-5-SAYNOW)
+   - PUSD "See Something, Say Something" tip line (1-844-PUSD-TIP)
+4. **Report a safety concern:** Guidance on reaching a trusted adult when worried about a classmate, paired with the two anonymous reporting lines above.
+5. **About this app:** The official Poway Unified disclaimer in English and Spanish, followed by a plain-language summary of what the app does and does not monitor.
 
-### Contact data (verified November 2025)
+### Verified Contact Data (Checked November 2025)
 
-Counselors, by the first letter of the student's last name (source:
-`westview.powayusd.com/apps/pages/counseling-staff`):
+Counselor assignments are organized by the first letters of a student's last name, sourced from `westview.powayusd.com/apps/pages/counseling-staff`:
 
-| Caseload | Counselor | Extension | E-mail |
+| Caseload | Counselor | Extension | Email |
 | --- | --- | --- | --- |
 | A–C | Taylor Oakley | 3080 | toakley@powayusd.com |
 | D–J | Isabella Rusy | 3062 | irusy@powayusd.com |
@@ -53,29 +38,22 @@ Counselors, by the first letter of the student's last name (source:
 | N–Sh | Adriana Chittuluru | 3026 | achittuluru@powayusd.com |
 | Si–Z | Vicki deJesus | 3023 | vdejesus@powayusd.com |
 
-College & Career Guidance Technician: Danielle Beccarelli, ext 3019.
-Main line: (858) 780-2000. Address: 13500 Camino del Sur, San Diego, CA 92129.
+College & Career Guidance Technician: Danielle Beccarelli, ext. 3019.
+Main office line: (858) 780-2000. Address: 13500 Camino del Sur, San Diego, CA 92129.
 
-Because caseloads change every year, the screen always shows a "list checked
-November 2025 — confirm with the counseling office" note and links to the live
-counseling page. **Update `lib/support.dart`, this table and
-`test/support_resources_test.dart` together.**
+Because counselor caseloads can shift between school years, the screen displays a verification date ("checked November 2025") and links to Westview's live counseling webpage so students can confirm current assignments. **Whenever counselor assignments change, `lib/support.dart`, this table, and `test/support_resources_test.dart` must be updated together.**
 
-### Why the numbers are compiled into the app
+### Why Contact Numbers Are Compiled Into the App
 
-No network call is made to render the Get-help screen: it works offline, on the
-school's flaky Wi-Fi, and during an outage. `test/support_resources_test.dart`
-hard-codes the expected digits so a typo cannot ship unnoticed.
+The Get help screen makes zero network requests when it opens. Bundling these phone numbers and extensions into the binary allows the screen to load immediately when campus Wi-Fi drops, when mobile data is unavailable, or when an external website is down. Additionally, `test/support_resources_test.dart` asserts the exact digits of each phone number and extension directly so an accidental edit cannot ship an invalid number.
 
 ---
 
-## 2. District disclaimer
+## 2. District Disclaimer
 
 `lib/support.dart` (`disclaimers`), `lib/main.dart`, `lib/settings_page.dart`
 
-The wording is copied exactly from PUSD's "Flyers – Outside Organizations" page,
-which is where the district specifies the disclaimer required on material from
-any non-district source:
+The app includes the exact disclaimer text required by Poway Unified School District on its "Flyers – Outside Organizations" page for materials distributed by non-district groups:
 
 > **DISCLAIMER:** This activity is not a school-sponsored activity and is not
 > endorsed by the school or Poway Unified School District. The products or
@@ -87,120 +65,70 @@ any non-district source:
 > Poway. Los productos o servicios anunciados en este folleto no están
 > respaldados por la escuela ni el Distrito.
 
-It appears in three places, so it cannot be missed:
+To make sure students, parents, and administrators can always tell that WVAA is independent of the school district, the disclaimer appears in three places:
 
-- a **permanent bar under the navigation bar on every tab** (short form:
-  "Not a Poway Unified app. Not sponsored or endorsed by Poway Unified School
-  District or Westview High School."), tappable to open the full text;
-- the **Get help** screen's "About this app" card, in full, English + Spanish;
-- **Settings ▸ About this app**, in full, English + Spanish, plus the
-  "not a crisis service, not monitored" line.
+- **Pinned bar above the bottom navigation bar on every tab:** Displays a short notice stating that WVAA is an independent student-built app and is not sponsored or endorsed by Westview High School or Poway Unified School District; tapping the bar opens the full text.
+- **Get help ("About this app" card):** Displays the full English and Spanish district text alongside a translated plain-language summary.
+- **Settings > About this app:** Displays the full English and Spanish district text alongside a reminder that the app is not monitored and is not a crisis service.
 
-The first-run privacy dialog also states it before anything else happens.
+The first-launch notice also states this disclaimer, so the app opens by making its unofficial status clear.
 
 ---
 
-## 3. What the app refuses to do
+## 3. Data and Permission Boundaries
 
-| Refusal | Where |
+| Boundary | Enforcement Location |
 | --- | --- |
-| **No analytics of help-seeking.** Opening the Get-help tab is never logged. `support.dart` does not even import `telemetry.dart`. | `lib/main.dart`, `lib/support.dart` |
-| **No collection before consent.** Analytics and crash reporting default to **off**; nothing is queued until the student picks "Share anonymously" in the first-run dialog (turning a switch on in Settings counts as consent too). | `lib/settings.dart`, `lib/telemetry.dart`, `lib/main.dart` |
-| **No inherited consent.** Installs upgrading from the old opt-out build have their stored "on" values discarded (no consent version in the payload) and are asked again. | `lib/settings.dart` (`_consentVersion`) |
-| **No free text in reports.** Crash errors and stacks are scrubbed of anything the student typed into "My classes" (class names, teacher names, room numbers) and of any e-mail address or phone number before they leave the device. | `lib/telemetry.dart` |
-| **No identifying device data.** No device model, IDFA/GAID, install id, contacts, location or account. Only a per-launch session id. | `lib/telemetry.dart` |
-| **No school details on the lock screen.** Notification visibility is `SECRET`: nothing from the countdown appears until the phone is unlocked. As defence in depth, the notification's redacted "public" version (shown only if visibility is ever loosened) carries the period name alone — never the course name, teacher or room. | `ScheduleNotificationManager.kt`, `CustomLiveActivityManager.kt` |
-| **No full-screen takeover.** `USE_FULL_SCREEN_INTENT` was removed and `showWhenLocked` is `false`: a countdown timer can never slam an activity over whatever the student was doing, or over the lock screen. | `AndroidManifest.xml` |
-| **No handling of calls or messages.** All phone, SMS and e-mail actions are handed to the system dialer / Messages / Mail app via `url_launcher`; the app never sees or stores call audio or message content. | `lib/support.dart` |
-| **No tracking in web content.** Embedded newsletters and publications are plain WebViews of the school's own pages; the app injects nothing. | `lib/web_page.dart`, `lib/publications.dart` |
+| **No usage tracking anywhere.** The repository contains no analytics SDK, no crash reporter, and no reporting endpoint, so there is no code path that uploads how a student uses the app. Opening Get help therefore records nothing, and neither does any other screen. | `pubspec.yaml`, `lib/` |
+| **No advertising or device identifiers.** The app never reads `AdvertisingIdClient`, the Android ID, or an install identifier, and it does not declare the `AD_ID` permission. | `AndroidManifest.xml`, `pubspec.yaml` |
+| **No collection of names, accounts, or class details.** Custom class names, teacher names, and room numbers stay in local `SharedPreferences` on the phone and are never serialized into a network request. The only outbound requests go to the school's calendar feeds and to `studycs.org` for special schedules. | `lib/settings.dart`, `lib/calendars.dart`, `lib/special_schedule.dart` |
+| **No class details on a locked screen.** The countdown notification channel uses `VISIBILITY_SECRET` so Android hides the notification while the phone is locked. As a secondary safeguard, the notification's fallback public version includes only the period label and omits custom course names, teachers, and room numbers. | `ScheduleNotificationManager.kt`, `CustomLiveActivityManager.kt` |
+| **No full-screen interruptions.** `USE_FULL_SCREEN_INTENT` is omitted and `showWhenLocked` is set to `false`, preventing a period timer from appearing over the lock screen or interrupting another app. | `AndroidManifest.xml` |
+| **No in-app call or message handling.** Phone calls, text messages, emails, and web links are handed off to the system dialer, messaging app, mail app, or browser through `url_launcher`, so the app never accesses call audio or message contents. | `lib/support.dart` |
+| **No analytics injected into school webpages.** Embedded newsletters and publications load Westview's existing pages in a WebView without adding tracking scripts. | `lib/web_page.dart`, `lib/publications.dart` |
 
 ---
 
-## 4. Use-it-safely features (shared / watched devices)
+## 4. Shared-Phone and Shoulder-Surfing Protections
 
 `lib/safety.dart`, `MainActivity.kt`, `lib/settings_page.dart`
 
-- **Quick exit** (on by default): long-press the Help button (Schedule tab or
-  app bar) to leave the app instantly — the help screen is popped off the
-  navigation stack and the task is sent to the background. Deliberately *no*
-  confirmation dialog: a quick exit that asks "are you sure?" is not a quick
-  exit. Toggle in Settings ▸ Safety.
-- **Hide preview in app switcher** (on by default): the app's content is
-  blanked in the Android recents thumbnail, so the last screen opened is not
-  visible to whoever picks the phone up next. Implemented with `FLAG_SECURE`
-  applied only while the app is in the background, so screenshots of your own
-  timetable still work.
-- **Lock-screen privacy**: see the refusal table above.
+- **Quick exit (enabled by default):** Holding down any Help button pops the Get help route if it is open and moves the Android task to the background immediately. The gesture skips any confirmation prompt because asking "Are you sure?" would slow down a student who needs to close the screen quickly. Students can turn this gesture off under `Settings > Safety`.
+- **Hidden app-switcher preview (enabled by default):** When WVAA moves to the background, `MainActivity` sets Android's `FLAG_SECURE` window flag so the system's recent-apps thumbnail appears blank instead of showing the last open screen. When the app returns to the foreground, `MainActivity` clears `FLAG_SECURE` so students can still take screenshots of their own class schedule.
+- **Lock-screen hiding:** Covered in Section 3 above; class schedule details remain hidden until the device is unlocked.
 
 ---
 
-## 5. Developer safety (the person shipping this)
+## 5. Practical Safeguards for the Maintainer
 
-Not legal advice; it is the practical posture the code is written to support.
+The points below are not formal legal advice, though they explain the administrative and liability boundaries built into the repository:
 
-1. **Never call it an official app.** Use "Westview HS companion app", never
-   "Westview's app", "the PUSD app" or anything using district branding. The
-   disclaimer bar is permanent precisely so a screenshot can never be mistaken
-   for a district product. Do not use PUSD/Westview logos in store listings
-   without written permission, and do not publish under a school-sounding
-   developer name.
-2. **Keep the disclaimer intact.** Removing or rewording it is the single
-   fastest way to turn a helpful project into a trademark / implied-endorsement
-   problem. It is also the first thing a district administrator will look for.
-3. **Do not speak for the school.** Crisis numbers you list are public
-   resources, not partnerships; the app says explicitly that it receives no
-   payment from them and is not affiliated with them.
-4. **Never present the app as a crisis service.** The Get-help screen says it
-   is not monitored, tells students to call 911 in an emergency, and never
-   implies a reply is guaranteed.
-5. **Do not collect more.** Every added field is a new privacy obligation and a
-   new thing that could identify a minor. The telemetry pipeline is
-   deliberately tiny; keep it that way, and keep it opt-in.
-6. **Moderate the review pipeline, not the students.** If the app ever gains
-   user-generated content, the district's own flyer rules (no politics, no
-   discrimination, nothing illegal or age-inappropriate) are a reasonable bar —
-   but the safer design is to keep the app read-only.
-7. **Have a takedown plan.** If the school asks you to stop, you can: there is
-   no server you own in the critical path except the telemetry endpoint, which
-   fails closed (4xx/404 drops the batch and the app carries on).
-8. **Keep the data current.** Stale counselor or hotline data is a safety bug,
-   not a cosmetic one. Re-verify each term (the `supportDataVerified` constant
-   and the tests make the current value visible).
+1. **Never represent the app as official:** Refer to the project as an independent student-built app for Westview HS rather than "the Westview app" or "a PUSD app." Keeping the disclaimer bar visible on every tab ensures that even a cropped screenshot shows the project is unofficial. Do not use district or school logos on an app store listing without written permission from administration.
+2. **Keep the district disclaimer verbatim:** Removing or paraphrasing the required Poway Unified wording creates avoidable trademark and endorsement issues, since that wording is the standard notice district staff expect on non-school materials.
+3. **Do not imply partnerships with crisis organizations:** The hotlines listed on Get help are public services rather than sponsors or partners, which is why the screen states explicitly that the app is independent and receives no funding from them.
+4. **Never imply live monitoring:** Get help states clearly that the app cannot read messages or respond to emergencies and directs students in immediate danger to call 911.
+5. **Collect nothing:** A student audience makes every added data point a privacy question. Keeping the app free of analytics and crash reporting avoids collecting student records at all, and it removes any consent flow that could mislead users into thinking data is being gathered.
+6. **Keep the app read-only:** Allowing user-generated posts would require content moderation under school-adjacent standards, whereas displaying read-only schedules, calendars, and public webpages avoids moderation and student-account risks altogether.
+7. **Maintain a clean shutdown path:** Apart from the special-schedule files on `studycs.org`, the app does not depend on maintainer-run infrastructure. If that server stops responding, the cached schedules keep the app working until a new answer arrives.
+8. **Re-verify contact information every term:** Outdated counselor extensions or hotline numbers can prevent a student from reaching help when needed, so `supportDataVerified` and `test/support_resources_test.dart` keep the verification date and expected digits explicit in code.
 
 ---
 
-## 6. Checklist for future changes
+## 6. Checklist Before Merging Future Changes
 
-- [ ] Adding a contact? Put it in `lib/support.dart` and pin it in
-      `test/support_resources_test.dart`.
-- [ ] Adding an event or property? Ask whether it could identify a student;
-      if yes, don't. Never log anything on the Get-help screen.
-- [ ] Adding a notification? It must not contain teacher, room or course names
-      in the lock-screen / public version.
-- [ ] Adding a permission? Justify it here and in the manifest comment. The app
-      needs INTERNET, notifications, and alarm/boot permissions for the widget —
-      nothing else (no camera, mic, location, contacts, storage).
-- [ ] Touching the first-run dialog? Consent must stay opt-in and the disclaimer
-      must stay visible.
-- [ ] Changing a disclaimer string? Copy it verbatim from the district page
-      (`docs/SAFETY.md` §2), update `Disclaimers` in `lib/support.dart`, and run
-      `flutter test test/support_resources_test.dart`.
+- [ ] **Adding or editing a support contact:** Update `lib/support.dart`, update Section 1 of this file, and update the hardcoded assertions in `test/support_resources_test.dart`.
+- [ ] **Adding any reporting or analytics:** Treat this as a policy change rather than a code change. It would require a new consent flow, an update to this document, and a review of what minors can be asked to share.
+- [ ] **Modifying notifications:** Verify that `VISIBILITY_SECRET` remains enforced and that public fallback text never includes custom course names, teacher names, or room numbers.
+- [ ] **Requesting an Android permission:** Document why the permission is necessary here and in `AndroidManifest.xml`. Beyond internet, notifications, and widget alarm/boot receivers, the app should not request camera, microphone, contacts, location, or storage permissions.
+- [ ] **Changing the first-launch notice:** Keep the unofficial-app disclaimer visible in the prompt, since that notice is what tells a new student the app is not run by the district.
+- [ ] **Updating a disclaimer:** Copy the required English and Spanish text verbatim from Poway Unified's policy page, update `disclaimers` in `lib/support.dart`, and pass `flutter test test/support_resources_test.dart`.
 
 ---
 
-## 7. Known gaps / next steps
+## 7. Current Limitations
 
-Honest list of what this hardening does **not** cover:
-
-- **Crash-report scrubbing is best effort.** Values typed into "My classes" and
-  anything matching an e-mail/phone pattern are removed, but free-form text
-  cannot be perfectly anonymised. Keep new `context` labels developer-authored.
-- **The recents-privacy flag is Android-only** and OEM-dependent; on iOS the app
-  relies on the system app-switcher blur.
-- **The iOS share sheet / link handling is untested** (`LSApplicationQueriesSchemes`
-  is declared, but the crisis actions are only exercised on Android).
-- **Nothing verifies that a hotline is still in service.** Numbers are pinned by
-  tests but re-checking them each term is a human task (see `supportDataVerified`).
-- **WebView content is out of scope.** Newsletters and publications are the
-  school's own pages; the app adds no protection inside them beyond the
-  surrounding UI.
+- **Crashes leave no report behind:** Because the app has no crash reporting, a crash shows up only as a `debugPrint` line in a debug build. Fixing one depends on a student describing what happened, which is the tradeoff accepted for keeping the app free of data collection.
+- **App-switcher blanking is Android-specific:** `FLAG_SECURE` only applies on Android, and certain manufacturer skins handle recent-app snapshots differently; on iOS, behavior depends on the operating system's own switcher blur.
+- **iOS crisis-link launching is not tested on hardware:** While `Info.plist` declares the relevant URL schemes, call and SMS handoffs are actively verified on Android devices rather than iOS.
+- **Automated tests cannot confirm live phone-line availability:** Unit tests prevent accidental edits to phone numbers in code, whereas confirming that an external hotline or school extension remains active still requires a manual check each term.
+- **Embedded webpages are controlled upstream:** Newsletters and student publications load directly from Westview's external sites, so the app cannot control layout, privacy behavior, or link targets inside those pages.

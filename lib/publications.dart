@@ -6,18 +6,27 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'l10n/strings.dart';
+import 'newscast_page.dart';
 import 'support.dart';
-import 'telemetry.dart';
-import 'vimeo_pip.dart';
+import 'video_pip.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
 class _Publication {
-  const _Publication(this.titleKey, this.url);
+  const _Publication(this.titleKey, this.url, {this.isNewscast = false});
 
-  /// Catalogue key, so the tab labels follow the app language.
+  /// Key in `strings.dart` for the translated tab label.
   final String titleKey;
+
+  /// Page loaded in a WebView. Ignored for the Newscast tab, which draws its
+  /// own episode list instead of embedding youtube.com.
   final String url;
+
+  /// When true this tab is the Newscast: a Flutter list fed by the channel's
+  /// upload feed, with one embedded video per tap. Nothing on this tab is a
+  /// YouTube page, so there is no search box or recommendation rail to wander
+  /// into from a school app.
+  final bool isNewscast;
 }
 
 class PublicationsPage extends StatefulWidget {
@@ -33,7 +42,10 @@ class _PublicationsPageState extends State<PublicationsPage> {
   static const List<_Publication> _publications = [
     _Publication('publications.nexus', 'https://wvnexus.org/category/news/'),
     _Publication(
-        'publications.newscast', 'https://vimeo.com/channels/westviewnewscast'),
+      'publications.newscast',
+      'https://www.youtube.com/@westviewnewscast7337/videos',
+      isNewscast: true,
+    ),
   ];
 
   /// One key per publication so the header refresh button can reach the
@@ -45,15 +57,17 @@ class _PublicationsPageState extends State<PublicationsPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance.logEvent('view_section', {
-      'screen': 'publications',
-      'section': _publications[index].titleKey,
-    });
   }
 
+  /// Key for the Newscast list so the header refresh button can reach it.
+  final GlobalKey<NewscastPageState> _newscastKey =
+      GlobalKey<NewscastPageState>();
+
   void _refreshCurrent() {
-    Telemetry.instance.logEvent('publication_refresh',
-        {'section': _publications[selectedIndex].titleKey});
+    if (_publications[selectedIndex].isNewscast) {
+      _newscastKey.currentState?.refresh();
+      return;
+    }
     _webKeys[selectedIndex].currentState?.reload();
   }
 
@@ -61,7 +75,7 @@ class _PublicationsPageState extends State<PublicationsPage> {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     return ValueListenableBuilder<bool>(
-      valueListenable: vimeoPipActive,
+      valueListenable: videoPipActive,
       builder: (context, isPipActive, _) {
         return Scaffold(
           backgroundColor: Colors.black,
@@ -109,10 +123,16 @@ class _PublicationsPageState extends State<PublicationsPage> {
                   child: LazyIndexedStack(
                     index: selectedIndex,
                     itemCount: _publications.length,
-                    itemBuilder: (context, index) => PublicationWebView(
-                      key: _webKeys[index],
-                      url: _publications[index].url,
-                    ),
+                    itemBuilder: (context, index) {
+                      final publication = _publications[index];
+                      if (publication.isNewscast) {
+                        return NewscastPage(key: _newscastKey);
+                      }
+                      return PublicationWebView(
+                        key: _webKeys[index],
+                        url: publication.url,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -124,8 +144,10 @@ class _PublicationsPageState extends State<PublicationsPage> {
   }
 }
 
-/// WebView that bridges Vimeo playback to Android picture-in-picture. Only
-/// used by the Publications tab because other tabs do not host videos.
+/// WebView for the sites that are read as pages, like the Nexus. It is the only
+/// thing on the Publications tab that could play a video, so the PiP bridge
+/// lives here; the Newscast draws its own list and player instead of loading
+/// youtube.com.
 ///
 /// Exposes the same last-known-content error handling as `web_page.dart`
 /// (full-screen retry state on first load, non-destructive notice when a
@@ -154,15 +176,22 @@ class PublicationWebViewState extends State<PublicationWebView>
   bool _initialLoadFailed = false;
   bool _refreshFailed = false;
 
-  bool get _isVimeoPage => isVimeoUrl(widget.url);
+  /// Whether this page can hold a video the PiP bridge understands. Only the
+  /// Nexus tab loads a site directly now; the Newscast draws its own list and
+  /// player (`newscast_page.dart`), so it never reaches this widget.
+  bool get _isPipVideoPage => isPipVideoUrl(widget.url);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Android 12+ shrinks the window on its own when the app is backgrounded
+    // mid-video. `onPipEntered` then fires after the shrink, so promoting the
+    // video there is a recovery step; `_enterPipVisual` also runs ahead of the
+    // shrink wherever the app controls the timing.
     _pip = SimplePip(
-      onPipEntered: _enterPipVisual,
+      onPipEntered: () => unawaited(_enterPipVisual()),
       onPipExited: _exitPipVisual,
     );
 
@@ -206,8 +235,8 @@ class PublicationWebViewState extends State<PublicationWebView>
               _initialLoadFailed = false;
               _refreshFailed = false;
             });
-            if (_isVimeoPage) {
-              unawaited(_installVimeoBridge());
+            if (_isPipVideoPage) {
+              unawaited(_installPipBridge());
               unawaited(_setupPipMode());
             }
           },
@@ -238,16 +267,16 @@ class PublicationWebViewState extends State<PublicationWebView>
     _controller.reload();
   }
 
-  Future<void> _installVimeoBridge() async {
+  Future<void> _installPipBridge() async {
     try {
-      await _controller.runJavaScript(vimeoPipScript);
+      await _controller.runJavaScript(videoPipScript);
     } catch (e) {
-      debugPrint('Vimeo PiP script injection error: $e');
+      debugPrint('PiP script injection error: $e');
     }
   }
 
   Future<void> _setupPipMode() async {
-    if (_pipInitialized || !_isVimeoPage) return;
+    if (_pipInitialized || !_isPipVideoPage) return;
     _pipInitialized = true;
     try {
       _pipAvailable = await SimplePip.isPipAvailable;
@@ -259,8 +288,24 @@ class PublicationWebViewState extends State<PublicationWebView>
   }
 
   void _handlePipMessage(String message) {
-    if (!mounted || !_isVimeoPage) return;
+    if (!mounted || !_isPipVideoPage) return;
     final state = message.trim();
+    // `entered` / `no-target` come back from the promotion itself so the app
+    // knows whether there is a video to show before it shrinks.
+    if (state == 'no-target') {
+      // Either the request already failed and this is the retry giving up, or
+      // the promotion never found a player at all. Either way the app stays
+      // full screen instead of shrinking into a picture of a page.
+      videoPipActive.value = false;
+      return;
+    }
+    if (state == 'entered') {
+      // The bridge can only answer a promotion request after it has retried, so
+      // a slow player reports `entered` long after `_enterPipVisual` gave up
+      // waiting on the JavaScript return value. Re-apply the layout then.
+      if (!videoPipActive.value) videoPipActive.value = true;
+      return;
+    }
     if (state != 'playing' && state != 'paused') return;
     final playing = state == 'playing';
     if (playing == _isVideoPlaying) return;
@@ -270,7 +315,7 @@ class PublicationWebViewState extends State<PublicationWebView>
 
   Future<void> _syncPipMode() async {
     if (!_pipAvailable || !_autoPipSupported) return;
-    final shouldAutoEnter = _isVimeoPage && _isVideoPlaying;
+    final shouldAutoEnter = _isPipVideoPage && _isVideoPlaying;
     try {
       await _pip.setAutoPipMode(
         aspectRatio: const (16, 9),
@@ -282,29 +327,49 @@ class PublicationWebViewState extends State<PublicationWebView>
     }
   }
 
-  Future<void> _enterPipVisual() async {
-    if (!_isVimeoPage) return;
-    // Tell the parent shell to hide its chrome (tab bar, selector) without
-    // detaching the WebView so playback is uninterrupted.
-    vimeoPipActive.value = true;
+  /// Makes the playing video the only thing on screen, then lets Android
+  /// shrink the activity.
+  ///
+  /// Order matters. PiP captures whatever the activity is drawing, so the
+  /// video has to be promoted *before* the window shrinks — otherwise the
+  /// snapshot Android takes is the page as it was, and the video ends up tiny
+  /// inside a picture of the app. The promotion is only worth starting when
+  /// the bridge can actually find a playing player; if it cannot, the app
+  /// stays full screen rather than shrinking into something that shows a page
+  /// instead of a video.
+  Future<bool> _enterPipVisual() async {
+    if (!_isPipVideoPage) return false;
+
+    // Tell the app shell to hide its header and bottom navigation bar without
+    // detaching the WebView so playback keeps running smoothly.
+    videoPipActive.value = true;
+
+    bool promoted = false;
     try {
-      await _controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.enter();',
+      final result = await _controller.runJavaScriptReturningResult(
+        'window.__westviewVideoPip && window.__westviewVideoPip.enter();',
       );
+      promoted = result == true || result == 'true';
     } catch (e) {
       debugPrint('PiP visual enter error: $e');
     }
+
+    if (!promoted) {
+      // No player to show: undo the layout change and leave the app alone.
+      videoPipActive.value = false;
+    }
+    return promoted;
   }
 
   Future<void> _exitPipVisual() async {
     try {
       await _controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.exit();',
+        'window.__westviewVideoPip && window.__westviewVideoPip.exit();',
       );
     } catch (e) {
       debugPrint('PiP visual exit error: $e');
     } finally {
-      vimeoPipActive.value = false;
+      videoPipActive.value = false;
     }
   }
 
@@ -320,7 +385,7 @@ class PublicationWebViewState extends State<PublicationWebView>
       _initialLoadFailed = false;
       _refreshFailed = false;
     });
-    if (wasPlaying || !isVimeoUrl(widget.url)) {
+    if (wasPlaying || !isPipVideoUrl(widget.url)) {
       unawaited(_syncPipMode());
     }
     _controller.loadRequest(Uri.parse(widget.url));
@@ -333,14 +398,14 @@ class PublicationWebViewState extends State<PublicationWebView>
     unawaited(_syncPipMode());
     _pip.onPipEntered = null;
     _pip.onPipExited = null;
-    vimeoPipActive.value = false;
+    videoPipActive.value = false;
     super.dispose();
   }
 
   /// Android <12 doesn't support auto-enter; we manually enter PiP when the
-  /// app backgrounds while a Vimeo video is playing.
+  /// app backgrounds while a video is playing.
   Future<void> _enterLegacyPip() async {
-    await _enterPipVisual();
+    if (!await _enterPipVisual()) return;
     bool entered = false;
     try {
       entered = await _pip.enterPipMode(
@@ -360,7 +425,7 @@ class PublicationWebViewState extends State<PublicationWebView>
         _pipAvailable &&
         !_autoPipSupported &&
         _isVideoPlaying &&
-        _isVimeoPage) {
+        _isPipVideoPage) {
       unawaited(_enterLegacyPip());
     }
   }

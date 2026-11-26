@@ -1,5 +1,5 @@
 name: westview_app
-description: "Westview High School companion app — schedules, calendars, newsletters, publications, and lunch menu."
+description: "Student-built Westview High School app for bell schedules, calendars, newsletters, publications, and daily lunch menus."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -10,9 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Localised Material/Cupertino widget strings (date pickers, "Back",
-  # tooltips, text-selection menus) plus locale-aware number/date formatting
-  # for es/zh/tl. The app's own copy lives in lib/l10n/strings.dart.
+  # Localized Material/Cupertino widget strings (like "Back", selection menus,
+  # and date pickers) for en/es/zh/tl. Our own app strings live in
+  # lib/l10n/strings.dart.
   flutter_localizations:
     sdk: flutter
 
@@ -25,17 +25,15 @@ dependencies:
   http: ^1.6.0
   scrollable_positioned_list: ^0.3.8
   intl: ^0.20.2
-  # Pinned at 2.4.7 because 2.5.0 requires Flutter 3.44+ and renames the
-  # Android plugin package, which would break the CustomLiveActivityManager
-  # import. Upgrade deliberately after testing against the new package name
-  # (`com.istornz.live_activities`).
+  # Keep this pinned at 2.4.7 because 2.5.0 requires Flutter 3.44+ and renames
+  # the Android Kotlin package to `com.istornz.live_activities`, which breaks
+  # CustomLiveActivityManager.kt until both are updated together.
   live_activities: 2.4.7
   permission_handler: ^12.0.1
   home_widget: ^0.9.3
   shared_preferences: ^2.5.3
-  # Used by the Get-help screen so a student can tap a counselor or a crisis
-  # line and land in the phone/keyboard/browser they already use. The app never
-  # handles the call or the message itself.
+  # Opens external dialer, SMS, mail, and browser links from the Get help tab
+  # so the app never handles calls or messages itself.
   url_launcher: ^6.2.0
 
 dev_dependencies:

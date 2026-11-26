@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Structural check for lib/l10n/strings.dart.
 
-The catalogue is a large hand-edited Dart map, and a mistake in it is a Dart
-*compile* error — which in CI shows up as an opaque "The Dart compiler exited
-unexpectedly". This script parses the file with the same rules the Dart parser
-uses for a `const Map<String, Map<String, String>>` literal and fails loudly.
+Because `lib/l10n/strings.dart` is a large hand-edited Dart map, a missing comma
+or stray `$` turns into a vague Dart compiler failure later in CI. This script
+parses each language block directly and reports exact line numbers right away.
 
 Checks:
-  * every entry is `'key': 'value',` or `'key':` followed by one or more
-    adjacent string literals (implicit concatenation) ending in a comma;
+  * every entry is `'key': 'value',` or `'key':` followed by indented adjacent
+    string literals ending in a comma;
   * keys are unique within each language;
-  * all four languages define the same key set;
-  * no empty values, no stray tab characters, no `$` (which Dart would
-    interpolate);
-  * every value's quoting is consistent.
+  * every language (`en`, `es`, `zh`, `tl`, `fr`) defines the exact same key set;
+  * no empty values, no tab characters, and no `$` interpolation characters;
+  * every value's quotes balance, so an unescaped apostrophe in prose (the
+    ``channel's`` bug) is reported here instead of by the Dart compiler.
 
-Usage: python3 tools/check_strings.py [--fix-report]
+Usage: python3 tools/check_strings.py
 Exit code 1 on any problem.
 """
 
@@ -26,8 +25,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CATALOGUE = ROOT / "lib" / "l10n" / "strings.dart"
-LANGUAGES = ["en", "es", "zh", "tl"]
+STRINGS_FILE = ROOT / "lib" / "l10n" / "strings.dart"
+LANGUAGES = ["en", "es", "zh", "tl", "fr"]
 
 ENTRY = re.compile(r"^    '([^']+)':(.*)$")
 OPEN_STRING = re.compile(r"""^(\s*)('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")\s*(,?)\s*$""")
@@ -59,6 +58,35 @@ def strip_comment(line: str) -> str:
                 out.append(ch)
         i += 1
     return "".join(out)
+
+
+def quote_problem(text: str) -> str | None:
+    """Scan `text` as Dart and report the first structural quoting mistake.
+
+    An unescaped apostrophe inside a single-quoted literal closes the string
+    early, and everything after it is parsed as code. That produces a wall of
+    confusing errors from the Dart compiler far away from the real line, so it
+    is worth catching here. Returns None when the text ends outside a string
+    with no stray backslashes.
+    """
+    quote = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "\\":
+            return f"a backslash outside a string literal near {text[i:i + 12]!r}"
+        i += 1
+    if quote:
+        return "an unterminated string literal (likely an unescaped apostrophe)"
+    return None
 
 
 def language_blocks(text: str) -> dict[str, list[tuple[int, str]]]:
@@ -141,6 +169,13 @@ def parse_block(
             problems.append(f"{name}:{number}: {key!r} has no value")
         elif not last_text.strip().endswith(","):
             problems.append(f"{name}:{last_line}: {key!r} is missing a trailing comma")
+        stray = quote_problem(joined)
+        if stray is not None:
+            problems.append(f"{name}:{number}: {key!r} has {stray}")
+            problems.append(
+                f"{name}:{number}: in {key!r}, write an apostrophe inside a "
+                "single-quoted literal as \\'"
+            )
         if key in values:
             problems.append(f"{name}:{number}: duplicate key {key!r}")
         values[key] = value
@@ -148,13 +183,13 @@ def parse_block(
 
 
 def main() -> int:
-    text = CATALOGUE.read_text()
+    text = STRINGS_FILE.read_text()
     blocks = language_blocks(text)
     problems: list[str] = []
 
     missing = [lang for lang in LANGUAGES if lang not in blocks]
     if missing:
-        problems.append(f"catalogue languages not found: {missing}")
+        problems.append(f"string catalog languages not found: {missing}")
         print("\n".join(problems))
         return 1
 
@@ -185,7 +220,7 @@ def main() -> int:
                 problems.append(f"{lang}: {key!r} contains a tab")
 
     if problems:
-        print(f"{len(problems)} problem(s) in {CATALOGUE.relative_to(ROOT)}:")
+        print(f"{len(problems)} problem(s) in {STRINGS_FILE.relative_to(ROOT)}:")
         for problem in problems:
             print("  -", problem)
         return 1

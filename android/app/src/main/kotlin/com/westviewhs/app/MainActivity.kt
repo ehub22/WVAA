@@ -17,6 +17,14 @@ class MainActivity : FlutterActivity() {
     /// Whether the app's content should be hidden in the recents thumbnail.
     private var hideRecents = true
 
+    /// True while the activity is the picture-in-picture window.
+    ///
+    /// `FLAG_SECURE` is inherited by the PiP window, and Android draws a secure
+    /// window as a blank rectangle inside PiP. So the flag has to come off the
+    /// moment the activity shrinks, or a student who leaves the app mid-video
+    /// gets a black box where the video should be.
+    private var inPictureInPicture = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -60,18 +68,18 @@ class MainActivity : FlutterActivity() {
         applyRecentsPrivacy()
     }
 
-    /// Hides the app's content from the recents/app-switcher preview when the
-    /// student asked for it.
+    /// Blanks out the app's preview in Android's recent-apps switcher when
+    /// enabled in Settings.
     ///
-    /// Android only offers one mechanism for blanking the system snapshot
-    /// (`FLAG_SECURE`), and it also blocks screenshots — so the flag is set
-    /// only while the app is in the background (this is called from onPause
-    /// and when the setting changes), and always cleared on resume. Net
-    /// effect: your own timetable still screenshots fine; the thumbnail in the
-    /// app switcher is blank.
+    /// Android's `FLAG_SECURE` blanks the recent-apps snapshot, though it also
+    /// blocks screenshots while set. To avoid breaking normal screenshots, I
+    /// only set `FLAG_SECURE` when the app pauses into the background and clear
+    /// it again in `onResume()`, so you can still screenshot your own class
+    /// schedule while the app-switcher preview stays blank.
     private fun applyRecentsPrivacy() {
         try {
-            if (hideRecents) {
+            // Never secure the PiP window: it would blank the video.
+            if (hideRecents && !inPictureInPicture) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             } else {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -81,24 +89,28 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /// Set the privacy flag as the app leaves the foreground, so the snapshot
-    /// the system captures for recents is blank (see applyRecentsPrivacy).
-    override fun onPause() {
-        if (hideRecents) applyRecentsPrivacy()
-        super.onPause()
+    /// Keeps the recents-privacy flag from blanking the PiP window, and turns
+    /// it back on once the app returns to its normal full-screen size.
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        inPictureInPicture = isInPictureInPictureMode
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        applyRecentsPrivacy()
     }
 
     override fun onResume() {
         super.onResume()
         try {
-            // Forward: while the app is visible, screenshots/screen recording
-            // of the student's own timetable must keep working.
+            // Clear `FLAG_SECURE` while the app is open in front of you so
+            // taking screenshots of your own class schedule still works.
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } catch (_: Throwable) {
         }
-        // Re-assert channel settings every resume: if the channel's lockscreen
-        // visibility was loosened (by the user or an OEM) so that class details
-        // could leak onto a locked phone, repair it back to SECRET.
+        // Re-check notification channel settings on every resume so if the
+        // lock-screen visibility got loosened in system settings, it resets
+        // back to `VISIBILITY_SECRET`.
         ScheduleNotificationManager.ensureChannel(this)
     }
 }
