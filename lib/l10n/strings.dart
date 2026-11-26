@@ -155,7 +155,7 @@ const Map<String, Map<String, String>> _catalog = {
     'disclaimer.translationNote':
         'Translated summaries are included to make this notice easier to read, '
         'while the official English and Spanish text required by the district '
-        'remains the binding version.',
+        'remains the official version.',
 
     'help.title': 'Get help',
     'help.emergency.title': 'In immediate danger?',
@@ -170,25 +170,24 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.title': 'Talk to a counselor at Westview',
     'help.counselor.body':
         'Westview counselors are available in the Wolverine Center during '
-        'school hours. Students can stop by in person, ask a teacher for a '
-        'pass, or email their counselor directly without having to explain '
-        'everything in the message.',
+        'school hours. You can stop by in person, ask a teacher for a '
+        'pass, or email your counselor directly.',
     'help.counselor.callOffice': 'Call the office',
     'help.counselor.website': 'Counseling website',
-    'help.counselor.find': 'Find your counselor',
-    'help.counselor.byLast': 'Assigned by the first letter of your last name.',
+    'help.counselor.find': 'Counselors',
+    'help.counselor.byLast': '(First letter of your last name)',
     'help.counselor.career': 'College & career questions',
     'help.counselor.verified':
-        'Counselor assignments can change during the school year, so check '
+        'Counselor assignments can change. Check '
         'Westview\'s website or the counseling office if your last name does '
-        'not match the list below. (Checked November 2025.)',
+        'not match the list below. (Last checked November 2026.)',
 
     'help.crisis.title': '24/7 free and confidential crisis lines',
     'help.crisis.call': 'Call',
     'help.crisis.text': 'Text',
     'help.crisis.deaf':
-        'If you are deaf, hard of hearing, or unable to speak out loud, every '
-        'service below can also be reached by text or online. Both 988 and '
+        'If you are deaf, hard of hearing, or unable to speak out loud, '
+        'services below can also be reached by text or online. Both 988 and '
         'Crisis Text Line support texting directly, while the San Diego County '
         'line accepts 711 relay calls.',
 
@@ -248,7 +247,7 @@ const Map<String, Map<String, String>> _catalog = {
     'settings.quickExit': 'Quick exit',
     'settings.quickExitSub':
         'Hold down the Help button to close this screen and move the app to '
-        'the background right away.',
+        'the background.',
     'settings.hideRecents': 'Hide preview in app switcher',
     'settings.hideRecentsSub':
         'Blanks out the app\'s thumbnail in Android\'s recent-apps list while '
@@ -268,7 +267,7 @@ const Map<String, Map<String, String>> _catalog = {
     'settings.clear': 'Clear saved content',
     'settings.clearSub':
         'Removes cached calendars, lunch menus, and nutrition data stored for '
-        'offline viewing so they download fresh next time.',
+        'offline viewing.',
     'settings.cleared': 'Saved content cleared',
     'settings.classDetails': 'Class details',
     'settings.showTeacher': 'Show teacher',
@@ -281,7 +280,7 @@ const Map<String, Map<String, String>> _catalog = {
     'settings.resetClasses': 'Reset all class names',
     'settings.resetTitle': 'Reset class names?',
     'settings.resetBody':
-        'This clears every custom class name, teacher, and room number you '
+        'This clears all custom class names, teachers, and room numbers you '
         'entered.',
     'settings.reset': 'Reset',
     'settings.tapToAdd': 'Tap to add a class name, teacher, or room',
@@ -297,9 +296,9 @@ const Map<String, Map<String, String>> _catalog = {
         'someone else is in danger, call 911. During an emotional crisis, call '
         'or text 988.',
     'settings.verified':
-        'Because schedules, menus, and links can change during the year, '
-        'confirm time-sensitive details with the school office. Counselor '
-        'contacts were last checked in November 2025 against Westview\'s '
+        'Schedules, menus, and links can change during the year. '
+        'Confirm time-sensitive details with the office. Counselor '
+        'contacts were last checked in November 2026 against Westview\'s '
         'counseling webpage.',
     'settings.langLabel': 'Language',
     'settings.langSystem': 'System default',
