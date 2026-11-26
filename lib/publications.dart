@@ -7,7 +7,6 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'l10n/strings.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'vimeo_pip.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
@@ -45,15 +44,9 @@ class _PublicationsPageState extends State<PublicationsPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance.logEvent('view_section', {
-      'screen': 'publications',
-      'section': _publications[index].titleKey,
-    });
   }
 
   void _refreshCurrent() {
-    Telemetry.instance.logEvent('publication_refresh',
-        {'section': _publications[selectedIndex].titleKey});
     _webKeys[selectedIndex].currentState?.reload();
   }
 

@@ -8,7 +8,7 @@ import 'package:westview_app/l10n/strings.dart';
 import 'package:westview_app/settings.dart';
 import 'package:westview_app/support.dart';
 
-/// Checks that all four language maps define identical keys, safety strings are
+/// Checks that every language map defines identical keys, safety strings are
 /// translated rather than left in English, every key referenced in `lib/`
 /// exists, and the Get help screen lays out cleanly at 200% text scale.
 void main() {
@@ -21,11 +21,11 @@ void main() {
   });
 
   group('string catalog completeness', () {
-    test('all four languages define exactly the same keys', () {
+    test('every language defines exactly the same keys', () {
       final english = AppStrings.catalog['en']!.keys.toSet();
       expect(english, isNotEmpty);
 
-      for (final language in ['es', 'zh', 'tl']) {
+      for (final language in ['es', 'zh', 'tl', 'fr']) {
         final keys = AppStrings.catalog[language]!.keys.toSet();
         expect(
           keys.difference(english),
@@ -60,7 +60,7 @@ void main() {
       expect(critical, contains('disclaimer.title'));
       expect(critical, contains('disclaimer.short'));
 
-      for (final language in ['es', 'zh', 'tl']) {
+      for (final language in ['es', 'zh', 'tl', 'fr']) {
         final strings = AppStrings.forTag(language);
         for (final key in critical) {
           expect(strings.isMissing(key), isFalse,
@@ -86,7 +86,7 @@ void main() {
       for (final hotline in crisisHotlines) {
         for (final suffix in ['name', 'desc']) {
           final key = 'hotline.${hotline.id}.$suffix';
-          for (final language in ['en', 'es', 'zh', 'tl']) {
+          for (final language in ['en', 'es', 'zh', 'tl', 'fr']) {
             expect(AppStrings.forTag(language).isMissing(key), isFalse,
                 reason: '$language missing $key');
           }
@@ -109,11 +109,19 @@ void main() {
       expect(AppStrings.forTag('xx')['nav.getHelp'], 'Get help');
     });
 
-    test('the language picker shows every language name four ways', () {
+    test('the language picker shows every language name in each language', () {
+      final shipped = AppLanguage.values
+          .where((l) => l != AppLanguage.system)
+          .map((l) => l.code)
+          .toList();
+      expect(shipped, ['en', 'es', 'zh', 'tl', 'fr']);
+      // Every option is named once per shipped language, so a student can find
+      // their language without reading the current UI language.
       for (final language in AppLanguage.values) {
-        // Each label names the language in all four shipped languages, so a
-        // student can find it without reading the current UI language.
-        expect(language.pluralLabel.split('·').length, 4,
+        expect(language.nativeName, isNotEmpty,
+            reason: 'name for ${language.code}');
+        if (language == AppLanguage.system) continue;
+        expect(language.pluralLabel.split('·').length, shipped.length,
             reason: 'label for ${language.code}');
       }
     });
@@ -154,6 +162,7 @@ void main() {
       expect(AppLanguage.system.resolve(const Locale('zh', 'CN')), 'zh');
       expect(AppLanguage.system.resolve(const Locale('fil', 'PH')), 'tl');
       expect(AppLanguage.system.resolve(const Locale('tl')), 'tl');
+      expect(AppLanguage.system.resolve(const Locale('fr', 'CA')), 'fr');
       expect(AppLanguage.system.resolve(const Locale('de')), 'en');
     });
 
@@ -204,6 +213,7 @@ void main() {
         AppLanguage.spanish,
         AppLanguage.chinese,
         AppLanguage.tagalog,
+        AppLanguage.french,
       ]) {
         await pumpHelp(tester, language);
         // A RenderFlex overflow would be reported as an exception.

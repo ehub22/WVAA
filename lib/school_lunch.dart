@@ -7,7 +7,6 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'l10n/strings.dart';
 import 'network_cache.dart';
-import 'telemetry.dart';
 import 'widgets/status_views.dart';
 
 class DailyLunch {
@@ -121,7 +120,6 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
 
       await NetworkCache.instance.write(_recipesCacheKey, recipesBody);
       await NetworkCache.instance.write(_menuCacheKey, menuBody);
-      Telemetry.instance.logEvent('lunch_refresh');
 
       if (!mounted) return;
       setState(() {
@@ -141,7 +139,6 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
         _loading = false;
         if (_lunches != null && _lunches!.isNotEmpty) {
           _showingSavedCopy = true;
-          Telemetry.instance.logEvent('lunch_cache_used');
         } else {
           _error = true;
         }
@@ -323,7 +320,6 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
   }
 
   void _showNutritionFacts(BuildContext context, String mealName) {
-    Telemetry.instance.logEvent('nutrition_facts_opened');
     final strings = AppStrings.of(context);
     final recipe = _recipes[mealName];
     if (recipe == null) {

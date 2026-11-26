@@ -85,21 +85,17 @@ class AppSettings extends ChangeNotifier {
 
   static const String _prefsKey = 'westview_settings_v1';
 
-  /// Bumped whenever the consent model changes. Payloads written by an older
-  /// build did not record a version, so they are treated as "no consent on
-  /// file": telemetry is switched off and the first-run dialog is shown again.
-  static const int _consentVersion = 2;
+  /// Bumped whenever the stored settings shape changes in a way that needs a
+  /// one-time notice. Builds that predate this version have no value stored, so
+  /// they see the new notice instead of inheriting an old default.
+  static const int _settingsVersion = 3;
 
   bool _loaded = false;
   bool _notificationsEnabled = true;
   bool _liveActivityEnabled = true;
   bool _showTeacher = true;
   bool _showRoom = true;
-  // Opt-in, not opt-out: nothing is ever reported until the student says yes
-  // in the first-run dialog. See `telemetry.dart`.
-  bool _analyticsEnabled = false;
-  bool _crashReportingEnabled = false;
-  bool _privacyNoticeSeen = false;
+  bool _safetyNoticeSeen = false;
   AppLanguage _language = AppLanguage.system;
   Map<String, PeriodSettings> _periods = <String, PeriodSettings>{};
 
@@ -124,14 +120,8 @@ class AppSettings extends ChangeNotifier {
   /// Show the room number in the schedule / notification / widget.
   bool get showRoom => _showRoom;
 
-  /// Anonymous, non-identifying usage analytics (see `telemetry.dart`).
-  bool get analyticsEnabled => _analyticsEnabled;
-
-  /// Anonymous crash reports (see `telemetry.dart`).
-  bool get crashReportingEnabled => _crashReportingEnabled;
-
-  /// Whether the first-run privacy disclosure has been acknowledged.
-  bool get privacyNoticeSeen => _privacyNoticeSeen;
+  /// Whether the one-time unofficial-app notice has been dismissed.
+  bool get safetyNoticeSeen => _safetyNoticeSeen;
 
   /// UI language. [AppLanguage.system] follows the device locale; every other
   /// value pins the app to that language regardless of device settings (some
@@ -143,17 +133,6 @@ class AppSettings extends ChangeNotifier {
     if (_language == value) return;
     _language = value;
     await _persist();
-  }
-
-  /// Every string the student typed into "My classes" (custom names, teacher
-  /// names, room numbers). Used by telemetry to scrub those values out of
-  /// crash reports before they leave the device.
-  Iterable<String> get userTypedValues sync* {
-    for (final entry in _periods.entries) {
-      if (entry.value.customName.isNotEmpty) yield entry.value.customName;
-      if (entry.value.teacher.isNotEmpty) yield entry.value.teacher;
-      if (entry.value.room.isNotEmpty) yield entry.value.room;
-    }
   }
 
   PeriodSettings periodSettings(String canonicalName) =>
@@ -224,26 +203,10 @@ class AppSettings extends ChangeNotifier {
     await _persist();
   }
 
-  Future<void> setAnalyticsEnabled(bool value) async {
-    if (_analyticsEnabled == value) return;
-    _analyticsEnabled = value;
-    await _persist();
-  }
-
-  Future<void> setCrashReportingEnabled(bool value) async {
-    if (_crashReportingEnabled == value) return;
-    _crashReportingEnabled = value;
-    await _persist();
-  }
-
-  /// Records that the student has answered the first-run privacy dialog.
-  ///
-  /// Goes through the normal [_persist] path so the consent-model version and
-  /// the switch values are written together: a payload that says "consent given"
-  /// but lacks the version is ignored at load time (see [_applyJson]).
-  Future<void> setPrivacyNoticeSeen({bool value = true}) async {
-    if (_privacyNoticeSeen == value) return;
-    _privacyNoticeSeen = value;
+  /// Records that the student dismissed the first-launch notice.
+  Future<void> setSafetyNoticeSeen({bool value = true}) async {
+    if (_safetyNoticeSeen == value) return;
+    _safetyNoticeSeen = value;
     await _persist();
   }
 
@@ -272,9 +235,7 @@ class AppSettings extends ChangeNotifier {
     _liveActivityEnabled = true;
     _showTeacher = true;
     _showRoom = true;
-    _analyticsEnabled = false;
-    _crashReportingEnabled = false;
-    _privacyNoticeSeen = false;
+    _safetyNoticeSeen = false;
     _language = AppLanguage.system;
     _periods = <String, PeriodSettings>{};
     notifyListeners();
@@ -296,27 +257,16 @@ class AppSettings extends ChangeNotifier {
   }
 
   void _applyJson(Map<String, dynamic> json) {
-    // Consent model upgrade: builds before opt-in recorded no consent version,
-    // so existing installs must be asked again rather than silently inheriting
-    // whatever the old default was.
-    final storedConsent = json['privacyConsentVersion'] as int? ?? 1;
-    final hasCurrentConsent = storedConsent >= _consentVersion;
+    // Builds that predate the current settings shape show the unofficial-app
+    // notice once more rather than inheriting an answer nobody gave.
+    final storedVersion = json['settingsVersion'] as int? ?? 1;
+    final isCurrent = storedVersion >= _settingsVersion;
 
     _notificationsEnabled = json['notificationsEnabled'] as bool? ?? true;
     _liveActivityEnabled = json['liveActivityEnabled'] as bool? ?? true;
     _showTeacher = json['showTeacher'] as bool? ?? true;
     _showRoom = json['showRoom'] as bool? ?? true;
-    _analyticsEnabled = hasCurrentConsent
-        ? (json['analyticsEnabled'] as bool? ?? false)
-        : false;
-    _crashReportingEnabled = hasCurrentConsent
-        ? (json['crashReportingEnabled'] as bool? ?? false)
-        : false;
-    // Turning a switch on in Settings > Privacy & data counts as consent on its
-    // own, while older pre-v2 payloads get reset to false above because their
-    // `true` value came from an old default rather than an opt-in choice.
-    _privacyNoticeSeen =
-        hasCurrentConsent ? (json['privacyNoticeSeen'] as bool? ?? false) : false;
+    _safetyNoticeSeen = isCurrent ? (json['safetyNoticeSeen'] as bool? ?? false) : false;
     _language = AppLanguage.fromCode(json['language'] as String?);
 
     final periods = json['periods'];
@@ -334,14 +284,12 @@ class AppSettings extends ChangeNotifier {
   }
 
   Map<String, dynamic> toJson() => {
-        'privacyConsentVersion': _consentVersion,
+        'settingsVersion': _settingsVersion,
         'notificationsEnabled': _notificationsEnabled,
         'liveActivityEnabled': _liveActivityEnabled,
         'showTeacher': _showTeacher,
         'showRoom': _showRoom,
-        'analyticsEnabled': _analyticsEnabled,
-        'crashReportingEnabled': _crashReportingEnabled,
-        'privacyNoticeSeen': _privacyNoticeSeen,
+        'safetyNoticeSeen': _safetyNoticeSeen,
         'language': _language.code,
         'periods': {
           for (final entry in _periods.entries) entry.key: entry.value.toJson(),

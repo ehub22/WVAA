@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'l10n/strings.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'web_page.dart';
 import 'widgets/section_selector.dart';
 
@@ -21,10 +20,6 @@ class NewsletterPage extends StatefulWidget {
 
 class _NewsletterPageState extends State<NewsletterPage> {
   int selectedIndex = 0;
-
-  /// Stable, language-independent section id for analytics (never the
-  /// translated label, so metrics stay comparable across languages).
-  String get _sectionId => _newsletters[selectedIndex].titleKey;
 
   static const List<_Newsletter> _newsletters = [
     _Newsletter(
@@ -51,13 +46,9 @@ class _NewsletterPageState extends State<NewsletterPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance
-        .logEvent('view_section', {'screen': 'newsletters', 'section': _newsletters[index].titleKey});
   }
 
   void _refreshCurrent() {
-    Telemetry.instance
-        .logEvent('newsletter_refresh', {'section': _sectionId});
     _webKeys[selectedIndex].currentState?.reload();
   }
 

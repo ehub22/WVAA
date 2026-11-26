@@ -12,7 +12,6 @@ import 'settings.dart';
 import 'settings_page.dart';
 import 'special_schedule.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'widget_sync.dart';
 
 class SchedulePage extends StatefulWidget {
@@ -95,8 +94,6 @@ class _SchedulePageState extends State<SchedulePage>
     if (service.lastFetchFailed && !_specialScheduleFetchFailed) {
       // A fresh failure: re-show the "may not be accurate" banner.
       _fetchFailedBannerDismissed = false;
-      Telemetry.instance
-          .logEvent('special_schedule_fetch_failed', {'stale': special != null});
     }
     _specialScheduleFetchFailed = service.lastFetchFailed;
 

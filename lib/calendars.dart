@@ -9,7 +9,6 @@ import 'l10n/strings.dart';
 import 'network_cache.dart';
 import 'school_lunch.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
@@ -19,15 +18,11 @@ enum CalendarType { google, schoolLunch }
 /// [CalendarType.schoolLunch], [url] is ignored and the native lunch view is
 /// rendered.
 class CalendarTab {
-  const CalendarTab(this.titleKey, this.slug, this.url,
+  const CalendarTab(this.titleKey, this.url,
       {this.isApi = false, this.type = CalendarType.google});
 
   /// Key in `strings.dart` so tab labels translate with the app language.
   final String titleKey;
-
-  /// Fixed English slug used for cache keys and optional usage counts so
-  /// switching languages doesn't split cache entries.
-  final String slug;
   final String url;
   final bool isApi;
   final CalendarType type;
@@ -42,13 +37,9 @@ class CalendarEventsView extends StatefulWidget {
   const CalendarEventsView({
     super.key,
     required this.apiUrl,
-    this.calendarName = 'calendar',
   });
 
   final String apiUrl;
-
-  /// Human-readable name, used in notices and anonymous analytics.
-  final String calendarName;
 
   @override
   State<CalendarEventsView> createState() => CalendarEventsViewState();
@@ -117,8 +108,6 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       final body = await _fetchEventsBody();
       final events = parseEvents(body);
       await NetworkCache.instance.write(widget.apiUrl, body);
-      Telemetry.instance
-          .logEvent('calendar_refresh', {'calendar': widget.calendarName});
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -135,8 +124,6 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
         if (_events != null && _events!.isNotEmpty) {
           // Offline: keep showing the last known events.
           _showingSavedCopy = true;
-          Telemetry.instance.logEvent('calendar_cache_used',
-              {'calendar': widget.calendarName});
         } else {
           _error = true;
         }
@@ -517,21 +504,18 @@ class _CalendarsPageState extends State<CalendarsPage> {
   static const List<CalendarTab> _calendars = [
     CalendarTab(
       'calendar.tabSchool',
-      'school',
       'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events'
       '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
     CalendarTab(
       'calendar.tabAthletics',
-      'athletics',
       'https://www.googleapis.com/calendar/v3/calendars/c_bdlim8dben51vvr6p2omiguh1k@group.calendar.google.com/events'
       '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
       isApi: true,
     ),
     CalendarTab(
       'calendar.tabLunch',
-      'lunch',
       '',
       isApi: true,
       type: CalendarType.schoolLunch,
@@ -540,10 +524,6 @@ class _CalendarsPageState extends State<CalendarsPage> {
 
   void _onItemTapped(int index) {
     setState(() => selectedIndex = index);
-    Telemetry.instance.logEvent('view_section', {
-      'screen': 'calendars',
-      'section': _calendars[index].slug,
-    });
   }
 
   @override
@@ -580,7 +560,6 @@ class _CalendarsPageState extends State<CalendarsPage> {
                     : CalendarEventsView(
                         key: ValueKey(tab.url),
                         apiUrl: tab.url,
-                        calendarName: tab.slug,
                       );
               },
             ),

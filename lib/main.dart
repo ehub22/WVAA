@@ -12,7 +12,6 @@ import 'schedule_page.dart';
 import 'settings.dart';
 import 'special_schedule.dart';
 import 'support.dart';
-import 'telemetry.dart';
 import 'theme/theme.dart';
 import 'vimeo_pip.dart';
 import 'widget_sync.dart';
@@ -40,27 +39,12 @@ Future<void> main() async {
   // user opens another tab first.
   await syncHomeWidget();
 
-  // Hook framework, platform, and uncaught zone errors into the opt-in crash
-  // reporter while letting Flutter keep rendering normally afterward.
-  final previousFlutterOnError = FlutterError.onError;
-  FlutterError.onError = (details) {
-    Telemetry.instance
-        .logError(details.exception, details.stack, context: 'flutter_error');
-    previousFlutterOnError?.call(details);
-  };
-  WidgetsBinding.instance.platformDispatcher.onError = (error, stackTrace) {
-    Telemetry.instance.logError(error, stackTrace, context: 'platform');
-    return true;
-  };
-
-  // Flush any reports left over from offline sessions and log `app_open`. Both
-  // do nothing unless the user opted in (see settings.dart and telemetry.dart).
-  unawaited(Telemetry.instance.init());
-
   await runZonedGuarded(() async {
     runApp(const WestviewApp());
   }, (error, stackTrace) {
-    Telemetry.instance.logError(error, stackTrace, context: 'zone');
+    // Nothing is reported anywhere: a crash just ends the frame and Flutter
+    // keeps running, which keeps the app free of any reporting pipeline.
+    debugPrint('Uncaught error: $error');
   });
 }
 
@@ -83,12 +67,14 @@ class WestviewApp extends StatelessWidget {
           locale: language == AppLanguage.system ? null : Locale(language.code),
           // Include `fil` so Flutter's Material delegates accept phones set to
           // Filipino while `AppLanguage.resolve` maps it to our `tl` strings.
+          // French resolves by language code alone, so `fr-CA` works too.
           supportedLocales: const [
             Locale('en'),
             Locale('es'),
             Locale('zh'),
             Locale('tl'),
             Locale('fil'),
+            Locale('fr'),
           ],
           localeResolutionCallback: (locale, supported) {
             if (language != AppLanguage.system) return Locale(language.code);
@@ -138,15 +124,7 @@ class _HomePage extends StatefulWidget {
 
 class _HomePageState extends State<_HomePage> {
   static const int _publicationsIndex = 2;
-  static const int _helpIndex = 4;
   int _selectedIndex = 0;
-
-  static const List<String> _screenNames = [
-    'schedule',
-    'newsletters',
-    'publications',
-    'calendars',
-  ];
 
   // Keep all pages alive (IndexedStack) so a playing Vimeo WebView is never
   // recreated when switching tabs or entering PiP.
@@ -161,41 +139,28 @@ class _HomePageState extends State<_HomePage> {
   @override
   void initState() {
     super.initState();
-    Telemetry.instance
-        .logEvent('screen_view', {'screen': _screenNames[_selectedIndex]});
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeShowPrivacyNotice();
+      _maybeShowSafetyNotice();
     });
   }
 
   void _onTabSelected(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
-    // Never log visits to Get help so checking counseling or crisis resources
-    // leaves zero analytics trace.
-    if (index != _helpIndex) {
-      Telemetry.instance
-          .logEvent('screen_view', {'screen': _screenNames[index]});
-    }
   }
 
-  /// Shows a one-time prompt on first launch explaining optional diagnostics.
-  /// Nothing gets queued before the user answers this dialog, and both switches
-  /// can be changed later under Settings > Privacy & data.
-  Future<void> _maybeShowPrivacyNotice() async {
-    if (!mounted || AppSettings.instance.privacyNoticeSeen) return;
+  /// Shows the disclaimer once on first launch so nobody mistakes this for an
+  /// official district app. The same text stays available under Settings >
+  /// About this app afterward.
+  Future<void> _maybeShowSafetyNotice() async {
+    if (!mounted || AppSettings.instance.safetyNoticeSeen) return;
 
-    final share = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => const _PrivacyNoticeDialog(),
+      builder: (context) => const _SafetyNoticeDialog(),
     );
 
-    // Save both toggles explicitly so storage reflects what the user picked.
-    final agreed = share ?? false;
-    await AppSettings.instance.setAnalyticsEnabled(agreed);
-    await AppSettings.instance.setCrashReportingEnabled(agreed);
-    await AppSettings.instance.setPrivacyNoticeSeen();
+    await AppSettings.instance.setSafetyNoticeSeen();
   }
 
   @override
@@ -312,47 +277,32 @@ class _DistrictDisclaimerBar extends StatelessWidget {
   }
 }
 
-/// First-launch opt-in prompt shown before any diagnostics can be queued.
-class _PrivacyNoticeDialog extends StatelessWidget {
-  const _PrivacyNoticeDialog();
+/// First-launch disclaimer. The app has nothing to ask consent for, so this
+/// only makes the unofficial status and the crisis-service limits clear.
+class _SafetyNoticeDialog extends StatelessWidget {
+  const _SafetyNoticeDialog();
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     return AlertDialog(
-      title: Text(strings['privacy.title']),
+      title: Text(strings['disclaimer.title']),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(strings['privacy.intro']),
+            Text(strings['disclaimer.plain']),
             const SizedBox(height: 12),
-            Text(strings['privacy.bullet1']),
-            Text(strings['privacy.bullet2']),
-            const SizedBox(height: 12),
-            Text(strings['privacy.never']),
-            const SizedBox(height: 12),
-            Text(strings['privacy.offUntil']),
+            Text(strings['disclaimer.crisis']),
           ],
         ),
       ),
       actionsOverflowDirection: VerticalDirection.down,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(strings['privacy.dontShare']),
-        ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(strings['privacy.share']),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            '${strings['disclaimer.short']}\n\n${strings['disclaimer.crisis']}',
-            style: const TextStyle(fontSize: 12, height: 1.4),
-          ),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings['common.close']),
         ),
       ],
     );

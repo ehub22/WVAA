@@ -13,7 +13,8 @@ enum AppLanguage {
   english('en', 'English', 'English'),
   spanish('es', 'Español', 'Español'),
   chinese('zh', '简体中文', '中文'),
-  tagalog('tl', 'Filipino', 'Filipino');
+  tagalog('tl', 'Filipino', 'Filipino'),
+  french('fr', 'Français', 'Français');
 
   const AppLanguage(this.code, this.nativeName, this.shortName);
 
@@ -26,14 +27,22 @@ enum AppLanguage {
   /// Shorter label used in compact spots.
   final String shortName;
 
-  /// Shows each language in all four supported scripts so you can still find
-  /// your language if the app got switched to one you don't read.
+  /// Names every supported language in one line, so the settings row can be
+  /// found even if the app was left in a language you don't read.
+  static String get namesLine => AppLanguage.values
+      .where((l) => l != AppLanguage.system)
+      .map((l) => l.shortName)
+      .join(' · ');
+
+  /// Spells one language out in each shipped language, so every row in the
+  /// picker is readable no matter which language the app is currently in.
   String get pluralLabel => switch (this) {
-        AppLanguage.system => 'System · Sistema · 系统 · Sistema',
-        AppLanguage.english => 'English · Inglés · 英语 · Ingles',
-        AppLanguage.spanish => 'Español · Spanish · 西班牙语 · Espanyol',
-        AppLanguage.chinese => '简体中文 · Chinese · Chino · Tsino',
-        AppLanguage.tagalog => 'Filipino · Tagalog · 菲律宾语 · Filipino',
+        AppLanguage.system => namesLine,
+        AppLanguage.english => 'English · Inglés · 英语 · Ingles · Anglais',
+        AppLanguage.spanish => 'Español · Spanish · 西班牙语 · Espanyol · Espagnol',
+        AppLanguage.chinese => '简体中文 · Chinese · Chino · Tsino · Chinois',
+        AppLanguage.tagalog => 'Filipino · Tagalog · 菲律宾语 · Filipino · Philippin',
+        AppLanguage.french => 'Français · French · Francés · 法语 · Pranses',
       };
 
   static AppLanguage fromCode(String? code) => AppLanguage.values.firstWhere(
@@ -52,6 +61,8 @@ enum AppLanguage {
       case 'tl':
       case 'fil':
         return 'tl';
+      case 'fr':
+        return 'fr';
       default:
         return 'en';
     }
@@ -68,7 +79,7 @@ enum AppLanguage {
 class AppStrings {
   const AppStrings(this.languageCode);
 
-  /// Resolved BCP-47 tag (`en`, `es`, `zh`, `tl`).
+  /// Resolved BCP-47 tag (`en`, `es`, `zh`, `tl`, `fr`).
   final String languageCode;
 
   static AppStrings of(BuildContext context) {
@@ -97,9 +108,10 @@ class AppStrings {
 }
 
 // ===========================================================================
-// String maps (en, es, zh, tl)
-// Note: Chinese (`zh`) strings should get a pass from a fluent speaker when
-// available; `tools/check_strings.py` enforces formatting and key parity.
+// String maps (en, es, zh, tl, fr)
+// Note: the Chinese (`zh`), Filipino (`tl`), and French (`fr`) maps should get
+// a pass from a fluent speaker when available; `tools/check_strings.py`
+// enforces formatting and key parity.
 // ===========================================================================
 
 const Map<String, Map<String, String>> _catalog = {
@@ -243,27 +255,8 @@ const Map<String, Map<String, String>> _catalog = {
         'in the background.',
     'settings.language': 'Language',
     'settings.languageSub': 'Applies to Help, Settings, and navigation.',
-    'settings.privacy': 'Privacy & data',
     'settings.about': 'About this app',
 
-    'privacy.title': 'Your privacy',
-    'privacy.intro':
-        'If enabled, this app sends only two kinds of anonymous data to the '
-        'school server:',
-    'privacy.bullet1':
-        '• Anonymous usage counts: which tabs are opened and whether refreshes '
-        'succeed, without names or accounts.',
-    'privacy.bullet2':
-        '• Crash reports: error details with any class names, teachers, or '
-        'rooms typed into Settings removed before sending.',
-    'privacy.never':
-        'The app does not use third-party analytics and never collects names, '
-        'student IDs, contacts, location, or advertising identifiers.',
-    'privacy.offUntil':
-        'Both options stay off unless turned on, and either setting can be '
-        'changed anytime under Settings > Privacy & data.',
-    'privacy.dontShare': 'Don\'t share',
-    'privacy.share': 'Share anonymously',
     'settings.notifications': 'Notifications',
     'settings.notificationsSub': 'Allow Westview HS to send notifications',
     'settings.liveActivity': 'Live activity',
@@ -271,21 +264,6 @@ const Map<String, Map<String, String>> _catalog = {
         'Ongoing notification with a countdown to the end of the current '
         'period',
     'settings.liveOff': 'Turn notifications on to use the live activity',
-    'settings.privacyData': 'Privacy & data',
-    'settings.analytics': 'Anonymous usage statistics',
-    'settings.analyticsSub':
-        'Counts which screens open and whether refreshes succeed, without '
-        'identifying you.',
-    'settings.crash': 'Crash reports',
-    'settings.crashSub':
-        'Sends error details and stack traces when something crashes so bugs '
-        'can be fixed, without identifying you.',
-    'settings.collectTitle': 'What this app collects',
-    'settings.collectBody':
-        'Both switches stay off until enabled. When turned on, the app sends '
-        'anonymous usage counts and crash reports to the school server after '
-        'stripping anything typed into My classes, and it never collects '
-        'names, student IDs, contacts, location, or advertising IDs.',
     'settings.savedContent': 'Saved content',
     'settings.clear': 'Clear saved content',
     'settings.clearSub':
@@ -571,28 +549,8 @@ const Map<String, Map<String, String>> _catalog = {
         'Android mientras está en segundo plano.',
     'settings.language': 'Idioma',
     'settings.languageSub': 'Se aplica a Ayuda, Ajustes y la navegación.',
-    'settings.privacy': 'Privacidad y datos',
     'settings.about': 'Sobre esta aplicación',
 
-    'privacy.title': 'Tu privacidad',
-    'privacy.intro':
-        'Si lo activas, esta aplicación envía solo dos tipos de datos anónimos '
-        'al servidor escolar:',
-    'privacy.bullet1':
-        '• Conteos de uso anónimos: qué pestañas se abren y si las '
-        'actualizaciones funcionan, sin nombres ni cuentas.',
-    'privacy.bullet2':
-        '• Reportes de fallos: detalles del error después de borrar cualquier '
-        'clase, maestro o salón escrito en Ajustes.',
-    'privacy.never':
-        'La aplicación no usa analítica de terceros y nunca recopila nombres, '
-        'números de estudiante, contactos, ubicación ni identificadores '
-        'publicitarios.',
-    'privacy.offUntil':
-        'Ambas opciones permanecen desactivadas a menos que las actives, y '
-        'puedes cambiarlas cuando quieras en Ajustes > Privacidad y datos.',
-    'privacy.dontShare': 'No compartir',
-    'privacy.share': 'Compartir de forma anónima',
     'settings.notifications': 'Notificaciones',
     'settings.notificationsSub':
         'Permitir que Westview HS envíe notificaciones',
@@ -602,22 +560,6 @@ const Map<String, Map<String, String>> _catalog = {
         'actual',
     'settings.liveOff':
         'Activa las notificaciones para usar la actividad en curso',
-    'settings.privacyData': 'Privacidad y datos',
-    'settings.analytics': 'Estadísticas de uso anónimas',
-    'settings.analyticsSub':
-        'Cuenta qué pantallas se abren y si las actualizaciones funcionan, sin '
-        'identificarte.',
-    'settings.crash': 'Reportes de fallos',
-    'settings.crashSub':
-        'Envía detalles del error y rastros de pila cuando algo falla para '
-        'poder corregirlo, sin identificarte.',
-    'settings.collectTitle': 'Qué recopila esta aplicación',
-    'settings.collectBody':
-        'Ambos interruptores permanecen apagados hasta que los actives. Cuando '
-        'están activos, la aplicación envía conteos de uso anónimos y reportes '
-        'de fallos al servidor escolar después de quitar lo que hayas escrito '
-        'en Mis clases, y nunca recopila nombres, ID estudiantil, contactos, '
-        'ubicación ni ID publicitarios.',
     'settings.savedContent': 'Contenido guardado',
     'settings.clear': 'Borrar contenido guardado',
     'settings.clearSub':
@@ -876,34 +818,13 @@ const Map<String, Map<String, String>> _catalog = {
         '切到后台时将 Android 最近任务列表中的应用缩略图设为空白。',
     'settings.language': '语言',
     'settings.languageSub': '应用于求助、设置和导航栏。',
-    'settings.privacy': '隐私与数据',
     'settings.about': '关于本应用',
 
-    'privacy.title': '你的隐私',
-    'privacy.intro': '开启后，本应用仅向学校服务器发送两类匿名数据：',
-    'privacy.bullet1':
-        '• 匿名使用计数：打开了哪些标签页以及刷新是否成功，不含姓名或账号。',
-    'privacy.bullet2':
-        '• 崩溃报告：发送前会先移除你在设置中填写的课程名、老师和教室号。',
-    'privacy.never':
-        '本应用不使用第三方统计工具，也绝不收集姓名、学号、通讯录、位置或广告标识符。',
-    'privacy.offUntil':
-        '两项开关默认关闭，除非你主动开启，且可随时在“设置 > 隐私与数据”中修改。',
-    'privacy.dontShare': '不分享',
-    'privacy.share': '匿名分享',
     'settings.notifications': '通知',
     'settings.notificationsSub': '允许 Westview HS 发送通知',
     'settings.liveActivity': '实时活动',
     'settings.liveOn': '常驻通知，实时倒计时显示当前课时结束时间',
     'settings.liveOff': '开启通知后才能使用实时活动',
-    'settings.privacyData': '隐私与数据',
-    'settings.analytics': '匿名使用统计',
-    'settings.analyticsSub': '统计页面打开次数和刷新结果，不会识别你的身份。',
-    'settings.crash': '崩溃报告',
-    'settings.crashSub': '应用崩溃时发送错误信息与堆栈以便修复问题，不会识别你的身份。',
-    'settings.collectTitle': '本应用收集的数据',
-    'settings.collectBody':
-        '上方两个开关默认关闭。开启后，应用会先剔除你在“我的课程”中填写的内容，再将匿名使用计数和崩溃报告发送至学校服务器；应用绝不收集姓名、学号、通讯录、位置或广告 ID。',
     'settings.savedContent': '已保存的内容',
     'settings.clear': '清除已保存内容',
     'settings.clearSub':
@@ -1164,28 +1085,8 @@ const Map<String, Map<String, String>> _catalog = {
         'Android habang nasa background.',
     'settings.language': 'Wika',
     'settings.languageSub': 'Naaangkop sa Tulong, Mga Setting, at navigation.',
-    'settings.privacy': 'Privacy at data',
     'settings.about': 'Tungkol sa app na ito',
 
-    'privacy.title': 'Ang iyong privacy',
-    'privacy.intro':
-        'Kapag binuksan mo ito, dalawang uri lang ng anonymous na data ang '
-        'ipinapadala ng app sa server ng paaralan:',
-    'privacy.bullet1':
-        '• Anonymous na bilang ng paggamit: kung aling tab ang binubuksan at '
-        'kung gumana ang refresh, nang walang pangalan o account.',
-    'privacy.bullet2':
-        '• Mga crash report: detalye ng error matapos alisin ang anumang '
-        'pangalan ng klase, teacher, o room na inilagay sa Mga Setting.',
-    'privacy.never':
-        'Hindi gumagamit ang app ng third-party analytics at hindi nito '
-        'kinokolekta ang pangalan, student ID, contacts, lokasyon, o '
-        'advertising ID.',
-    'privacy.offUntil':
-        'Naka-off ang parehong opsyon maliban kung buksan mo, at maaari mo '
-        'itong baguhin anumang oras sa Mga Setting > Privacy at data.',
-    'privacy.dontShare': 'Huwag ibahagi',
-    'privacy.share': 'Ibahagi nang anonymous',
     'settings.notifications': 'Mga abiso',
     'settings.notificationsSub':
         'Payagan ang Westview HS na magpadala ng abiso',
@@ -1194,22 +1095,6 @@ const Map<String, Map<String, String>> _catalog = {
         'Tuloy-tuloy na abiso na may countdown hanggang matapos ang '
         'kasalukuyang period',
     'settings.liveOff': 'Buksan ang abiso para magamit ang live na aktibidad',
-    'settings.privacyData': 'Privacy at data',
-    'settings.analytics': 'Anonymous na estadistika ng paggamit',
-    'settings.analyticsSub':
-        'Binibilang kung aling screen ang binubuksan at kung gumagana ang '
-        'refresh, nang hindi ka nakikilala.',
-    'settings.crash': 'Mga crash report',
-    'settings.crashSub':
-        'Nagpapadala ng detalye ng error at stack trace kapag nag-crash ang '
-        'app para maayos ang bug, nang hindi ka nakikilala.',
-    'settings.collectTitle': 'Ano ang kinokolekta ng app na ito',
-    'settings.collectBody':
-        'Naka-off ang dalawang switch hangga\'t hindi mo binubuksan. Kapag '
-        'naka-on, nagpapadala ang app ng anonymous na bilang ng paggamit at '
-        'crash report sa server ng paaralan matapos alisin ang anumang '
-        'inilagay sa Aking mga klase, at hindi ito kumokolekta ng pangalan, '
-        'student ID, contacts, lokasyon, o advertising ID.',
     'settings.savedContent': 'Naka-save na content',
     'settings.clear': 'Burahin ang naka-save na content',
     'settings.clearSub':
@@ -1350,5 +1235,318 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.careerTitle': 'Gabay sa kolehiyo at karera',
     'help.counselor.careerRole': 'College & Career Guidance Technician',
     'settings.roomShort': 'Rm',
+  },
+  // ------------------------------------------------------------------ Français
+  'fr': {
+    'app.title': 'Westview HS',
+    'nav.schedule': 'Emploi du temps',
+    'nav.newsletters': 'Bulletins',
+    'nav.publications': 'Publications',
+    'nav.calendars': 'Calendrier',
+    'nav.getHelp': 'Aide',
+    'common.call': 'Appeler',
+    'common.text': 'Texto',
+    'common.website': 'Site web',
+    'common.close': 'Fermer',
+    'common.cancel': 'Annuler',
+    'common.openInBrowser': 'Ouvrir dans le navigateur',
+    'common.copyNumber': 'Copier ce numéro',
+    'sms.confirmTitle': 'Envoyer ce message ?',
+    'sms.openApp': 'Ouvrir Messages',
+    'sms.editNote':
+        'Votre application de messagerie s\'ouvrira avec ce mot-clé '
+        'déjà rempli, pour que vous puissiez le relire ou le compléter '
+        'avant l\'envoi.',
+    'disclaimer.short':
+        'Application non officielle du Poway Unified. Créée '
+        'indépendamment par des élèves, elle n\'est ni sponsorisée ni '
+        'approuvée par le Poway Unified School District ni par le '
+        'Westview High School.',
+    'disclaimer.title': 'Cette application ne fait pas partie du Poway Unified',
+    'disclaimer.plain':
+        'Westview HS (WVAA) est une application indépendante créée par '
+        'des élèves, et non par le Poway Unified School District ni par '
+        'le Westview High School. Comme l\'école ne gère ni ne vérifie '
+        'cette application, les horaires, les liens ou les contacts '
+        'affichés ici peuvent être périmés. Vérifiez donc les '
+        'informations importantes auprès du secrétariat, de votre '
+        'conseiller ou du site web de Westview.',
+    'disclaimer.crisis':
+        'Cette application n\'est pas un service de crise et personne '
+        'ne la surveille. Si vous ou une autre personne êtes en danger, '
+        'appelez le 911. En cas de crise émotionnelle, appelez le 988 '
+        'ou envoyez un texto au 988.',
+    'disclaimer.translationNote':
+        'Les résumés traduits sont ajoutés pour rendre cet avis plus '
+        'facile à lire, mais le texte officiel en anglais et en '
+        'espagnol exigé par le district reste la version qui fait foi.',
+    'help.title': 'Aide',
+    'help.emergency.title': 'Danger immédiat ?',
+    'help.emergency.body':
+        'Appelez le 911 tout de suite si vous ou une autre personne '
+        'risquez d\'être blessé et avez besoin d\'aide immédiate.',
+    'help.emergency.call': 'Appeler le 911',
+    'help.emergency.note':
+        'Si vous ne savez pas si la situation est une urgence, appelez '
+        'le 988 ou envoyez un texto au 988 pour qu\'un intervenant vous '
+        'aide à décider quoi faire.',
+    'help.counselor.title': 'Parler à un conseiller de Westview',
+    'help.counselor.body':
+        'Les conseillers de Westview sont disponibles au Wolverine '
+        'Center pendant les heures de cours. Vous pouvez passer les '
+        'voir, demander un billet à un professeur ou écrire directement '
+        'à votre conseiller sans devoir tout expliquer dans le message.',
+    'help.counselor.callOffice': 'Appeler le secrétariat',
+    'help.counselor.website': 'Site des conseillers',
+    'help.counselor.find': 'Trouver votre conseiller',
+    'help.counselor.byLast':
+        'Attribution selon la première lettre de votre nom de famille.',
+    'help.counselor.career': 'Questions sur les études et les métiers',
+    'help.counselor.verified':
+        'Les attributions de conseillers peuvent changer pendant '
+        'l\'année scolaire. Vérifiez donc le site web de Westview ou le '
+        'bureau des conseillers si votre nom de famille ne correspond '
+        'pas à la liste ci-dessous. (Vérifié en novembre 2025.)',
+    'help.crisis.title': 'Lignes de crise gratuites et confidentielles 24h/24',
+    'help.crisis.call': 'Appeler',
+    'help.crisis.text': 'Texto',
+    'help.crisis.deaf':
+        'Si vous êtes sourd, malentendant ou incapable de parler à voix '
+        'haute, tous les services ci-dessous sont aussi joignables par '
+        'texto ou en ligne. Le 988 et Crisis Text Line répondent '
+        'directement par texto, et la ligne du comté de San Diego '
+        'accepte les appels via le relais 711.',
+    'help.report.title': 'Signaler un problème de sécurité',
+    'help.report.body':
+        'Si vous vous inquiétez pour un camarade, une menace, une arme '
+        'ou quelque chose publié en ligne, parlez-en à un adulte de '
+        'confiance : un professeur, un conseiller, un entraîneur ou un '
+        'parent. Vous pouvez aussi signaler la situation de façon '
+        'anonyme par ces lignes :',
+    'help.report.note':
+        'Vous n\'avez pas besoin de preuves complètes avant de signaler '
+        'une situation, car du personnel formé examine chaque '
+        'signalement pour déterminer l\'aide nécessaire.',
+    'help.about.title': 'À propos de cette application',
+    'hotline.988.name': 'Ligne 988 de prévention du suicide et de crise',
+    'hotline.988.desc':
+        'Soutien gratuit et confidentiel 24h/24 par téléphone ou texto, '
+        'pour toute personne en détresse émotionnelle ou en crise '
+        'suicidaire.',
+    'hotline.988.call': 'Appeler le 988',
+    'hotline.988.sms': 'Texto au 988',
+    'hotline.sdaocl.name': 'Ligne d\'accès et de crise de San Diego',
+    'hotline.sdaocl.desc':
+        'Ligne 24h/24 du comté de San Diego pour les crises de santé '
+        'mentale ou de consommation de substances qui vous touchent, '
+        'vous ou un proche, avec des interprètes gratuits en plus de '
+        '200 langues et des équipes mobiles d\'intervention de crise si '
+        'nécessaire.',
+    'hotline.sdaocl.call': 'Appeler le 1-888-724-7240',
+    'hotline.crisistext.name': 'Crisis Text Line',
+    'hotline.crisistext.desc':
+        'Vous met en contact par texto avec un intervenant de crise '
+        'formé à toute heure, si écrire est plus facile que parler au '
+        'téléphone. Gratuit et confidentiel.',
+    'hotline.crisistext.sms': 'Texto HOME au 741741',
+    'hotline.trevor.name': 'The Trevor Project',
+    'hotline.trevor.desc':
+        'Soutien gratuit et confidentiel 24h/24 en prévention de la '
+        'crise et du suicide pour les jeunes LGBTQ+, par téléphone ou '
+        'texto.',
+    'hotline.trevor.call': 'Appeler le 1-866-488-7386',
+    'hotline.trevor.sms': 'Texto START au 678678',
+    'hotline.sandyhook.name': 'Signalement anonyme Say Something',
+    'hotline.sandyhook.desc':
+        'Ligne de signalement anonyme tenue par des intervenants de '
+        'crise, pour les menaces, les armes ou l\'inquiétude qu\'un '
+        'camarade risque de se faire du mal.',
+    'hotline.sandyhook.call': 'Appeler le 1-844-5-SAYNOW',
+    'hotline.pusdtip.name':
+        'Ligne de signalement « See Something, Say Something » du PUSD',
+    'hotline.pusdtip.desc':
+        'Ligne de signalement anonyme du Poway Unified, ouverte 24h/24 '
+        'et surveillée par les forces de l\'ordre pour les menaces et '
+        'les problèmes de sécurité sur le campus (également imprimée au '
+        'dos des cartes d\'élève).',
+    'hotline.pusdtip.call': 'Appeler le 1-844-PUSD-TIP',
+    'settings.title': 'Réglages',
+    'settings.safety': 'Sécurité',
+    'settings.getHelp': 'Obtenir de l\'aide',
+    'settings.getHelpSub':
+        'Conseillers de Westview, lignes de crise 24h/24 et signalement '
+        'anonyme. Disponible hors ligne.',
+    'settings.quickExit': 'Sortie rapide',
+    'settings.quickExitSub':
+        'Maintenez le bouton Aide enfoncé pour fermer cet écran et '
+        'mettre l\'application en arrière-plan immédiatement.',
+    'settings.hideRecents':
+        'Masquer l\'aperçu dans le sélecteur d\'applications',
+    'settings.hideRecentsSub':
+        'Efface la vignette de l\'application dans la liste des '
+        'applications récentes d\'Android tant qu\'elle est en '
+        'arrière-plan.',
+    'settings.language': 'Langue',
+    'settings.languageSub':
+        'S\'applique à l\'aide, aux réglages et à la navigation.',
+    'settings.about': 'À propos de cette application',
+    'settings.notifications': 'Notifications',
+    'settings.notificationsSub':
+        'Autoriser Westview HS à envoyer des notifications',
+    'settings.liveActivity': 'Activité en direct',
+    'settings.liveOn':
+        'Notification permanente avec un compte à rebours jusqu\'à la '
+        'fin du cours en cours',
+    'settings.liveOff':
+        'Activez les notifications pour utiliser l\'activité en direct',
+    'settings.savedContent': 'Contenu enregistré',
+    'settings.clear': 'Effacer le contenu enregistré',
+    'settings.clearSub':
+        'Supprime les calendriers, menus de cantine et données '
+        'nutritionnelles gardés pour la consultation hors ligne, afin '
+        'qu\'ils soient retéléchargés la prochaine fois.',
+    'settings.cleared': 'Contenu enregistré effacé',
+    'settings.classDetails': 'Détails des cours',
+    'settings.showTeacher': 'Afficher le professeur',
+    'settings.showTeacherSub':
+        'Afficher le nom du professeur dans l\'emploi du temps, la '
+        'notification et le widget',
+    'settings.showRoom': 'Afficher la salle',
+    'settings.showRoomSub':
+        'Afficher le numéro de salle dans l\'emploi du temps, la '
+        'notification et le widget',
+    'settings.myClasses': 'Mes cours',
+    'settings.resetClasses': 'Réinitialiser les noms de cours',
+    'settings.resetTitle': 'Réinitialiser les noms de cours ?',
+    'settings.resetBody':
+        'Cela efface tous les noms de cours, professeurs et numéros de '
+        'salle que vous avez saisis.',
+    'settings.reset': 'Réinitialiser',
+    'settings.tapToAdd':
+        'Appuyez pour ajouter un nom de cours, un professeur ou une '
+        'salle',
+    'settings.editClass': 'Nom du cours',
+    'settings.leaveEmpty':
+        'Laissez vide pour garder le nom de période par défaut',
+    'settings.teacher': 'Professeur',
+    'settings.room': 'Numéro de salle',
+    'settings.clearField': 'Effacer',
+    'settings.cancel': 'Annuler',
+    'settings.save': 'Enregistrer',
+    'settings.notCrisis':
+        'Cette application n\'est pas un service de crise et personne '
+        'ne la surveille. Si vous ou une autre personne êtes en danger, '
+        'appelez le 911. En cas de crise émotionnelle, appelez le 988 '
+        'ou envoyez un texto au 988.',
+    'settings.verified':
+        'Comme les horaires, les menus et les liens peuvent changer '
+        'pendant l\'année, vérifiez les informations urgentes auprès du '
+        'secrétariat. Les contacts des conseillers ont été vérifiés '
+        'pour la dernière fois en novembre 2025 sur la page des '
+        'conseillers de Westview.',
+    'settings.langLabel': 'Langue',
+    'settings.langSystem': 'Langue du téléphone',
+    'schedule.monFri': 'Lun/ven',
+    'schedule.tueThu': 'Mar/jeu',
+    'schedule.wed': 'Mer',
+    'schedule.noActivePeriod': 'Aucun cours en cours',
+    'schedule.now': 'Maintenant',
+    'schedule.endsAt': 'se termine à',
+    'schedule.special': 'Un horaire spécial s\'applique aujourd\'hui',
+    'schedule.mayNotBeAccurate':
+        'Le serveur des horaires spéciaux est injoignable, donc '
+        'l\'emploi du temps d\'aujourd\'hui peut être périmé.',
+    'schedule.dismiss': 'Fermer',
+    'schedule.checking': 'Recherche de mises à jour de l\'emploi du temps',
+    'schedule.settings': 'Réglages',
+    'schedule.help': 'Aide',
+    'schedule.helpTooltip':
+        'Obtenir de l\'aide. Maintenez ce bouton enfoncé pour fermer '
+        'l\'application immédiatement.',
+    'common.selected': 'Sélectionné',
+    'common.refresh': 'Actualiser la page',
+    'common.dismiss': 'Fermer',
+    'common.retry': 'Réessayer',
+    'newsletter.weekly': 'Bulletin hebdomadaire',
+    'newsletter.counseling': 'Bulletins des conseillers',
+    'newsletter.den': 'Annonces Den',
+    'publications.nexus': 'Westview Nexus',
+    'publications.newscast': 'Westview Newscast',
+    'web.errorTitle': 'Impossible d\'ouvrir cette page',
+    'web.errorBody':
+        'La page n\'a pas pu être chargée. Vérifiez votre connexion et '
+        'réessayez.',
+    'web.loading': 'Chargement de la page…',
+    'web.stale':
+        'L\'actualisation a échoué, donc la page déjà chargée reste '
+        'affichée.',
+    'calendar.tabSchool': 'Calendrier scolaire',
+    'calendar.tabAthletics': 'Athlétisme',
+    'calendar.tabLunch': 'Cantines scolaires',
+    'calendar.errorTitle': 'Impossible de charger les événements',
+    'calendar.errorBody':
+        'Le serveur du calendrier est injoignable. Vérifiez votre '
+        'connexion et réessayez.',
+    'calendar.loading': 'Chargement des événements…',
+    'calendar.emptyTitle': 'Aucun événement à venir',
+    'calendar.emptyBody':
+        'Rien n\'est prévu sur ce calendrier pour le moment. Tirez vers '
+        'le bas pour actualiser.',
+    'calendar.savedCopy': 'Copie enregistrée du',
+    'calendar.untitled': 'Événement sans titre',
+    'calendar.description': 'Description',
+    'calendar.noDescription': 'Aucune description fournie.',
+    'calendar.allDay': 'Toute la journée',
+    'calendar.today': 'Aujourd\'hui',
+    'calendar.yesterday': 'Hier',
+    'calendar.tomorrow': 'Demain',
+    'calendar.weekdays': 'lundi,mardi,mercredi,jeudi,vendredi,samedi,dimanche',
+    'calendar.am': 'AM',
+    'calendar.pm': 'PM',
+    'schedule.refresh': 'Actualisation de l\'emploi du temps…',
+    'settings.langPickTitle': 'Langue de l\'application',
+    'web.retry': 'Réessayer',
+    'common.loading': 'Chargement…',
+    'common.errorTitle': 'Impossible de charger pour le moment',
+    'help.iconTooltip': 'Obtenir de l\'aide',
+    'help.iconTooltipQuickExit':
+        '%s (maintenez enfoncé pour quitter immédiatement)',
+    'lunch.errorTitle': 'Impossible de charger le menu',
+    'lunch.errorBody':
+        'Le serveur du menu est injoignable. Vérifiez votre connexion '
+        'et réessayez.',
+    'lunch.loading': 'Chargement du menu…',
+    'lunch.emptyTitle': 'Aucun menu de cantine publié',
+    'lunch.emptyBody':
+        'Le menu de cantine de ce mois n\'a pas encore été publié. '
+        'Tirez vers le bas pour actualiser.',
+    'lunch.savedCopy': 'Menu enregistré du',
+    'lunch.noSchool': 'Pas d\'école',
+    'lunch.entrees': 'Plats principaux',
+    'lunch.vegetables': 'Légumes',
+    'lunch.fruit': 'Fruits et jus',
+    'lunch.milk': 'Choix de lait',
+    'lunch.noFactsFor': 'Aucune information nutritionnelle pour %s',
+    'lunch.servingSize': 'Portion',
+    'lunch.oneServing': '1 portion',
+    'lunch.noNutrition': 'Aucune donnée nutritionnelle détaillée disponible.',
+    'lunch.nutritionFacts': 'Informations nutritionnelles',
+    'lunch.calories': 'Calories',
+    'lunch.totalFat': 'Matières grasses totales',
+    'lunch.saturatedFat': 'Matières grasses saturées',
+    'lunch.transFat': 'Matières grasses trans',
+    'lunch.cholesterol': 'Cholestérol',
+    'lunch.sodium': 'Sodium',
+    'lunch.carbs': 'Glucides',
+    'lunch.fiber': 'Fibres alimentaires',
+    'lunch.sugars': 'Sucres',
+    'lunch.protein': 'Protéines',
+    'help.counselor.callA11y': 'Appeler %s',
+    'help.counselor.emailA11y': 'Écrire à %s',
+    'help.counselor.emailSubject': 'Question d\'un élève pour son conseiller',
+    'help.counselor.careerTitle': 'Orientation vers les études et les métiers',
+    'help.counselor.careerRole':
+        'Technicienne en orientation scolaire et professionnelle',
+    'settings.roomShort': 'Salle',
   },
 };

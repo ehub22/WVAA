@@ -421,8 +421,8 @@ class HelpIconButton extends StatelessWidget {
 ///    compiled into the app so they still load when campus Wi-Fi drops.
 ///  * Calls, texts, and emails hand off to the phone's own apps, so WVAA never
 ///    sees call audio or message text.
-///  * I don't import `telemetry.dart` in this file at all so opening Get help
-///    is never logged.
+///  * Nothing here reports analytics or writes a log line, so opening Get help
+///    leaves no trace on the device.
 class SupportPage extends StatelessWidget {
   const SupportPage({super.key});
 

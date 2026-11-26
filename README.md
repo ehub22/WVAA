@@ -19,8 +19,8 @@ I built WVAA as an Android-first Flutter app for students at Westview High Schoo
 - **Light and dark themes:** Material 3 light and dark palettes built from Westview's gold and brass colors, following your phone's system theme while keeping every text and surface pair above WCAG AA contrast minimums.
 - **Offline fallbacks for bad campus Wi-Fi:** Campus Wi-Fi drops pretty often in certain buildings, so calendars, lunch menus, and special schedules save their last good response on the device and show a "saved copy" banner when a refresh fails. Newsletter and publication WebViews also keep an already-loaded page on screen rather than replacing it with an error screen mid-session.
 - **Manual refresh everywhere:** Pull-to-refresh on calendars and lunch menus, a refresh button in the header on newsletters and publications, and retry buttons whenever an initial load fails.
-- **Languages and accessibility:** Full app translations in English, Spanish, Simplified Chinese, and Filipino, including all crisis and safety text. Controls carry explicit screen-reader labels (for example, the 911 button announces as "9 1 1"), tap targets are at least 48dp (56dp on the 911 button), text scales up to 200% without clipping, status never relies on color alone, notifications stay silent, and every crisis line includes a text or chat option alongside calling. See [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
-- **Opt-in anonymous diagnostics:** Optional usage counts and crash reports stay off until you choose to turn them on, with separate switches for each and automatic redaction for anything you typed into your schedule. See [Privacy](#privacy).
+- **Languages and accessibility:** Full app translations in English, Spanish, Simplified Chinese, Filipino, and French, including all crisis and safety text. Controls carry explicit screen-reader labels (for example, the 911 button announces as "9 1 1"), tap targets are at least 48dp (56dp on the 911 button), text scales up to 200% without clipping, status never relies on color alone, notifications stay silent, and every crisis line includes a text or chat option alongside calling. See [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+- **No analytics at all:** Nothing about how you use the app leaves your phone. There are no analytics or crash SDKs, no tracking IDs, and no reporting endpoint in the code, so there is nothing to opt out of. See [Privacy](#privacy).
 - **Quick exit and app-switcher privacy:** Holding down any Help button sends the app straight to the background, and Android's app switcher blanks out the app preview by default so nobody looking over your shoulder can see what tab you had open.
 
 ## Why It Uses Plain Material 3
@@ -29,22 +29,19 @@ Since Android is the only platform I actively support, I used Material 3 compone
 
 ## Privacy
 
-If you opt in, the app can send two kinds of anonymous data, and nothing else:
+There is no telemetry in this app. It has no analytics SDK, no crash reporter, no advertising ID, and no reporting endpoint, so nothing you do in WVAA is counted, logged, or uploaded. Earlier builds carried opt-in usage and crash reporting code that posted to `studycs.org`; nothing was receiving those batches, so I deleted the code rather than leave a switch that implied data was being collected.
 
-- **Anonymous usage counts:** Which tabs get opened and whether content refreshes succeed or fail.
-- **Crash reports:** The error message and a shortened stack trace when an unhandled exception happens.
+That means the app never learns your name, student ID, accounts, contacts, location, or which tabs you open. It asks for internet access only to download content: the two Google Calendar feeds run by the school, the lunch menus from `menus.healthepro.com`, and the special-schedule files on `studycs.org`. Each request asks for public data and never includes anything you typed.
 
-Both switches start turned **off**. Nothing gets queued or sent unless you tap "Share anonymously" on the first-launch prompt or turn the switches on yourself in **Settings > Privacy**. If you turn either switch off later, the app clears any unsent items from storage right away instead of flushing them on the next launch.
+Everything the app saves stays on your phone too:
 
-The app doesn't use any third-party analytics or crash SDKs, and it never collects your name, student ID, accounts, contacts, location, or device/advertising IDs. Reports only go to `studycs.org` (the same server that hosts the special-schedule files), and the client scrubs them before they ever hit disk:
+- Calendar events, lunch menus, and nutrition facts sit in a local cache so they still show up when campus Wi-Fi drops.
+- Class names, teacher names, and room numbers live in local settings so the schedule, notification, and widget can display them.
+- You can clear the cached content anytime from **Settings > Saved content**, and reset your class details from **Settings > My classes**.
 
-- Anything you typed under "My classes" (course names, teacher names, and room numbers) gets replaced with `[text]`.
-- Anything matching an email address or phone number gets replaced with `[email]` or `[phone]`.
-- The only identifier attached to a batch is a random session ID generated in memory each time the app starts.
+The newsletters and publications tabs load Westview's own pages in a WebView, so whatever those pages do is up to the school groups that publish them, not to WVAA. And the Get help tab hands calls, texts, and emails to your phone's own apps, so those go through your carrier and the service you contacted.
 
-Opening the **Get help** tab is never logged at all, even if usage analytics are turned on.
-
-Saved calendar events, lunch menus, and nutrition facts stay locally on your phone, and you can clear all of them anytime from **Settings > Saved content**.
+Because there is no tracking left in the app, Android's Data Safety section for a WVAA listing is straightforward: no data collected, no data shared.
 
 ## Student safety
 
@@ -59,7 +56,7 @@ I wrote out the full reasoning, contact sources, and verification dates in [`doc
 
 ## Language and accessibility
 
-Every screen I draw in the app ships in **English, Spanish, Simplified Chinese, and Filipino**. You can switch languages under `Settings > Safety > Language · Idioma · 语言 · Wika`, where the row title includes all four languages so you can still find it if the phone is set to a language you don't read, or leave it on **System default** to follow Android.
+Every screen I draw in the app ships in **English, Spanish, Simplified Chinese, Filipino, and French**. You can switch languages under `Settings > Safety > English · Español · 中文 · Filipino · Français`, where the row title lists every language so you can still find it if the phone is set to one you don't read, or leave it on **System default** to follow Android.
 
 None of the safety copy is machine-translated at runtime. Every string lives in `lib/l10n/strings.dart`, including the 911 card, all six crisis lines, counselor roles, reporting notes, and the district disclaimer, and is checked by `test/l10n_test.dart` and `tools/check_strings.py`. Those checks fail if any language misses a key, leaves a safety string identical to English, or looks up a key in Dart that isn't in the string catalog. If a key were ever missing at runtime, it falls back to English and then to the raw key name so mistakes show up immediately during testing rather than rendering an empty button.
 
@@ -76,7 +73,7 @@ These mockups are generated from the real color tokens in `lib/theme/colors.dart
 | ![Get help — top](docs/screenshots/get-help-1.png) | ![Get help — crisis lines](docs/screenshots/get-help-2.png) |
 | Emergency card and counselor roster | Crisis lines, reporting links, and disclaimer |
 | ![Schedule with Help](docs/screenshots/home-with-help.png) | ![Settings safety](docs/screenshots/settings-safety.png) |
-| Help button and pinned disclaimer bar | Settings > Safety, including Language |
+| Help button and pinned disclaimer bar | Settings > Safety, including the language row |
 | ![Spanish Get help](docs/screenshots/get-help-spanish.png) | ![Language picker](docs/screenshots/language-picker.png) |
 | Get help screen in Spanish | Language picker (CJK characters omitted because the mockup script runs without a CJK font) |
 | ![Deuteranopia](docs/screenshots/get-help-deuteranopia.png) | ![Palette](docs/screenshots/palette-simulated.png) |
@@ -86,16 +83,15 @@ These mockups are generated from the real color tokens in `lib/theme/colors.dart
 
 ```
 lib/
-  main.dart              App entry point, Material 3 navigation shell, crash
-                         reporting setup, and first-run privacy prompt
+  main.dart              App entry point, Material 3 navigation shell, and the
+                         first-run disclaimer notice
   data.dart              Regular bell schedules (Mon/Fri, Tue/Thu, Wed)
   schedule_page.dart     Schedule tab, live countdown, and settings button
   special_schedule.dart  Special-schedule fetcher and multi-day cache
-  settings.dart          Saved user settings and privacy consent state
-  settings_page.dart     Settings screen (safety, notifications, privacy, classes)
-  telemetry.dart         Opt-in anonymous crash reports and usage counts
+  settings.dart          Saved user settings (language, classes, theme state)
+  settings_page.dart     Settings screen (safety, notifications, classes)
   support.dart           Get help screen: counselors, crisis lines, disclaimer
-  l10n/strings.dart      Translations for en/es/zh/tl and AppLanguage logic
+  l10n/strings.dart      Translations for en/es/zh/tl/fr and language handling
   safety.dart            Quick exit and app-switcher privacy channel
   network_cache.dart     Local cache for calendars, menus, and nutrition data
   widget_sync.dart       Syncs schedules and class names to the Android widget
@@ -167,12 +163,12 @@ To add the widget on Android, long-press your home screen, tap **Widgets**, find
 
 Tapping the gear button in the bottom-right corner of the Schedule tab opens Settings:
 
-- **Safety:** Quick access to Get help, toggles for quick exit and hiding the app-switcher preview, and the **Language** picker (System default, English, Español, 简体中文, and Filipino).
+- **Safety:** Quick access to Get help, toggles for quick exit and hiding the app-switcher preview, and the **Language** picker (System default, English, Español, 简体中文, Filipino, and Français).
 - **Notifications:** The main notification switch; turning this off stops the app from posting any notifications at all.
 - **Live activity:** Controls the ongoing period countdown notification (only active when Notifications are also turned on).
 - **Show teacher / Show room number:** Controls whether teacher names and room numbers appear on the schedule tab, the countdown notification, and the home-screen widget.
 - **My classes:** Lets you rename Period 1 through Period 4 and fill in your teacher and room number for each class.
-- **Privacy and saved content:** Separate opt-in switches for anonymous usage stats and crash reports, plus a button to clear cached calendars and lunch menus.
+- **Saved content:** A button to clear cached calendars and lunch menus.
 - **About this app:** Shows the full Poway Unified disclaimer in English and Spanish, explains that the app is student-built, and reminds users that the app itself isn't a monitored crisis service.
 
 Changes save right away and sync immediately to the schedule tab, notification, and widget.
@@ -218,7 +214,7 @@ If you want to publish a build to Google Play, set up a real upload keystore fol
 flutter test
 ```
 
-The test suite checks schedule period transitions, settings storage, special-schedule parsing and multi-day caching (with `MockClient`), Vimeo URL matching, crisis hotline and counselor contact numbers, and localization/accessibility rules in `test/l10n_test.dart` (making sure all four languages have matching keys, safety strings are actually translated, every key used in `lib/` exists, the Get help screen lays out cleanly at 200% font scale in every language, and the 911 button exposes the `"9 1 1"` screen-reader label).
+The test suite checks schedule period transitions, settings storage, special-schedule parsing and multi-day caching (with `MockClient`), Vimeo URL matching, crisis hotline and counselor contact numbers, and localization/accessibility rules in `test/l10n_test.dart` (making sure all five languages have matching keys, safety strings are actually translated, every key used in `lib/` exists, the Get help screen lays out cleanly at 200% font scale in every language, and the 911 button exposes the `"9 1 1"` screen-reader label).
 
 Before building the APK, CI also runs two Python checks:
 

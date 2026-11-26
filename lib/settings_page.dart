@@ -5,7 +5,6 @@ import 'network_cache.dart';
 import 'safety.dart';
 import 'settings.dart';
 import 'support.dart';
-import 'telemetry.dart';
 
 /// Settings screen opened from the gear button on the Schedule tab.
 class SettingsPage extends StatelessWidget {
@@ -78,10 +77,10 @@ class SettingsPage extends StatelessWidget {
                   button: true,
                   child: ListTile(
                     leading: const Icon(Icons.translate),
-                    // Show all four language names in the row title so someone
-                    // can still find this setting if the app was left in a
+                    // Name every language on the row itself so someone can
+                    // still find this setting if the app was left in a
                     // language they don't read.
-                    title: const Text('Language · Idioma · 语言 · Wika'),
+                    title: Text(AppLanguage.namesLine),
                     subtitle: Text(
                       AppSettings.instance.language == AppLanguage.system
                           ? t['settings.langSystem']
@@ -91,23 +90,6 @@ class SettingsPage extends StatelessWidget {
                     onTap: () => _pickLanguage(context),
                   ),
                 ),
-
-                _SectionHeader(t['settings.privacy']),
-                SwitchListTile(
-                  value: settings.analyticsEnabled,
-                  onChanged: (value) => settings.setAnalyticsEnabled(value),
-                  title: Text(t['settings.analytics']),
-                  subtitle: Text(t['settings.analyticsSub']),
-                  secondary: const Icon(Icons.insights_outlined),
-                ),
-                SwitchListTile(
-                  value: settings.crashReportingEnabled,
-                  onChanged: (value) => settings.setCrashReportingEnabled(value),
-                  title: Text(t['settings.crash']),
-                  subtitle: Text(t['settings.crashSub']),
-                  secondary: const Icon(Icons.bug_report_outlined),
-                ),
-                const _PrivacyDisclosure(),
 
                 const Divider(height: 32),
 
@@ -162,7 +144,8 @@ class SettingsPage extends StatelessWidget {
   }
 
   /// Bottom sheet for switching the app language. Each option shows its native
-  /// name alongside all four language names on the subtitle line.
+  /// name first, then the full language list, so a row is legible no matter
+  /// which language the app is currently in.
   Future<void> _pickLanguage(BuildContext context) async {
     final current = AppSettings.instance.language;
     final t = AppStrings.of(context);
@@ -186,7 +169,7 @@ class SettingsPage extends StatelessWidget {
             for (final language in AppLanguage.values)
               ListTile(
                 // Every entry is legible from any starting language: its own
-                // name first, then all four names on the subtitle line.
+                // name first, then the full list on the subtitle line.
                 title: Text(language.nativeName),
                 subtitle: language == AppLanguage.system
                     ? null
@@ -308,60 +291,6 @@ class _AboutAppFooter extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Card under Privacy & data summarizing what optional diagnostics send.
-class _PrivacyDisclosure extends StatelessWidget {
-  const _PrivacyDisclosure();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Card(
-        elevation: 0,
-        color: scheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: scheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.shield_outlined,
-                      size: 20, color: scheme.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      AppStrings.of(context)['settings.collectTitle'],
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${AppStrings.of(context)['settings.collectBody']} '
-                '(${Uri.parse(telemetryEndpoint).host})',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(height: 1.5, color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -71,7 +71,7 @@ To make sure students, parents, and administrators can always tell that WVAA is 
 - **Get help ("About this app" card):** Displays the full English and Spanish district text alongside a translated plain-language summary.
 - **Settings > About this app:** Displays the full English and Spanish district text alongside a reminder that the app is not monitored and is not a crisis service.
 
-The first-launch privacy dialog also states this disclaimer before asking about optional diagnostics.
+The first-launch notice also states this disclaimer, so the app opens by making its unofficial status clear.
 
 ---
 
@@ -79,11 +79,9 @@ The first-launch privacy dialog also states this disclaimer before asking about 
 
 | Boundary | Enforcement Location |
 | --- | --- |
-| **No logging on the Get help screen.** Opening or interacting with Get help never records an analytics event, and `lib/support.dart` does not import `lib/telemetry.dart`. | `lib/main.dart`, `lib/support.dart` |
-| **No telemetry before explicit opt-in.** Usage counts and crash reporting both default to `false`; nothing is queued or sent unless the student chooses "Share anonymously" in the first-launch prompt or enables a toggle in Settings. | `lib/settings.dart`, `lib/telemetry.dart`, `lib/main.dart` |
-| **No carried-over consent across disclosure changes.** Older installs without `privacyConsentVersion = 2` have prior telemetry flags reset to `false` and must opt in again under the current notice. | `lib/settings.dart` (`_consentVersion`) |
-| **No user-entered schedule text in crash reports.** Before a crash report is stored or sent, `Telemetry` replaces custom class names, teacher names, and room numbers with `[text]`, and replaces email addresses and phone numbers with `[email]` and `[phone]`. | `lib/telemetry.dart` |
-| **No persistent device or personal identifiers.** Payloads exclude device models, advertising IDs, install IDs, accounts, contacts, and location, carrying only a random session ID created in memory on each app launch. | `lib/telemetry.dart` |
+| **No usage tracking anywhere.** The repository contains no analytics SDK, no crash reporter, and no reporting endpoint, so there is no code path that uploads how a student uses the app. Opening Get help therefore records nothing, and neither does any other screen. | `pubspec.yaml`, `lib/` |
+| **No advertising or device identifiers.** The app never reads `AdvertisingIdClient`, the Android ID, or an install identifier, and it does not declare the `AD_ID` permission. | `AndroidManifest.xml`, `pubspec.yaml` |
+| **No collection of names, accounts, or class details.** Custom class names, teacher names, and room numbers stay in local `SharedPreferences` on the phone and are never serialized into a network request. The only outbound requests go to the school's calendar feeds and to `studycs.org` for special schedules. | `lib/settings.dart`, `lib/calendars.dart`, `lib/special_schedule.dart` |
 | **No class details on a locked screen.** The countdown notification channel uses `VISIBILITY_SECRET` so Android hides the notification while the phone is locked. As a secondary safeguard, the notification's fallback public version includes only the period label and omits custom course names, teachers, and room numbers. | `ScheduleNotificationManager.kt`, `CustomLiveActivityManager.kt` |
 | **No full-screen interruptions.** `USE_FULL_SCREEN_INTENT` is omitted and `showWhenLocked` is set to `false`, preventing a period timer from appearing over the lock screen or interrupting another app. | `AndroidManifest.xml` |
 | **No in-app call or message handling.** Phone calls, text messages, emails, and web links are handed off to the system dialer, messaging app, mail app, or browser through `url_launcher`, so the app never accesses call audio or message contents. | `lib/support.dart` |
@@ -109,9 +107,9 @@ The points below are not formal legal advice, though they explain the administra
 2. **Keep the district disclaimer verbatim:** Removing or paraphrasing the required Poway Unified wording creates avoidable trademark and endorsement issues, since that wording is the standard notice district staff expect on non-school materials.
 3. **Do not imply partnerships with crisis organizations:** The hotlines listed on Get help are public services rather than sponsors or partners, which is why the screen states explicitly that the app is independent and receives no funding from them.
 4. **Never imply live monitoring:** Get help states clearly that the app cannot read messages or respond to emergencies and directs students in immediate danger to call 911.
-5. **Keep telemetry minimal and opt-in:** Every additional field increases privacy risk when users are minors. Keeping diagnostics strictly anonymous, scrubbed, and off by default avoids collecting student records.
+5. **Collect nothing:** A student audience makes every added data point a privacy question. Keeping the app free of analytics and crash reporting avoids collecting student records at all, and it removes any consent flow that could mislead users into thinking data is being gathered.
 6. **Keep the app read-only:** Allowing user-generated posts would require content moderation under school-adjacent standards, whereas displaying read-only schedules, calendars, and public webpages avoids moderation and student-account risks altogether.
-7. **Maintain a clean shutdown path:** Apart from optional telemetry and special-schedule files on `studycs.org`, the app does not depend on maintainer-run infrastructure. If telemetry returns `4xx` or `404`, the client drops the batch quietly and continues functioning.
+7. **Maintain a clean shutdown path:** Apart from the special-schedule files on `studycs.org`, the app does not depend on maintainer-run infrastructure. If that server stops responding, the cached schedules keep the app working until a new answer arrives.
 8. **Re-verify contact information every term:** Outdated counselor extensions or hotline numbers can prevent a student from reaching help when needed, so `supportDataVerified` and `test/support_resources_test.dart` keep the verification date and expected digits explicit in code.
 
 ---
@@ -119,17 +117,17 @@ The points below are not formal legal advice, though they explain the administra
 ## 6. Checklist Before Merging Future Changes
 
 - [ ] **Adding or editing a support contact:** Update `lib/support.dart`, update Section 1 of this file, and update the hardcoded assertions in `test/support_resources_test.dart`.
-- [ ] **Adding a telemetry event or property:** Confirm that the value cannot identify an individual student, and never record events from the Get help screen.
+- [ ] **Adding any reporting or analytics:** Treat this as a policy change rather than a code change. It would require a new consent flow, an update to this document, and a review of what minors can be asked to share.
 - [ ] **Modifying notifications:** Verify that `VISIBILITY_SECRET` remains enforced and that public fallback text never includes custom course names, teacher names, or room numbers.
 - [ ] **Requesting an Android permission:** Document why the permission is necessary here and in `AndroidManifest.xml`. Beyond internet, notifications, and widget alarm/boot receivers, the app should not request camera, microphone, contacts, location, or storage permissions.
-- [ ] **Changing the first-launch privacy dialog:** Keep telemetry switches off unless the user explicitly opts in, and keep the unofficial-app disclaimer visible in the prompt.
+- [ ] **Changing the first-launch notice:** Keep the unofficial-app disclaimer visible in the prompt, since that notice is what tells a new student the app is not run by the district.
 - [ ] **Updating a disclaimer:** Copy the required English and Spanish text verbatim from Poway Unified's policy page, update `disclaimers` in `lib/support.dart`, and pass `flutter test test/support_resources_test.dart`.
 
 ---
 
 ## 7. Current Limitations
 
-- **Crash-report scrubbing relies on pattern matching:** Although `Telemetry` strips custom class entries as well as email and phone patterns, arbitrary exception strings cannot be guaranteed free of every personal detail. Call sites should pass fixed developer-written `context` strings rather than user input.
+- **Crashes leave no report behind:** Because the app has no crash reporting, a crash shows up only as a `debugPrint` line in a debug build. Fixing one depends on a student describing what happened, which is the tradeoff accepted for keeping the app free of data collection.
 - **App-switcher blanking is Android-specific:** `FLAG_SECURE` only applies on Android, and certain manufacturer skins handle recent-app snapshots differently; on iOS, behavior depends on the operating system's own switcher blur.
 - **iOS crisis-link launching is not tested on hardware:** While `Info.plist` declares the relevant URL schemes, call and SMS handoffs are actively verified on Android devices rather than iOS.
 - **Automated tests cannot confirm live phone-line availability:** Unit tests prevent accidental edits to phone numbers in code, whereas confirming that an external hotline or school extension remains active still requires a manual check each term.

@@ -100,22 +100,22 @@ The iOS project directory compiles in code, and `lib/publications.dart` preserve
 
 ### D1. Unofficial-App Disclaimer [done]
 
-Poway Unified's required English and Spanish outside-organization disclaimers appear verbatim on Get help and in Settings, while a short notice stays pinned above the bottom navigation bar on every tab. Translating the surrounding explanation into Chinese and Filipino supplements those notices without replacing the district's exact English and Spanish text.
+Poway Unified's required English and Spanish outside-organization disclaimers appear verbatim on Get help and in Settings, while a short notice stays pinned above the bottom navigation bar on every tab. Translating the surrounding explanation into Chinese, Filipino, and French supplements those notices without replacing the district's exact English and Spanish text.
 
 ### D2. Zero District Account or SIS Integration [done]
 
 WVAA never asks for a Poway Unified login, Synergy/Canvas credentials, or a student ID number. Operating solely on public schedules, public calendars, and student-typed class labels avoids handling protected student education records and removes the need for a district data-sharing agreement.
 
-### D3. Opt-In, Scrubbed Diagnostics [done]
+### D3. No Diagnostics Pipeline at All [done]
 
-Usage counts and crash reports start disabled, ask for explicit opt-in on first launch, strip custom class text and email/phone patterns on the client, send only to `studycs.org`, and never record visits to Get help. Consent is versioned (`privacyConsentVersion = 2` in `lib/settings.dart`) so any future change to what is collected can prompt users again rather than assuming older consent still applies.
+The app collects nothing: there is no analytics SDK, no crash reporter, and no reporting endpoint anywhere in the dependency list or in `lib/`. Outbound traffic is limited to the school's public calendar feeds, the lunch menu API, and the special-schedule files on `studycs.org`, none of which carries anything typed by a student.
 
 ### D4. Google Play Store Distribution [todo] [decide]
 
 Sideloading APKs from GitHub Releases works today without store review, whereas listing an app named "Westview HS" with school imagery on Google Play can trigger trademark or impersonation review unless authorized. Before submitting to Google Play:
 
 - Request written permission from Westview's administration to use the school name and icon in a student-built listing.
-- Complete Google Play's Data Safety declaration to match Section D3 (no data collected unless the user opts into anonymous diagnostics).
+- Complete Google Play's Data Safety declaration to match Section D3, where every answer is "no data collected" and "no data shared".
 - Include the non-affiliation disclaimer directly in the Play Store description.
 
 ### D5. Upstream Data Accuracy Expectations [todo] [decide]
@@ -129,7 +129,7 @@ Because calendars, lunch menus, nutrition facts, and newsletters come from schoo
 - The app states clearly that it is not a monitored crisis service and directs emergencies to 911 and 988.
 - Listed crisis lines are presented as independent public services with no sponsorship, partnership, or financial tie.
 - Counselor entries reproduce public staff directory information without offering medical or counseling advice.
-- Diagnostics cannot reconstruct an individual student's identity or schedule because identifiers are ephemeral and user-typed class strings are scrubbed before storage.
+- No diagnostics leave the device, so there is no payload that could identify a student or expose a schedule.
 - Quick exit and hidden app-switcher previews operate locally on the device without logging when they are triggered.
 
 ---

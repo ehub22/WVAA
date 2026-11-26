@@ -201,6 +201,29 @@ class Canvas:
         elif kind == "gear":
             self.circle(cx, cy, s * 0.55, color)
             self.circle(cx, cy, s * 0.22, "surfaceContainerLow")
+        elif kind == "chevron":  # chevron_right
+            self.ops.append(
+                f"stroke '{col}' stroke-width {self._p(1.6)} fill none polyline "
+                f"{self._p(cx - s * 0.25)},{self._p(cy - s * 0.5)} "
+                f"{self._p(cx + s * 0.25)},{self._p(cy)} "
+                f"{self._p(cx - s * 0.25)},{self._p(cy + s * 0.5)}"
+            )
+        elif kind == "download":  # download_done: tray plus arrow
+            self.ops.append(
+                f"stroke '{col}' stroke-width {self._p(1.4)} fill none polyline "
+                f"{self._p(cx - s * 0.6)},{self._p(cy + s * 0.15)} "
+                f"{self._p(cx - s * 0.6)},{self._p(cy + s * 0.7)} "
+                f"{self._p(cx + s * 0.6)},{self._p(cy + s * 0.7)} "
+                f"{self._p(cx + s * 0.6)},{self._p(cy + s * 0.15)}"
+            )
+            self.ops.append(
+                f"stroke '{col}' stroke-width {self._p(1.4)} fill none polyline "
+                f"{self._p(cx)},{self._p(cy - s * 0.7)} "
+                f"{self._p(cx)},{self._p(cy + s * 0.25)} "
+                f"{self._p(cx - s * 0.4)},{self._p(cy - s * 0.15)} "
+                f"{self._p(cx)},{self._p(cy + s * 0.25)} "
+                f"{self._p(cx + s * 0.4)},{self._p(cy - s * 0.15)}"
+            )
 
     def button_width(self, label, kind_icon=True, pad=32) -> float:
         return measure(label, 13, True) + pad + (22 if kind_icon else 0)
@@ -566,20 +589,24 @@ def settings_screen(kind: str | None = None) -> Canvas:
                  "onPrimary" if on else "outline")
         y += 84
 
-    c.text(16, y + 10, "PRIVACY & DATA", size=11, color="primary", bold=True)
+    # Language row, titled with every language name so it stays findable.
+    c.rect(16, y, W - 32, 72, "surfaceContainerLow", radius=12)
+    c.icon(40, y + 36, "globe", color="onSurfaceVariant", size=10)
+    c.text(64, y + 26, "English \u00b7 Espa\u00f1ol \u00b7 \u4e2d\u6587 \u00b7 "
+           "Filipino \u00b7 Fran\u00e7ais", size=12, color="onSurface")
+    c.text(64, y + 46, "System default", size=10, color="onSurfaceVariant")
+    c.icon(W - 34, y + 36, "chevron", color="onSurfaceVariant", size=8)
+    y += 96
+
+    c.text(16, y + 10, "SAVED CONTENT", size=11, color="primary", bold=True)
     y += 24
-    for title, sub, on in [
-        ("Anonymous usage counts", "Counts which tabs open. Off unless you opt in.", False),
-        ("Crash reports", "Sends error logs with custom class text removed.", False),
-    ]:
-        c.rect(16, y, W - 32, 72, "surfaceContainerLow", radius=12)
-        c.text(64, y + 28, title, size=14, color="onSurface")
-        c.wrap(64, y + 46, sub, W - 150, size=10, line_h=12)
-        c.rect(W - 76, y + 24, 44, 24, "surfaceContainerHighest", radius=12,
-               stroke="outline")
-        c.circle(W - 64, y + 36, 8, "outline")
-        y += 84
+    c.rect(16, y, W - 32, 72, "surfaceContainerLow", radius=12)
+    c.icon(40, y + 36, "download", color="onSurfaceVariant", size=10)
+    c.text(64, y + 26, "Clear saved content", size=14, color="onSurface")
+    c.wrap(64, y + 44, "Removes cached calendars, lunch menus, and nutrition "
+           "data so they download fresh next time.", W - 150, size=10, line_h=12)
     return c
+
 
 
 
@@ -659,7 +686,7 @@ def _wrap_lines(text, max_w, size=13, bold=False):
 # ------------------------------------------------------ language picker
 def language_picker_screen(kind: str | None = None) -> Canvas:
     """Settings language row with the bottom-sheet picker open."""
-    c = Canvas(W, 700, kind)
+    c = Canvas(W, 780, kind)
     c.rect(0, 0, W, 56, "primaryContainer")
     c.text(16, 35, "Settings", size=20, color="onPrimaryContainer", bold=True)
 
@@ -674,18 +701,25 @@ def language_picker_screen(kind: str | None = None) -> Canvas:
     y += 88
 
     # dimmed backdrop
-    c.rect(0, y - 8, W, 340, "surfaceContainerHighest")
+    c.rect(0, y - 8, W, 430, "surfaceContainerHighest")
     sheet_y = y + 60
-    c.rect(0, sheet_y, W, 320, "surfaceContainerLow", radius=24)
+    c.rect(0, sheet_y, W, 410, "surfaceContainerLow", radius=24)
     c.rect(W / 2 - 18, sheet_y + 10, 36, 4, "outlineVariant", radius=2)
     c.text(16, sheet_y + 42, "App language", size=15, color="onSurface",
            bold=True)
     rows = [
-        ("System default", "System \u00b7 Sistema \u00b7 \u7cfb\u7edf \u00b7 Sistema", True),
-        ("English", "English \u00b7 Ingl\u00e9s \u00b7 \u82f1\u8bed \u00b7 Ingles", False),
-        ("Espa\u00f1ol", "Espa\u00f1ol \u00b7 Spanish \u00b7 \u897f\u73ed\u7259\u8bed \u00b7 Espanyol", False),
-        ("\u7b80\u4f53\u4e2d\u6587", "\u7b80\u4f53\u4e2d\u6587 \u00b7 Chinese \u00b7 Chino \u00b7 Tsino", False),
-        ("Filipino", "Filipino \u00b7 Tagalog \u00b7 \u83f2\u5f8b\u5bbe\u8bed \u00b7 Filipino", False),
+        ("System default", "English \u00b7 Espa\u00f1ol \u00b7 \u4e2d\u6587 \u00b7 "
+                           "Filipino \u00b7 Fran\u00e7ais", True),
+        ("English", "English \u00b7 Ingl\u00e9s \u00b7 \u82f1\u8bed \u00b7 "
+                    "Ingles \u00b7 Anglais", False),
+        ("Espa\u00f1ol", "Espa\u00f1ol \u00b7 Spanish \u00b7 \u897f\u73ed\u7259\u8bed \u00b7 "
+                         "Espanyol \u00b7 Espagnol", False),
+        ("\u7b80\u4f53\u4e2d\u6587", "\u7b80\u4f53\u4e2d\u6587 \u00b7 Chinese \u00b7 Chino \u00b7 "
+                                        "Tsino \u00b7 Chinois", False),
+        ("Filipino", "Filipino \u00b7 Tagalog \u00b7 \u83f2\u5f8b\u5bbe\u8bed \u00b7 "
+                     "Filipino \u00b7 Philippin", False),
+        ("Fran\u00e7ais", "Fran\u00e7ais \u00b7 French \u00b7 Franc\u00e9s \u00b7 "
+                          "\u6cd5\u8bed \u00b7 Pranses", False),
     ]
     ry = sheet_y + 60
     for name, sub, selected in rows:

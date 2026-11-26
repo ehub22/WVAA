@@ -14,8 +14,9 @@ This document records what is implemented today, which files enforce each behavi
 | Spanish | `es` | Complete |
 | Simplified Chinese | `zh` | Complete |
 | Filipino / Tagalog | `tl` | Complete |
+| French | `fr` | Complete |
 
-Every screen drawn by the Flutter app is translated across all four languages, including all safety-related text: the 911 card, all six crisis lines, the counselor list, reporting instructions, the plain-language disclaimer summary, Settings, bottom navigation labels, loading/error/empty views, calendar and lunch headings, and the SMS confirmation dialog.
+Every screen drawn by the Flutter app is translated across all five languages, including all safety-related text: the 911 card, all six crisis lines, the counselor list, reporting instructions, the plain-language disclaimer summary, Settings, bottom navigation labels, loading/error/empty views, calendar and lunch headings, and the SMS confirmation dialog.
 
 All app translations live in `lib/l10n/strings.dart`:
 
@@ -23,17 +24,17 @@ All app translations live in `lib/l10n/strings.dart`:
 - **`AppStrings`:** Provides string lookup via `operator []`. If a lookup ever misses in a non-English map, it falls back to English and then to the key string itself so that an automated test catches the mistake instead of leaving a safety button blank.
 - **`AppStrings.of(context)`:** Checks `AppSettings.instance.language` before checking the device locale, allowing a student on a shared family phone to lock the app to one language while letting `System default` follow the operating system.
 
-Instead of using `intl` `.arb` code generation, the repository keeps the four maps in one Dart file validated by `tools/check_strings.py` and `test/l10n_test.dart`. Because the catalog has roughly two hundred keys, keeping them in plain Dart avoids a `build_runner` step while letting unit tests check key parity directly. At the same time, `flutter_localizations` is still enabled so Material widgets (such as back buttons, selection menus, and system tooltips) localize properly in `en`, `es`, `zh`, and `tl`.
+Instead of using `intl` `.arb` code generation, the repository keeps the five maps in one Dart file validated by `tools/check_strings.py` and `test/l10n_test.dart`. Because the catalog has roughly two hundred keys, keeping them in plain Dart avoids a `build_runner` step while letting unit tests check key parity directly. At the same time, `flutter_localizations` is still enabled so Material widgets (such as back buttons, selection menus, and system tooltips) localize properly in `en`, `es`, `zh`, `tl`, and `fr`.
 
 ### Language Picker and System Integration
 
-Under `Settings > Safety > Language · Idioma · 语言 · Wika`, both the setting row and every option inside the bottom sheet include labels in all four languages (for example, `Español · Spanish · 西班牙语 · Espanyol`). Naming every language in all four scripts allows a user to find their own language even if the app was previously set to one they cannot read.
+Under `Settings > Safety > English · Español · 中文 · Filipino · Français`, the setting row lists every supported language, and each option inside the bottom sheet repeats that list on its subtitle line (for example, `Español · Spanish · 西班牙语 · Espanyol · Espagnol`). Naming every language on every row allows a user to find their own language even if the app was previously set to one they cannot read.
 
-Outside Flutter, `android/app/src/main/res/values-{es,zh,tl}/strings.xml` translates the launcher and home-screen widget descriptions, while `res/xml/locale_config.xml` registers all four locales with Android 13's system per-app language menu (`Settings > Apps > Westview HS > Language`). On iOS, `Info.plist` declares the same four locales in `CFBundleLocalizations`.
+Outside Flutter, `android/app/src/main/res/values-{es,zh,tl,fr}/strings.xml` translates the launcher and home-screen widget descriptions, while `res/xml/locale_config.xml` registers all five locales with Android 13's system per-app language menu (`Settings > Apps > Westview HS > Language`). On iOS, `Info.plist` declares the same five locales in `CFBundleLocalizations`.
 
 ### Content Left Untranslated
 
-Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display external webpages controlled by school groups, so the app cannot translate their contents. In addition, the official Poway Unified disclaimer is kept verbatim in English and Spanish rather than translated informally into Chinese or Filipino, because legal disclaimer text should not be paraphrased as if the district wrote that translation; instead, the app translates its own plain-language explanation underneath and notes that the official district text governs.
+Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display external webpages controlled by school groups, so the app cannot translate their contents. In addition, the official Poway Unified disclaimer is kept verbatim in English and Spanish rather than translated informally into Chinese, Filipino, or French, because legal disclaimer text should not be paraphrased as if the district wrote that translation; instead, the app translates its own plain-language explanation underneath and notes that the official district text governs.
 
 ---
 
@@ -93,12 +94,12 @@ Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display e
 
 `test/l10n_test.dart` and `tools/check_strings.py` verify localization and layout rules on every test run:
 
-- All four language maps (`en`, `es`, `zh`, `tl`) contain identical, non-empty key sets.
+- All five language maps (`en`, `es`, `zh`, `tl`, `fr`) contain identical, non-empty key sets.
 - Every `help.*` and `disclaimer.*` key (apart from shared proper-noun constants) differs from English in `es`, `zh`, and `tl`, preventing untranslated safety copy from slipping through.
-- Every hotline defined in `lib/support.dart` has matching name, description, call, and SMS keys across all four languages.
+- Every hotline defined in `lib/support.dart` has matching name, description, call, and SMS keys across all five languages.
 - Every literal `strings['...']` lookup in `lib/` resolves to an existing key in `lib/l10n/strings.dart`.
 - Locale resolution maps `fil` to `tl`, falls back cleanly for unsupported tags, and persists explicit language selections.
-- `SupportPage` renders without overflow or layout exceptions in all four languages and at **200% text scale** in Spanish.
+- `SupportPage` renders without overflow or layout exceptions in all five languages and at **200% text scale** in Spanish.
 - The 911 action exposes its `"..., 9 1 1"` screen-reader label in the semantics tree.
 
 Separately, `python3 tools/audit_contrast.py --strict` verifies light and dark contrast ratios and colorblind separation before CI builds the APK.
@@ -112,6 +113,7 @@ Separately, `python3 tools/audit_contrast.py --strict` verifies light and dark c
 | No manual TalkBack or VoiceOver walkthrough recorded yet | Reading order is tested structurally in widget tests rather than by ear on a phone | Run a full TalkBack pass on a physical Android device and document any focus-order fixes in `docs/` |
 | Simplified Chinese (`zh`) strings have not had native-speaker review | Phrasing is accurate in meaning but may sound stiff in places | Ask a fluent Chinese-speaking Westview student or staff member to review the `zh` map in `lib/l10n/strings.dart` |
 | Filipino (`tl`) uses Tagalog phrasing rather than Ilocano or Cebuano | Students whose home language is another Philippine language will rely on Tagalog or English | Keep English available alongside `tl` and expand only if native reviewers are available |
+| French (`fr`) strings have not had native-speaker review | Wording follows standard metropolitan French and should read correctly, though phrasing may sound formal to some students | Ask a fluent French-speaking student or staff member to review the `fr` map in `lib/l10n/strings.dart` |
 | Embedded newsletters and publications are English-only | WebViews show external school pages as published | Suggest short multilingual summaries to ASB or counseling; cannot be solved inside the app alone |
 | Newscast Vimeo videos may lack closed captions | Deaf and hard-of-hearing students cannot follow uncaptioned broadcasts | Coordinate with Westview Newscast editors to upload `.srt` caption files to Vimeo |
 | No dedicated high-contrast (`forced-colors`) theme yet | Users needing contrast well above WCAG AA rely on standard light/dark palettes | Add `highContrastLight` and `highContrastDark` `ThemeData` variants in `lib/theme/theme.dart` |

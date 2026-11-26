@@ -9,7 +9,7 @@ Checks:
   * every entry is `'key': 'value',` or `'key':` followed by indented adjacent
     string literals ending in a comma;
   * keys are unique within each language;
-  * all four languages (`en`, `es`, `zh`, `tl`) define the exact same key set;
+  * every language (`en`, `es`, `zh`, `tl`, `fr`) defines the exact same key set;
   * no empty values, no tab characters, and no `$` interpolation characters.
 
 Usage: python3 tools/check_strings.py
@@ -24,7 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STRINGS_FILE = ROOT / "lib" / "l10n" / "strings.dart"
-LANGUAGES = ["en", "es", "zh", "tl"]
+LANGUAGES = ["en", "es", "zh", "tl", "fr"]
 
 ENTRY = re.compile(r"^    '([^']+)':(.*)$")
 OPEN_STRING = re.compile(r"""^(\s*)('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")\s*(,?)\s*$""")
