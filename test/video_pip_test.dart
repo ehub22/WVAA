@@ -79,15 +79,22 @@ void main() {
   });
 
   group('embedRequest', () {
-    test('loads a bare embed with previews limited to the same channel', () {
+    test('loads an embed with previews limited to the same channel', () {
       final uri = embedRequest('lGIZvN0V3w0');
       expect(uri.host, 'www.youtube-nocookie.com');
       expect(uri.path, '/embed/lGIZvN0V3w0');
       expect(uri.queryParameters['rel'], '0');
-      // No `origin` parameter: that is what lets the embed show a preview
-      // instead of opening youtube.com on a stray tap.
-      expect(uri.queryParameters.containsKey('origin'), isFalse);
       expect(uri.toString(), isNot(contains('youtube.com/@')));
+    });
+
+    test('declares an origin, which YouTube now requires', () {
+      // Earlier this test asserted the origin parameter was *absent*, because
+      // an embed with an origin routes stray taps to youtube.com instead of
+      // showing a preview. That trade is no longer available: an embed that
+      // declares no origin, and arrives without a matching Referer, fails with
+      // "Error 153: Video player configuration error" and plays nothing at all.
+      // Playback wins, and the navigation delegate still refuses the site.
+      expect(embedRequest('lGIZvN0V3w0').queryParameters['origin'], embedOrigin);
     });
   });
 

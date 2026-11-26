@@ -135,10 +135,13 @@ void main() {
     });
 
     test('the origin it declares matches the referrer it sends', () {
+      // A player whose `origin` disagrees with the `Referer` it received is
+      // another route to error 153, so the two must stay equal.
       expect(
         embedRequest('lGIZvN0V3w0').queryParameters['origin'],
         embedHeaders['Referer'],
       );
+      expect(embedOrigin, embedHeaders['Referer']);
     });
 
     test('keeps the embed locked to one video', () {
