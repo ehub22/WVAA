@@ -1,38 +1,69 @@
 import 'package:flutter/foundation.dart';
 
-/// Tracks whether Android is currently showing the Vimeo player in PiP mode.
+/// Tracks whether Android is currently showing an embedded video in PiP mode.
 ///
 /// Because Android PiP captures the whole activity window rather than a single
 /// widget, the app shell watches this flag and hides its headers and navigation
 /// bar while PiP is active so the video fills the entire window.
-final ValueNotifier<bool> vimeoPipActive = ValueNotifier<bool>(false);
+final ValueNotifier<bool> videoPipActive = ValueNotifier<bool>(false);
 
-/// Returns whether [url] belongs to Vimeo.
+/// Hosts whose players the PiP bridge knows how to follow.
 ///
-/// PiP must never be enabled for arbitrary videos that might appear on one of the
-/// other publication pages.
-bool isVimeoUrl(String url) {
+/// Most videos appear inside a cross-origin iframe, which the page's own
+/// JavaScript cannot read. Each host below gets handled one of two ways: its
+/// documented `postMessage` player API (Vimeo) or its public iframe API
+/// (YouTube), so playback state can be observed from the parent page.
+const Set<String> _videoHosts = <String>{'vimeo.com', 'youtube.com'};
+
+/// Returns whether [url] points at a page whose video the PiP bridge can follow.
+///
+/// PiP must never be enabled for arbitrary videos that might appear on one of
+/// the other publication pages, so the check is a host allowlist rather than
+/// "does this page have a video".
+bool isPipVideoUrl(String url) {
   final Uri? uri = Uri.tryParse(url);
   if (uri == null) return false;
 
   final String host = uri.host.toLowerCase();
-  return host == 'vimeo.com' || host.endsWith('.vimeo.com');
+  for (final String allowed in _videoHosts) {
+    if (host == allowed || host.endsWith('.$allowed')) return true;
+  }
+  // YouTube's short-link host still serves the same player.
+  return host == 'youtu.be';
 }
 
-/// Installs a small bridge in the Vimeo page.
+/// Returns whether [url] is a Vimeo page.
+bool isVimeoUrl(String url) => _matchesHost(url, 'vimeo.com');
+
+/// Returns whether [url] is a YouTube page.
+bool isYouTubeUrl(String url) => _matchesHost(url, 'youtube.com');
+
+bool _matchesHost(String url, String host) {
+  final Uri? uri = Uri.tryParse(url);
+  if (uri == null) return false;
+  final String actual = uri.host.toLowerCase();
+  return actual == host || actual.endsWith('.$host');
+}
+
+/// Installs a small bridge in a page that hosts a video player.
 ///
-/// A Vimeo watch page normally renders its player in a cross-origin
-/// `player.vimeo.com` iframe. JavaScript in the parent page cannot access that
-/// iframe's `<video>` element, so the bridge uses Vimeo's documented postMessage
-/// player API to observe playback. When Android enters activity PiP, [enter]
-/// expands either the playing video or its player iframe over the entire WebView.
-/// The original inline styles are restored by [exit] when PiP closes.
-const String vimeoPipScript = r'''
+/// Two things make this necessary:
+///
+///  * Playback state. A watch page renders its player in a cross-origin iframe,
+///    so the parent page cannot read the `<video>` element directly. Vimeo is
+///    observed through its documented `postMessage` player API, and YouTube
+///    through its public iframe API, which the bridge enables by adding
+///    `enablejsapi=1` to the embed URL and posting `listening` to the frame.
+///  * Layout. When Android enters activity PiP, [enter] promotes either the
+///    playing `<video>` or its player iframe to fill the whole WebView, so PiP
+///    shows the video instead of the page header, thumbnail wall, or comments.
+///    [exit] puts the original inline styles back.
+const String videoPipScript = r'''
 (function() {
   'use strict';
 
-  if (window.__westviewVimeoPip) {
-    window.__westviewVimeoPip.scan();
+  if (window.__westviewVideoPip) {
+    window.__westviewVideoPip.scan();
     return;
   }
 
@@ -43,14 +74,32 @@ const String vimeoPipScript = r'''
   var visualEntered = false;
   var retryTimer = null;
 
-  function isVimeoOrigin(origin) {
+  // ---------------------------------------------------------------- hosts
+
+  function hostOf(origin) {
     try {
-      var host = new URL(origin).hostname.toLowerCase();
-      return host === 'vimeo.com' || host.slice(-10) === '.vimeo.com';
+      return new URL(origin).hostname.toLowerCase();
     } catch (_) {
-      return false;
+      return '';
     }
   }
+
+  function isVimeoHost(host) {
+    return host === 'vimeo.com' || host.slice(-10) === '.vimeo.com';
+  }
+
+  function isYouTubeHost(host) {
+    return host === 'youtube.com' || host.slice(-12) === '.youtube.com' ||
+        host === 'youtube-nocookie.com' ||
+        host.slice(-21) === '.youtube-nocookie.com';
+  }
+
+  function isPlayerOrigin(origin) {
+    var host = hostOf(origin);
+    return isVimeoHost(host) || isYouTubeHost(host);
+  }
+
+  // ---------------------------------------------------------------- frames
 
   function isVimeoFrame(frame) {
     if (!frame || frame.tagName !== 'IFRAME') return false;
@@ -59,11 +108,21 @@ const String vimeoPipScript = r'''
     return src.indexOf('vimeo.com') !== -1 || title.indexOf('vimeo') !== -1;
   }
 
-  function vimeoFrames() {
+  function isYouTubeFrame(frame) {
+    if (!frame || frame.tagName !== 'IFRAME') return false;
+    var src = (frame.getAttribute('src') || '').toLowerCase();
+    var title = (frame.getAttribute('title') || '').toLowerCase();
+    return src.indexOf('youtube.com') !== -1 ||
+        src.indexOf('youtube-nocookie.com') !== -1 ||
+        title.indexOf('youtube') !== -1;
+  }
+
+  function playerFrames() {
     var all = document.querySelectorAll('iframe');
     var result = [];
     for (var i = 0; i < all.length; i++) {
-      if (isVimeoFrame(all[i]) || all[i].__westviewVimeoFrame) {
+      if (isVimeoFrame(all[i]) || isYouTubeFrame(all[i]) ||
+          all[i].__westviewPlayerFrame) {
         result.push(all[i]);
       }
     }
@@ -75,9 +134,9 @@ const String vimeoPipScript = r'''
     for (var i = 0; i < frames.length; i++) {
       try {
         if (frames[i].contentWindow === source) {
-          // The message origin was already validated as Vimeo, so remember
-          // players whose lazy iframe has no src/title hint yet.
-          frames[i].__westviewVimeoFrame = true;
+          // The message origin was already validated, so remember players
+          // whose lazy iframe has no src/title hint yet.
+          frames[i].__westviewPlayerFrame = true;
           return frames[i];
         }
       } catch (_) {}
@@ -93,6 +152,30 @@ const String vimeoPipScript = r'''
     } catch (_) {}
   }
 
+  // YouTube's iframe API uses event names instead of method calls.
+  function postYouTube(frame, eventName) {
+    try {
+      frame.contentWindow.postMessage(
+        JSON.stringify({event: eventName, id: '__westview'}), '*');
+    } catch (_) {}
+  }
+
+  /// YouTube needs `enablejsapi=1` in the embed URL before it will answer, and
+  /// its videos only start reporting after a `listening` message arrives.
+  function enableYouTubeApi(frame) {
+    try {
+      var src = frame.getAttribute('src');
+      if (src && src.indexOf('enablejsapi') === -1) {
+        var url = new URL(src, window.location.href);
+        url.searchParams.set('enablejsapi', '1');
+        frame.setAttribute('src', url.toString());
+        return;
+      }
+      frame.contentWindow.postMessage(
+        JSON.stringify({event: 'listening', id: '__westview'}), '*');
+    } catch (_) {}
+  }
+
   function subscribe(frame, force, sendPing) {
     if (!frame) return;
 
@@ -104,21 +187,32 @@ const String vimeoPipScript = r'''
       });
     }
 
-    if (!frame.__westviewSubscribed || force) {
-      frame.__westviewSubscribed = true;
-      post(frame, 'addEventListener', 'play');
-      post(frame, 'addEventListener', 'playing');
-      post(frame, 'addEventListener', 'pause');
-      post(frame, 'addEventListener', 'ended');
-      post(frame, 'addEventListener', 'finish');
-      post(frame, 'addEventListener', 'playProgress');
-      if (sendPing !== false) post(frame, 'ping');
+    var youtube = isYouTubeFrame(frame);
+    if (youtube) {
+      enableYouTubeApi(frame);
     }
 
-    // Poll the documented state getter as a fallback for a player that was
-    // already running before the event subscriptions were installed.
-    post(frame, 'getPaused');
+    if (!frame.__westviewSubscribed || force) {
+      frame.__westviewSubscribed = true;
+      if (youtube) {
+        postYouTube(frame, 'listening');
+      } else {
+        post(frame, 'addEventListener', 'play');
+        post(frame, 'addEventListener', 'playing');
+        post(frame, 'addEventListener', 'pause');
+        post(frame, 'addEventListener', 'ended');
+        post(frame, 'addEventListener', 'finish');
+        post(frame, 'addEventListener', 'playProgress');
+        if (sendPing !== false) post(frame, 'ping');
+      }
+    }
+
+    // Vimeo's documented state getter, as a fallback for a player that was
+    // already running before the subscriptions were installed.
+    if (!youtube) post(frame, 'getPaused');
   }
+
+  // ---------------------------------------------------------------- state
 
   function documentVideoPlaying() {
     var videos = document.querySelectorAll('video');
@@ -130,8 +224,8 @@ const String vimeoPipScript = r'''
     return false;
   }
 
-  function iframeVideoPlaying() {
-    var frames = vimeoFrames();
+  function frameVideoPlaying() {
+    var frames = playerFrames();
     for (var i = 0; i < frames.length; i++) {
       if (frames[i].__westviewPlaying === true) return true;
     }
@@ -139,7 +233,7 @@ const String vimeoPipScript = r'''
   }
 
   function reportState() {
-    var playing = documentVideoPlaying() || iframeVideoPlaying();
+    var playing = documentVideoPlaying() || frameVideoPlaying();
     if (playing === lastReportedState) return;
     lastReportedState = playing;
     try {
@@ -160,7 +254,7 @@ const String vimeoPipScript = r'''
     var videos = document.querySelectorAll('video');
     for (var i = 0; i < videos.length; i++) attachVideo(videos[i]);
 
-    var frames = vimeoFrames();
+    var frames = playerFrames();
     for (var j = 0; j < frames.length; j++) subscribe(frames[j]);
     reportState();
   }
@@ -173,7 +267,7 @@ const String vimeoPipScript = r'''
   }
 
   window.addEventListener('message', function(event) {
-    if (!isVimeoOrigin(event.origin)) return;
+    if (!isPlayerOrigin(event.origin)) return;
 
     var frame = frameForWindow(event.source);
     if (!frame) return;
@@ -188,14 +282,27 @@ const String vimeoPipScript = r'''
         ? data.method.toLowerCase()
         : '';
 
-    if (eventName === 'ready' || methodName === 'ping') {
+    if (eventName === 'ready' || eventName === 'initialdelivery' ||
+        methodName === 'ping') {
       subscribe(frame, true, false);
     }
 
     if (eventName === 'play' || eventName === 'playing' ||
-        eventName === 'playprogress') {
-      frame.__westviewPlaying = true;
-      activeFrame = frame;
+        eventName === 'playprogress' ||
+        eventName === 'onstatechange') {
+      // YouTube reports state as a number on `onStateChange`; 1 is playing.
+      var youtubePlaying = typeof data.info === 'number' && data.info === 1;
+      var youtubeStopped = typeof data.info === 'number' &&
+          (data.info === 0 || data.info === 2 || data.info === 5);
+      if (youtubeStopped) {
+        frame.__westviewPlaying = false;
+        // YouTube hides the play state inside the iframe, so poll it again
+        // once playback stops to catch a restart.
+        postYouTube(frame, 'listening');
+      } else if (eventName !== 'onstatechange' || youtubePlaying) {
+        frame.__westviewPlaying = true;
+        activeFrame = frame;
+      }
     } else if (eventName === 'pause' || eventName === 'ended' ||
                eventName === 'finish') {
       frame.__westviewPlaying = false;
@@ -206,6 +313,8 @@ const String vimeoPipScript = r'''
 
     reportState();
   }, false);
+
+  // ---------------------------------------------------------------- layout
 
   function visibleArea(element) {
     try {
@@ -240,7 +349,7 @@ const String vimeoPipScript = r'''
       return activeFrame;
     }
 
-    var frames = vimeoFrames();
+    var frames = playerFrames();
     var best = null;
     var bestArea = -1;
     for (var i = 0; i < frames.length; i++) {
@@ -274,7 +383,7 @@ const String vimeoPipScript = r'''
     var target = selectPlayer();
     if (!target) {
       // The iframe can be replaced during navigation. Retry briefly rather
-      // than ever promoting the comments/watch-page UI into PiP.
+      // than ever promoting the page chrome into PiP.
       if ((attempt || 0) < 20) {
         clearTimeout(retryTimer);
         retryTimer = setTimeout(function() {
@@ -364,7 +473,7 @@ const String vimeoPipScript = r'''
     scan();
   }
 
-  window.__westviewVimeoPip = {
+  window.__westviewVideoPip = {
     scan: scan,
     enter: function() { return enterVisual(0); },
     exit: exitVisual,
@@ -380,8 +489,8 @@ const String vimeoPipScript = r'''
     });
   } catch (_) {}
 
-  // Polling covers Vimeo replacing an iframe's internal document without
-  // mutating the parent DOM and WebView versions that miss a media event.
+  // Polling covers a player that swaps an iframe's internal document without
+  // mutating the parent DOM, plus WebView versions that miss a media event.
   setInterval(scan, 1500);
   scan();
 })();

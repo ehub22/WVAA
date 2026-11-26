@@ -380,10 +380,11 @@ class _SchedulePageState extends State<SchedulePage>
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                // Explicit icon + text cue so active
-                                                // periods don't rely on color alone.
+                                                // Explicit text cue so the active
+                                                // period doesn't rely on color alone.
                                                 _NowBadge(
-                                                  color: scheme.onPrimaryContainer,
+                                                  background: scheme.primary,
+                                                  color: scheme.onPrimary,
                                                   label:
                                                       AppStrings.of(context)
                                                           ['schedule.now'],
@@ -531,57 +532,65 @@ class _SchedulePageState extends State<SchedulePage>
     ].join(', ');
 
     return Card(
-      elevation: isNow ? 5 : 0,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
       color: isNow ? scheme.primaryContainer : scheme.surfaceContainerLow,
       child: Semantics(
         container: true,
         excludeSemantics: true,
         label: semanticsLabel,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+        child: Stack(
+          children: [
+            Padding(
+              // Extra left inset on the active card leaves room for the bar.
+              padding: EdgeInsets.fromLTRB(isNow ? 20 : 12, 12, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // The word + glyph carry the "current period" state on
-                        // their own, so the primaryContainer tint is never the
-                        // only signal (WCAG 1.4.1).
-                        if (isNow) ...[
-                          Icon(Icons.play_arrow_rounded,
-                              size: 15, color: scheme.onPrimaryContainer),
-                          const SizedBox(width: 2),
-                        ],
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            style: titleStyle,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Text(
+                          displayName,
+                          style: titleStyle,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        if (details.isNotEmpty)
+                          Text(details, style: detailStyle),
                       ],
                     ),
-                    if (details.isNotEmpty)
-                      Text(details, style: detailStyle),
-                  ],
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(startLabel, style: timeStyle),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(endLabel, style: timeStyle),
+                  ),
+                ],
+              ),
+            ),
+            // The bar plus the primaryContainer tint mark the running period.
+            // The bar is decorative, so the semantics label above is what tells
+            // screen readers this row is happening now.
+            if (isNow)
+              Positioned(
+                left: 0,
+                top: 8,
+                bottom: 8,
+                width: 4,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-              Expanded(
-                flex: 2,
-                child: Text(startLabel, style: timeStyle),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(endLabel, style: timeStyle),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -639,35 +648,46 @@ int getCurrentDayOfWeek([DateTime? customNow]) {
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
-/// "Now" badge shown on the active period card.
+/// "Now" pill on the active period card.
 ///
-/// Pairing the play icon and "Now" label with `primaryContainer` keeps the
-/// active period clear under colorblindness, grayscale mode, or bright sun
-/// instead of relying on color alone (WCAG 1.4.1).
+/// The word in a filled pill plus the `primaryContainer` tint keeps the active
+/// period clear under colorblindness, grayscale mode, or bright sun instead of
+/// relying on color alone (WCAG 1.4.1). It is a pill rather than an arrow on
+/// purpose: an arrow reads as a play button, and nothing here is tappable.
 class _NowBadge extends StatelessWidget {
-  const _NowBadge({required this.color, required this.label});
+  const _NowBadge({
+    required this.background,
+    required this.color,
+    required this.label,
+  });
 
+  /// Fill behind the word, usually the screen's primary color.
+  final Color background;
+
+  /// Text color that stays above 4.5:1 on [background].
   final Color color;
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.play_arrow_rounded, size: 16, color: color),
-          const SizedBox(width: 2),
-          Text(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          child: Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: color,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.5,
                 ),
           ),
-        ],
+        ),
       ),
     );
   }

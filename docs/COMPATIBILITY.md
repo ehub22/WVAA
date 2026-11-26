@@ -22,12 +22,12 @@ Regular weekday bell schedules (`monFriSchedule`, `tueThursSchedule`, and `wedSc
 
 - **Recommended mitigation:** Re-verify `lib/data.dart` and the default fallback lists in `ScheduleWidgetRenderer.kt` against Westview's published bell schedule every August before school starts. Assemblies and minimum days are already handled dynamically by the special-schedule endpoint.
 
-### A3. Public Google Calendar API Keys in Client Code [decide]
+### A3. No API Keys in Client Code [done]
 
-`lib/calendars.dart` and `lib/school_lunch.dart` include Google Calendar API keys used to read Westview's public School, Athletics, and Lunch calendars. Because those calendars are already public, the keys do not grant access to private student data; however, an unrestricted key extracted from an APK could be used by someone else to exhaust the project's daily request quota.
+`lib/calendars.dart` reads the school and Athletics calendars from their public iCalendar (`.ics`) addresses instead of the Google Calendar API, so no key ships in the APK. Without a key there is no quota for anyone to exhaust and nothing to rotate, which removes the failure mode where a leaked key could lock every student out of the calendar at once. The lunch menu was always keyless: `lib/school_lunch.dart` calls a public menus API.
 
-- **Effect on students:** If the API quota runs out, calendar and lunch fetches fail until the quota resets, forcing new installs without cached data onto an error screen.
-- **Recommended mitigation:** Restrict each key in Google Cloud Console to the Android package name (`com.westviewhs.app`) and signing certificate SHA-1, set a sensible per-day quota cap, and record who owns key rotation.
+- **Trade-off:** The feed returns every year of history, so the parser filters to yesterday onward and caps the list at 100 rows before rendering. A calendar that stops being public also stops working, since there is no authenticated fallback.
+- **Follow-up:** If a calendar is ever made private again, host a nightly export somewhere the app can reach rather than reintroducing a key into the APK.
 
 ---
 
@@ -51,7 +51,7 @@ The app does not depend on Firebase, Google Play Services libraries, or third-pa
 
 ### B5. Mobile Data Usage [done]
 
-Schedules, calendars, and lunch menus transfer only small JSON responses and reuse local caches when offline. Almost all bandwidth usage comes from the embedded WebViews on the Newsletters and Publications tabs (especially Vimeo video playback on Westview Newscast), since those tabs load full school webpages and video streams.
+Schedules, calendars, and lunch menus transfer only small JSON responses and reuse local caches when offline. Almost all bandwidth usage comes from the embedded WebViews on the Newsletters and Publications tabs (especially video playback on the Westview Newscast channel), since those tabs load full school webpages and video streams.
 
 ### B6. Accessibility Coverage
 
@@ -83,7 +83,7 @@ Adding `flutter analyze` alongside `flutter test` in `.github/workflows/build-ap
 
 ### C4. Android System WebView Differences [known]
 
-Newsletter rendering and the Vimeo picture-in-picture JavaScript bridge (`lib/vimeo_pip.dart`) depend on the device's installed Android System WebView and Vimeo's `postMessage` player events. If an older WebView build misses a media event or Vimeo changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
+Newsletter rendering and the video picture-in-picture bridge (`lib/video_pip.dart`) depend on the device's installed Android System WebView, Vimeo's `postMessage` player events, and YouTube's iframe API. If an older WebView build misses a media event, or either site changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
 
 ### C5. iOS Target Status [decide]
 
@@ -138,6 +138,5 @@ Because calendars, lunch menus, nutrition facts, and newsletters come from schoo
 
 1. **A1 & A2:** Set a recurring August/January check for Westview's counselor caseloads, hotline numbers, and base bell schedules.
 2. **C3 & B3:** Add `flutter analyze` to `.github/workflows/build-apk.yml` and add a landscape tablet/keyboard widget test at `200%` text scale.
-3. **A3:** Restrict the public Google Calendar API keys by Android package name and signing SHA-1 in Google Cloud Console.
-4. **C6:** Set up a dedicated release signing keystore in GitHub Secrets before broad distribution.
-5. **D4:** Obtain administrative sign-off before any Google Play Store submission.
+3. **C6:** Set up a dedicated release signing keystore in GitHub Secrets before broad distribution.
+4. **D4:** Obtain administrative sign-off before any Google Play Store submission.

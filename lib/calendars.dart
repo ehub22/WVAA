@@ -19,16 +19,20 @@ enum CalendarType { google, schoolLunch }
 /// rendered.
 class CalendarTab {
   const CalendarTab(this.titleKey, this.url,
-      {this.isApi = false, this.type = CalendarType.google});
+      {this.type = CalendarType.google});
 
   /// Key in `strings.dart` so tab labels translate with the app language.
   final String titleKey;
   final String url;
-  final bool isApi;
   final CalendarType type;
 }
 
-/// Displays upcoming events from one Google Calendar feed.
+/// Displays upcoming events from one public Google Calendar.
+///
+/// The feed is the calendar's public iCalendar (`.ics`) address rather than the
+/// Calendar API, because the public address needs no API key. That removes the
+/// key from the APK, so there is no quota for anyone to exhaust and nothing to
+/// rotate.
 ///
 /// This loads from local storage first so the calendar still opens right away
 /// when campus Wi-Fi is down, and pulling down (or tapping Retry) forces a
@@ -36,10 +40,11 @@ class CalendarTab {
 class CalendarEventsView extends StatefulWidget {
   const CalendarEventsView({
     super.key,
-    required this.apiUrl,
+    required this.feedUrl,
   });
 
-  final String apiUrl;
+  /// Public `.ics` address of the calendar.
+  final String feedUrl;
 
   @override
   State<CalendarEventsView> createState() => CalendarEventsViewState();
@@ -79,9 +84,9 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     // Serve the cached response immediately, if present and parseable.
     CachedResponse? cache;
     try {
-      cache = await NetworkCache.instance.read(widget.apiUrl);
+      cache = await NetworkCache.instance.read(widget.feedUrl);
       if (_events == null && cache != null) {
-        final cached = parseEvents(cache.body);
+        final cached = _visibleEvents(parseEvents(cache.body));
         if (cached.isNotEmpty) {
           _events = cached;
           _cachedAt = cache.cachedAt;
@@ -92,8 +97,8 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       debugPrint('Calendar cache unusable: $error');
     }
 
-    // A fresh cache satisfies the load without touching the network, keeping
-    // the school's calendar quota (and the student's battery) happy.
+    // A fresh cache satisfies the load without touching the network, which
+    // keeps the feed from being hammered and saves the student's battery.
     if (!force &&
         cache != null &&
         cache.isFreshWithin(_cacheMaxAge, DateTime.now()) &&
@@ -106,8 +111,8 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
 
     try {
       final body = await _fetchEventsBody();
-      final events = parseEvents(body);
-      await NetworkCache.instance.write(widget.apiUrl, body);
+      final events = _visibleEvents(parseEvents(body));
+      await NetworkCache.instance.write(widget.feedUrl, body);
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -150,45 +155,60 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   }
 
   Future<String> _fetchEventsBody() async {
-    final twoDaysAgo = DateTime.now().subtract(const Duration(days: 1));
-    final timeMin = Uri.encodeComponent(twoDaysAgo.toUtc().toIso8601String());
-    final url =
-        '${widget.apiUrl}&timeMin=$timeMin&singleEvents=True&orderBy=startTime&maxResults=100';
-
-    final response =
-        await http.get(Uri.parse(url)).timeout(_requestTimeout);
+    final response = await http
+        .get(Uri.parse(widget.feedUrl))
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to load events (HTTP ${response.statusCode})');
     }
-    return response.body;
+    return utf8.decode(response.bodyBytes, allowMalformed: true);
   }
 
-  /// Parses a Google Calendar API `events` response into a flat, sorted list
-  /// where multi-day events are expanded to one entry per day.
+  /// Parses an iCalendar (`.ics`) feed into the flat, sorted list the list
+  /// view renders, with multi-day events expanded to one entry per day.
   ///
-  /// Public and static so it can be unit-tested against saved payloads.
+  /// Each entry keeps the shape the UI already used for the Calendar API:
+  /// `summary`, `description`, `location`, and `start` with either a `date` or
+  /// a `dateTime`, plus `displayDate` for the day the row belongs to.
+  ///
+  /// Public and static so it can be unit-tested against saved feeds.
   @visibleForTesting
   static List<Map<String, dynamic>> parseEvents(String body) {
-    final data = json.decode(body);
-    final items = (data['items'] as List<dynamic>?) ?? const [];
     final expanded = <Map<String, dynamic>>[];
 
-    for (final event in items) {
-      if (event is! Map<String, dynamic>) continue;
-      final start = _parseEventDate(event['start']);
-      final end = _parseEventDate(event['end']);
-      final inclusiveEnd = end.isAtSameMomentAs(start)
-          ? end
-          : end.subtract(const Duration(milliseconds: 1));
+    for (final properties in _unfoldLines(body)) {
+      final summary = properties['SUMMARY'];
+      if (summary == null) continue;
 
-      var current = DateTime(start.year, start.month, start.day);
-      final last =
-          DateTime(inclusiveEnd.year, inclusiveEnd.month, inclusiveEnd.day);
+      final start = _parseIcsDate(properties['DTSTART']);
+      if (start == null) continue;
+      final allDay = !start.hasTime;
+      final end = _parseIcsDate(properties['DTEND']) ??
+          (allDay
+              ? _IcsDate(start.value.add(const Duration(days: 1)), false)
+              : start);
+
+      // All-day end dates are exclusive, and a timed event's end is the
+      // moment it stops, so both get backed off by a moment before the days
+      // are enumerated.
+      final lastMoment = end.value.isAfter(start.value)
+          ? end.value.subtract(const Duration(seconds: 1))
+          : start.value;
+
+      var current = DateTime(start.value.year, start.value.month, start.value.day);
+      final last = DateTime(lastMoment.year, lastMoment.month, lastMoment.day);
 
       while (!current.isAfter(last)) {
-        final clone = Map<String, dynamic>.from(event);
-        clone['displayDate'] = current;
-        expanded.add(clone);
+        expanded.add(<String, dynamic>{
+          'summary': summary,
+          if (properties['DESCRIPTION'] != null)
+            'description': properties['DESCRIPTION'],
+          if (properties['LOCATION'] != null) 'location': properties['LOCATION'],
+          'start': allDay
+              ? <String, dynamic>{'date': _isoDate(start.value)}
+              : <String, dynamic>{'dateTime': start.value.toIso8601String()},
+          'displayDate': current,
+        });
         current = current.add(const Duration(days: 1));
       }
     }
@@ -198,13 +218,91 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     return expanded;
   }
 
-  static DateTime _parseEventDate(Map<String, dynamic>? dateMap) {
-    if (dateMap == null) return DateTime.now();
-    if (dateMap['dateTime'] != null) {
-      return DateTime.parse(dateMap['dateTime'] as String).toLocal();
+  /// Keeps yesterday onward, since a public feed carries every year of history
+  /// and the list only needs what is current.
+  static List<Map<String, dynamic>> _visibleEvents(
+      List<Map<String, dynamic>> all) {
+    final now = DateTime.now();
+    final cutoff = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 1));
+    return all
+        .where((e) => !(e['displayDate'] as DateTime).isBefore(cutoff))
+        .take(100)
+        .toList(growable: false);
+  }
+
+  /// Groups a feed into one property map per `VEVENT`.
+  ///
+  /// Handles line folding (a long line continues on the next line, which
+  /// starts with a space) and unescapes the `\,`, `\;`, and `\n` sequences
+  /// Google writes into text values.
+  static Iterable<Map<String, String>> _unfoldLines(String body) sync* {
+    final lines = <String>[];
+    for (final raw in body.split('\n')) {
+      final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
+      if (line.startsWith(' ') && lines.isNotEmpty) {
+        lines[lines.length - 1] += line.substring(1);
+      } else {
+        lines.add(line);
+      }
     }
-    if (dateMap['date'] != null) return DateTime.parse(dateMap['date'] as String);
-    return DateTime.now();
+
+    Map<String, String>? event;
+    for (final line in lines) {
+      if (line == 'BEGIN:VEVENT') {
+        event = <String, String>{};
+        continue;
+      }
+      if (line == 'END:VEVENT') {
+        if (event != null) yield event;
+        event = null;
+        continue;
+      }
+      if (event == null) continue;
+
+      final colon = line.indexOf(':');
+      if (colon <= 0) continue;
+      final name = line.substring(0, colon).split(';').first.toUpperCase();
+      event[name] = _unescapeIcs(line.substring(colon + 1).trim());
+    }
+  }
+
+  static String _unescapeIcs(String value) => value
+      .replaceAll('\\n', '\n')
+      .replaceAll('\\N', '\n')
+      .replaceAll('\\,', ',')
+      .replaceAll('\\;', ';')
+      .replaceAll('\\\\', '\\');
+
+  static String _isoDate(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  /// Reads `20260928` (all day) or `20260928T153000Z` (timed, UTC).
+  static _IcsDate? _parseIcsDate(String? raw) {
+    if (raw == null) return null;
+    final match = RegExp(r'^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$')
+        .firstMatch(raw.trim());
+    if (match == null) return null;
+
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    if (match.group(4) == null) {
+      return _IcsDate(DateTime(year, month, day), false);
+    }
+
+    final value = DateTime.utc(
+      year,
+      month,
+      day,
+      int.parse(match.group(4)!),
+      int.parse(match.group(5)!),
+      int.parse(match.group(6)!),
+    );
+    // Timed values are UTC (`Z`); anything without it is already local.
+    return _IcsDate(match.group(7) == null ? value : value.toLocal(), true);
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -491,6 +589,16 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   }
 }
 
+/// A parsed `DTSTART`/`DTEND` value plus whether it carried a time.
+class _IcsDate {
+  const _IcsDate(this.value, this.hasTime);
+
+  final DateTime value;
+
+  /// False for an all-day value like `20260928`.
+  final bool hasTime;
+}
+
 class CalendarsPage extends StatefulWidget {
   const CalendarsPage({super.key});
 
@@ -504,20 +612,17 @@ class _CalendarsPageState extends State<CalendarsPage> {
   static const List<CalendarTab> _calendars = [
     CalendarTab(
       'calendar.tabSchool',
-      'https://www.googleapis.com/calendar/v3/calendars/westviewwolverines@gmail.com/events'
-      '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
-      isApi: true,
+      'https://calendar.google.com/calendar/ical/westviewwolverines%40gmail.com'
+      '/public/basic.ics',
     ),
     CalendarTab(
       'calendar.tabAthletics',
-      'https://www.googleapis.com/calendar/v3/calendars/c_bdlim8dben51vvr6p2omiguh1k@group.calendar.google.com/events'
-      '?key=AIzaSyDeFW5b_wnH-uDLG-RjPsTX6P2iOZHwGBo',
-      isApi: true,
+      'https://calendar.google.com/calendar/ical/'
+      'c_bdlim8dben51vvr6p2omiguh1k%40group.calendar.google.com/public/basic.ics',
     ),
     CalendarTab(
       'calendar.tabLunch',
       '',
-      isApi: true,
       type: CalendarType.schoolLunch,
     ),
   ];
@@ -559,7 +664,7 @@ class _CalendarsPageState extends State<CalendarsPage> {
                     ? const SchoolLunchView()
                     : CalendarEventsView(
                         key: ValueKey(tab.url),
-                        apiUrl: tab.url,
+                        feedUrl: tab.url,
                       );
               },
             ),

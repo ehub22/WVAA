@@ -5,8 +5,8 @@ import 'support.dart';
 import 'web_page.dart';
 import 'widgets/section_selector.dart';
 
-/// The newsletters tab: weekly newsletter, counseling newsletters and DEN
-/// announcements, each in an embedded WebView.
+/// The newsletters tab: the weekly newsletter and the counseling newsletters,
+/// each in an embedded WebView.
 ///
 /// Each newsletter keeps its own WebView alive (lazy IndexedStack) so content
 /// loaded once stays on screen when switching sections — and keeps rendering
@@ -24,17 +24,13 @@ class _NewsletterPageState extends State<NewsletterPage> {
   static const List<_Newsletter> _newsletters = [
     _Newsletter(
       'newsletter.weekly',
-      'https://www.canva.com/design/DAHAfg0kzy4/j0rtuhnsLlGu4XMtz5mqRA/view'
+      'https://www.canva.com/design/DAHAfg0kzy4/I_JhwzEhBL8HMWSlQmZH3g/view'
       '?utm_content=DAHAfg0kzy4&utm_campaign=designshare&utm_medium=link2'
-      '&utm_source=uniquelinks&utlId=hf1baa97a03',
+      '&utm_source=uniquelinks&utlId=he2477552fc',
     ),
     _Newsletter(
       'newsletter.counseling',
       'https://westview.powayusd.com/apps/pages/newsletters',
-    ),
-    _Newsletter(
-      'newsletter.den',
-      'https://docs.google.com/presentation/d/1Q6zH31VmOOnrPJMprtT6IL9rH8tEMmlKyBovYB0Ukq4/edit',
     ),
   ];
 

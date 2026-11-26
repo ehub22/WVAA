@@ -13,7 +13,7 @@ import 'settings.dart';
 import 'special_schedule.dart';
 import 'support.dart';
 import 'theme/theme.dart';
-import 'vimeo_pip.dart';
+import 'video_pip.dart';
 import 'widget_sync.dart';
 
 Future<void> main() async {
@@ -126,8 +126,8 @@ class _HomePageState extends State<_HomePage> {
   static const int _publicationsIndex = 2;
   int _selectedIndex = 0;
 
-  // Keep all pages alive (IndexedStack) so a playing Vimeo WebView is never
-  // recreated when switching tabs or entering PiP.
+  // Keep all pages alive (IndexedStack) so a WebView with a playing video is
+  // never recreated when switching tabs or entering PiP.
   final List<Widget> _pages = const [
     SchedulePage(),
     NewsletterPage(),
@@ -166,14 +166,14 @@ class _HomePageState extends State<_HomePage> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
-      valueListenable: vimeoPipActive,
+      valueListenable: videoPipActive,
       builder: (context, isPipActive, _) {
         return Scaffold(
           body: ColoredBox(
             color: Colors.black,
             child: IndexedStack(
               // During PiP the app must always surface the Publications tab
-              // (which owns the Vimeo WebView), no matter which tab the user
+              // (which owns the video WebView), no matter which tab the user
               // last selected.
               index: isPipActive ? _publicationsIndex : _selectedIndex,
               children: _pages,

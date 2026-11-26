@@ -7,7 +7,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'l10n/strings.dart';
 import 'support.dart';
-import 'vimeo_pip.dart';
+import 'video_pip.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
@@ -32,7 +32,8 @@ class _PublicationsPageState extends State<PublicationsPage> {
   static const List<_Publication> _publications = [
     _Publication('publications.nexus', 'https://wvnexus.org/category/news/'),
     _Publication(
-        'publications.newscast', 'https://vimeo.com/channels/westviewnewscast'),
+        'publications.newscast',
+        'https://www.youtube.com/@westviewnewscast7337/videos'),
   ];
 
   /// One key per publication so the header refresh button can reach the
@@ -54,7 +55,7 @@ class _PublicationsPageState extends State<PublicationsPage> {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     return ValueListenableBuilder<bool>(
-      valueListenable: vimeoPipActive,
+      valueListenable: videoPipActive,
       builder: (context, isPipActive, _) {
         return Scaffold(
           backgroundColor: Colors.black,
@@ -117,8 +118,9 @@ class _PublicationsPageState extends State<PublicationsPage> {
   }
 }
 
-/// WebView that bridges Vimeo playback to Android picture-in-picture. Only
-/// used by the Publications tab because other tabs do not host videos.
+/// WebView that bridges video playback (Vimeo or YouTube) to Android
+/// picture-in-picture. Only used by the Publications tab because other tabs do
+/// not host videos.
 ///
 /// Exposes the same last-known-content error handling as `web_page.dart`
 /// (full-screen retry state on first load, non-destructive notice when a
@@ -147,7 +149,8 @@ class PublicationWebViewState extends State<PublicationWebView>
   bool _initialLoadFailed = false;
   bool _refreshFailed = false;
 
-  bool get _isVimeoPage => isVimeoUrl(widget.url);
+  /// Only pages the bridge understands get the script and PiP wiring.
+  bool get _isPipVideoPage => isPipVideoUrl(widget.url);
 
   @override
   void initState() {
@@ -199,8 +202,8 @@ class PublicationWebViewState extends State<PublicationWebView>
               _initialLoadFailed = false;
               _refreshFailed = false;
             });
-            if (_isVimeoPage) {
-              unawaited(_installVimeoBridge());
+            if (_isPipVideoPage) {
+              unawaited(_installPipBridge());
               unawaited(_setupPipMode());
             }
           },
@@ -231,16 +234,16 @@ class PublicationWebViewState extends State<PublicationWebView>
     _controller.reload();
   }
 
-  Future<void> _installVimeoBridge() async {
+  Future<void> _installPipBridge() async {
     try {
-      await _controller.runJavaScript(vimeoPipScript);
+      await _controller.runJavaScript(videoPipScript);
     } catch (e) {
-      debugPrint('Vimeo PiP script injection error: $e');
+      debugPrint('PiP script injection error: $e');
     }
   }
 
   Future<void> _setupPipMode() async {
-    if (_pipInitialized || !_isVimeoPage) return;
+    if (_pipInitialized || !_isPipVideoPage) return;
     _pipInitialized = true;
     try {
       _pipAvailable = await SimplePip.isPipAvailable;
@@ -252,7 +255,7 @@ class PublicationWebViewState extends State<PublicationWebView>
   }
 
   void _handlePipMessage(String message) {
-    if (!mounted || !_isVimeoPage) return;
+    if (!mounted || !_isPipVideoPage) return;
     final state = message.trim();
     if (state != 'playing' && state != 'paused') return;
     final playing = state == 'playing';
@@ -263,7 +266,7 @@ class PublicationWebViewState extends State<PublicationWebView>
 
   Future<void> _syncPipMode() async {
     if (!_pipAvailable || !_autoPipSupported) return;
-    final shouldAutoEnter = _isVimeoPage && _isVideoPlaying;
+    final shouldAutoEnter = _isPipVideoPage && _isVideoPlaying;
     try {
       await _pip.setAutoPipMode(
         aspectRatio: const (16, 9),
@@ -276,13 +279,13 @@ class PublicationWebViewState extends State<PublicationWebView>
   }
 
   Future<void> _enterPipVisual() async {
-    if (!_isVimeoPage) return;
+    if (!_isPipVideoPage) return;
     // Tell the app shell to hide its header and bottom navigation bar without
     // detaching the WebView so video playback keeps running smoothly.
-    vimeoPipActive.value = true;
+    videoPipActive.value = true;
     try {
       await _controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.enter();',
+        'window.__westviewVideoPip && window.__westviewVideoPip.enter();',
       );
     } catch (e) {
       debugPrint('PiP visual enter error: $e');
@@ -292,12 +295,12 @@ class PublicationWebViewState extends State<PublicationWebView>
   Future<void> _exitPipVisual() async {
     try {
       await _controller.runJavaScript(
-        'window.__westviewVimeoPip && window.__westviewVimeoPip.exit();',
+        'window.__westviewVideoPip && window.__westviewVideoPip.exit();',
       );
     } catch (e) {
       debugPrint('PiP visual exit error: $e');
     } finally {
-      vimeoPipActive.value = false;
+      videoPipActive.value = false;
     }
   }
 
@@ -313,7 +316,7 @@ class PublicationWebViewState extends State<PublicationWebView>
       _initialLoadFailed = false;
       _refreshFailed = false;
     });
-    if (wasPlaying || !isVimeoUrl(widget.url)) {
+    if (wasPlaying || !isPipVideoUrl(widget.url)) {
       unawaited(_syncPipMode());
     }
     _controller.loadRequest(Uri.parse(widget.url));
@@ -326,12 +329,12 @@ class PublicationWebViewState extends State<PublicationWebView>
     unawaited(_syncPipMode());
     _pip.onPipEntered = null;
     _pip.onPipExited = null;
-    vimeoPipActive.value = false;
+    videoPipActive.value = false;
     super.dispose();
   }
 
   /// Android <12 doesn't support auto-enter; we manually enter PiP when the
-  /// app backgrounds while a Vimeo video is playing.
+  /// app backgrounds while a video is playing.
   Future<void> _enterLegacyPip() async {
     await _enterPipVisual();
     bool entered = false;
@@ -353,7 +356,7 @@ class PublicationWebViewState extends State<PublicationWebView>
         _pipAvailable &&
         !_autoPipSupported &&
         _isVideoPlaying &&
-        _isVimeoPage) {
+        _isPipVideoPage) {
       unawaited(_enterLegacyPip());
     }
   }

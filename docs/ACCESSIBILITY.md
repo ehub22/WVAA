@@ -40,7 +40,7 @@ Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display e
 
 ## 2. Color and Contrast
 
-- **Status never relies on color alone (WCAG 1.4.1):** On the Schedule tab, the active period card combines a `primaryContainer` background tint with a play icon and an explicit "Now" badge (`_NowBadge` in `lib/schedule_page.dart`). Repeating the icon and text ensures that students viewing the screen in grayscale or bright outdoor glare can still tell which period is running.
+- **Status never relies on color alone (WCAG 1.4.1):** On the Schedule tab, the active period card combines a `primaryContainer` background tint with a left accent bar and an explicit "Now" pill (`_NowBadge` in `lib/schedule_page.dart`). The bar and the word mean students viewing the screen in grayscale or bright outdoor glare can still tell which period is running, and neither element is shaped like a control, so the card never looks tappable.
 - **Verified WCAG AA contrast:** `tools/audit_contrast.py` calculates contrast ratios for every foreground/background token pair used in `lib/theme/colors.dart`:
 
   | Token Pair | Light Theme | Dark Theme | WCAG AA (4.5:1) |
@@ -53,7 +53,7 @@ Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display e
   | `outline` on `surface` (3.0:1 non-text target) | 4.26:1 | 6.11:1 | Pass |
 
   Any change to `lib/theme/colors.dart` should be checked locally with `python3 tools/audit_contrast.py --strict`, which also runs automatically in GitHub Actions.
-- **Color-vision deficiency separation:** `tools/audit_contrast.py` simulates deuteranopia, protanopia, and tritanopia to confirm that the active-period card (`primaryContainer`) remains visually distinct from standard period cards (`surfaceContainerLow`). Across all three simulations, separation stays at `ΔE >= 20.3` in light mode and `ΔE >= 63.2` in dark mode, reinforced by the play icon and "Now" label.
+- **Color-vision deficiency separation:** `tools/audit_contrast.py` simulates deuteranopia, protanopia, and tritanopia to confirm that the active-period card (`primaryContainer`) remains visually distinct from standard period cards (`surfaceContainerLow`). Across all three simulations, separation stays at `ΔE >= 20.3` in light mode and `ΔE >= 63.2` in dark mode, reinforced by a left accent bar and the "Now" label, neither of which looks like a button.
 - **Paired icons on status cards:** Emergency cards pair red error fills with a warning icon and heading text, offline banners pair container tints with a `cloud_off` or `offline_bolt` icon, and language selections pair highlight colors with a checkmark icon.
 
 ---
@@ -65,7 +65,7 @@ Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display e
 - **Explicit SMS keyword confirmation:** Before opening the phone's messaging app for a keyword-triggered hotline (`HOME` or `START`), the app displays a confirmation dialog showing the number and keyword and copies the keyword if needed, since sending a blank message to an automated shortcode can fail to start a session.
 - **No audio-only cues:** No feature in the app depends on sound effects or spoken prompts, and the period countdown is entirely visual and text-based.
 - **Silent ongoing notifications:** `ScheduleNotificationManager.kt` registers the countdown channel with `IMPORTANCE_LOW`, which prevents period transitions from playing alert tones or vibrating during class.
-- **Embedded video captions:** Because Westview Newscast videos stream from Vimeo inside a WebView, closed captions depend on caption tracks uploaded by the Newscast production team (see Section 7).
+- **Embedded video captions:** Westview Newscast videos play from the channel's YouTube page inside a WebView, so closed captions depend on the caption tracks the Newscast team uploads to YouTube (see Section 7).
 
 ---
 
@@ -115,7 +115,7 @@ Separately, `python3 tools/audit_contrast.py --strict` verifies light and dark c
 | Filipino (`tl`) uses Tagalog phrasing rather than Ilocano or Cebuano | Students whose home language is another Philippine language will rely on Tagalog or English | Keep English available alongside `tl` and expand only if native reviewers are available |
 | French (`fr`) strings have not had native-speaker review | Wording follows standard metropolitan French and should read correctly, though phrasing may sound formal to some students | Ask a fluent French-speaking student or staff member to review the `fr` map in `lib/l10n/strings.dart` |
 | Embedded newsletters and publications are English-only | WebViews show external school pages as published | Suggest short multilingual summaries to ASB or counseling; cannot be solved inside the app alone |
-| Newscast Vimeo videos may lack closed captions | Deaf and hard-of-hearing students cannot follow uncaptioned broadcasts | Coordinate with Westview Newscast editors to upload `.srt` caption files to Vimeo |
+| Newscast videos may lack closed captions | Deaf and hard-of-hearing students cannot follow uncaptioned broadcasts | Ask the Westview Newscast editors to enable YouTube's automatic captions or upload their own |
 | No dedicated high-contrast (`forced-colors`) theme yet | Users needing contrast well above WCAG AA rely on standard light/dark palettes | Add `highContrastLight` and `highContrastDark` `ThemeData` variants in `lib/theme/theme.dart` |
 | Tablet landscape layout at 200% text scale is untested | Dialogs with open keyboards could crowd vertical space on wide screens | Add widget tests covering an `800x1280` landscape viewport at `2.0` text scale |
 

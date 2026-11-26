@@ -6,50 +6,75 @@ import 'package:westview_app/school_lunch.dart';
 
 void main() {
   group('CalendarEventsViewState.parseEvents', () {
-    test('expands multi-day events into one entry per day', () {
-      final body = jsonEncode({
-        'items': [
-          {
-            'summary': 'Homecoming Week',
-            'start': {'date': '2026-09-28'},
-            // Google Calendar all-day end dates are exclusive.
-            'end': {'date': '2026-09-30'},
-          },
-        ],
-      });
+    String feed(String events) =>
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\n$events\r\nEND:VCALENDAR\r\n';
+
+    test('expands multi-day all-day events into one entry per day', () {
+      final body = feed(
+        'BEGIN:VEVENT\r\n'
+        'DTSTART;VALUE=DATE:20260928\r\n'
+        // iCalendar all-day end dates are exclusive.
+        'DTEND;VALUE=DATE:20260930\r\n'
+        'SUMMARY:Homecoming Week\r\n'
+        'END:VEVENT',
+      );
 
       final events = CalendarEventsViewState.parseEvents(body);
 
       expect(events, hasLength(2));
       expect((events[0]['displayDate'] as DateTime).day, 28);
       expect((events[1]['displayDate'] as DateTime).day, 29);
+      expect(events[0]['start']['date'], '2026-09-28');
     });
 
     test('sorts by display date and keeps timed event details', () {
-      final body = jsonEncode({
-        'items': [
-          {
-            'summary': 'Later event',
-            'start': {'dateTime': '2026-09-02T10:00:00-07:00'},
-            'end': {'dateTime': '2026-09-02T11:00:00-07:00'},
-          },
-          {
-            'summary': 'Earlier event',
-            'start': {'dateTime': '2026-09-01T08:00:00-07:00'},
-            'end': {'dateTime': '2026-09-01T09:00:00-07:00'},
-          },
-        ],
-      });
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART:20260902T170000Z\n'
+        'DTEND:20260902T180000Z\n'
+        'SUMMARY:Later event\n'
+        'END:VEVENT\n'
+        'BEGIN:VEVENT\n'
+        'DTSTART:20260901T150000Z\n'
+        'DTEND:20260901T160000Z\n'
+        'LOCATION:Westview High School\\, San Diego\\, CA\n'
+        'DESCRIPTION:First line\\nSecond line\\, with a comma\n'
+        'SUMMARY:Earlier event\n'
+        'END:VEVENT',
+      );
 
       final events = CalendarEventsViewState.parseEvents(body);
 
       expect(events, hasLength(2));
       expect(events[0]['summary'], 'Earlier event');
       expect(events[1]['summary'], 'Later event');
+      expect(events[0]['location'], 'Westview High School, San Diego, CA');
+      expect(events[0]['description'],
+          'First line\nSecond line, with a comma');
+      // Timed values are stored as UTC and read back as local wall-clock time,
+      // so the exact hour depends on the test machine's zone.
+      expect(events[0]['start']['dateTime'], isA<String>());
     });
 
-    test('an empty calendar parses to an empty list', () {
-      expect(CalendarEventsViewState.parseEvents(jsonEncode({})), isEmpty);
+    test('joins folded lines before reading a value', () {
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART;VALUE=DATE:20261111\n'
+        'DTEND;VALUE=DATE:20261112\n'
+        'SUMMARY:A summary Google wrapped across\n'
+        '  two lines\n'
+        'END:VEVENT',
+      );
+
+      final events = CalendarEventsViewState.parseEvents(body);
+
+      expect(events.single['summary'],
+          'A summary Google wrapped across two lines');
+    });
+
+    test('an empty feed parses to an empty list', () {
+      expect(CalendarEventsViewState.parseEvents(feed('')), isEmpty);
+      expect(CalendarEventsViewState.parseEvents(''), isEmpty);
     });
   });
 

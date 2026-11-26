@@ -493,30 +493,40 @@ def home_screen(kind: str | None = None) -> Canvas:
                color="onSecondaryContainer" if i == 0 else "onSurfaceVariant",
                bold=i == 0, align="center")
 
-    # "Now" card with an icon and text label alongside the highlight fill
+    # "Now" card: highlight fill, left accent bar, and a "Now" pill near the
+    # countdown. No play arrow, so nothing reads as a button.
     c.rect(12, 68, W - 24, 104, "primaryContainer", radius=12)
     c.text(W / 2, 100, "Period 2 · Algebra 2", size=16,
            color="onPrimaryContainer", bold=True, align="center")
     c.text(W / 2, 128, "24:18 left", size=22, color="onPrimaryContainer",
            align="center")
-    c.icon(W / 2 - 44, 150, "check", color="onPrimaryContainer", size=7)
-    c.text(W / 2 - 32, 154, "Now", size=11, color="onPrimaryContainer", bold=True)
+    pill_w = 46
+    c.rect(W / 2 - pill_w / 2, 142, pill_w, 20, "primary", radius=10)
+    c.text(W / 2, 156, "Now", size=10, color="onPrimary", bold=True,
+           align="center")
 
-    # period rows
+    # period rows, including the running period with its left accent bar
     y = 184
-    for name, detail, times in [
-        ("Period 1", "Mr. Smith · Rm 402", "8:00 – 9:40"),
-        ("Passing", "", "9:40 – 9:48"),
-        ("Lunch", "", "11:30 – 12:10"),
-        ("Period 3", "Ms. Lee · Rm 118", "12:14 – 1:54"),
+    for name, detail, times, is_now in [
+        ("Period 1", "Mr. Smith · Rm 402", "8:00 – 9:40", False),
+        ("Period 2", "Algebra 2", "10:33 – 11:58", True),
+        ("Passing", "", "11:58 – 12:04", False),
+        ("Lunch", "", "12:04 – 12:39", False),
     ]:
-        c.card(12, y, W - 24, 62, fill="surfaceContainerLow")
-        c.text(28, y + 26, name, size=14, color="onSurface", bold=True)
+        fill = "primaryContainer" if is_now else "surfaceContainerLow"
+        ink = "onPrimaryContainer" if is_now else "onSurface"
+        detail_ink = "onPrimaryContainer" if is_now else "onSurfaceVariant"
+        c.card(12, y, W - 24, 62, fill=fill)
+        text_x = 28
+        if is_now:
+            c.rect(20, y + 13, 4, 36, "primary", radius=2)
+            text_x = 34
+        c.text(text_x, y + 26, name, size=14, color=ink, bold=True)
         if detail:
-            c.text(28, y + 44, detail, size=11)
+            c.text(text_x, y + 44, detail, size=11, color=detail_ink)
         start, end = times.split(" – ")
-        c.text(W - 150, y + 26, start, size=12)
-        c.text(W - 84, y + 26, end, size=12)
+        c.text(W - 150, y + 26, start, size=12, color=ink)
+        c.text(W - 84, y + 26, end, size=12, color=ink)
         y += 70
 
     # FAB row: Help (extended) + Settings

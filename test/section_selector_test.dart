@@ -94,7 +94,6 @@ void main() {
           labels: const [
             'Weekly Newsletter',
             'Counseling Newsletters',
-            'Den Announcements',
           ],
           selectedIndex: 0,
           onSelected: (_) {},
@@ -108,7 +107,6 @@ void main() {
     for (final label in [
       'Weekly Newsletter',
       'Counseling Newsletters',
-      'Den Announcements',
     ]) {
       expect(find.text(label), findsOneWidget);
     }
