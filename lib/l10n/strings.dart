@@ -330,7 +330,7 @@ const Map<String, Map<String, String>> _catalog = {
     'newscast.openOnYouTube': 'Open on YouTube',
     'newscast.errorTitle': 'Couldn\'t load the Newscast',
     'newscast.errorBody':
-        'The channel's video list didn\'t load. Check your connection and '
+        'The channel\'s video list didn\'t load. Check your connection and '
         'try again.',
     'web.errorTitle': 'Couldn\'t open this page',
     'web.errorBody':

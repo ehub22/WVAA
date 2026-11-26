@@ -293,10 +293,19 @@ class PublicationWebViewState extends State<PublicationWebView>
     // `entered` / `no-target` come back from the promotion itself so the app
     // knows whether there is a video to show before it shrinks.
     if (state == 'no-target') {
+      // Either the request already failed and this is the retry giving up, or
+      // the promotion never found a player at all. Either way the app stays
+      // full screen instead of shrinking into a picture of a page.
       videoPipActive.value = false;
       return;
     }
-    if (state == 'entered') return;
+    if (state == 'entered') {
+      // The bridge can only answer a promotion request after it has retried, so
+      // a slow player reports `entered` long after `_enterPipVisual` gave up
+      // waiting on the JavaScript return value. Re-apply the layout then.
+      if (!videoPipActive.value) videoPipActive.value = true;
+      return;
+    }
     if (state != 'playing' && state != 'paused') return;
     final playing = state == 'playing';
     if (playing == _isVideoPlaying) return;

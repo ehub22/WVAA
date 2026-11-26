@@ -10,7 +10,9 @@ Checks:
     string literals ending in a comma;
   * keys are unique within each language;
   * every language (`en`, `es`, `zh`, `tl`, `fr`) defines the exact same key set;
-  * no empty values, no tab characters, and no `$` interpolation characters.
+  * no empty values, no tab characters, and no `$` interpolation characters;
+  * every value's quotes balance, so an unescaped apostrophe in prose (the
+    ``channel's`` bug) is reported here instead of by the Dart compiler.
 
 Usage: python3 tools/check_strings.py
 Exit code 1 on any problem.
@@ -56,6 +58,35 @@ def strip_comment(line: str) -> str:
                 out.append(ch)
         i += 1
     return "".join(out)
+
+
+def quote_problem(text: str) -> str | None:
+    """Scan `text` as Dart and report the first structural quoting mistake.
+
+    An unescaped apostrophe inside a single-quoted literal closes the string
+    early, and everything after it is parsed as code. That produces a wall of
+    confusing errors from the Dart compiler far away from the real line, so it
+    is worth catching here. Returns None when the text ends outside a string
+    with no stray backslashes.
+    """
+    quote = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "\\":
+            return f"a backslash outside a string literal near {text[i:i + 12]!r}"
+        i += 1
+    if quote:
+        return "an unterminated string literal (likely an unescaped apostrophe)"
+    return None
 
 
 def language_blocks(text: str) -> dict[str, list[tuple[int, str]]]:
@@ -138,6 +169,13 @@ def parse_block(
             problems.append(f"{name}:{number}: {key!r} has no value")
         elif not last_text.strip().endswith(","):
             problems.append(f"{name}:{last_line}: {key!r} is missing a trailing comma")
+        stray = quote_problem(joined)
+        if stray is not None:
+            problems.append(f"{name}:{number}: {key!r} has {stray}")
+            problems.append(
+                f"{name}:{number}: in {key!r}, write an apostrophe inside a "
+                "single-quoted literal as \\'"
+            )
         if key in values:
             problems.append(f"{name}:{number}: duplicate key {key!r}")
         values[key] = value
