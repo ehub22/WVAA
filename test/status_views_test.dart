@@ -32,9 +32,9 @@ void main() {
   testWidgets('ErrorStatusView exposes a working retry button', (tester) async {
     var retries = 0;
 
-    // Without a callback (e.g. a permanent failure) no dead button is shown.
-    // ErrorStatusView falls back to the *translated* title and retry label,
-    // which needs a Localizations scope that knows the app's catalogue.
+    // Without a callback (such as a permanent failure), hide the retry button.
+    // ErrorStatusView falls back to the translated title and retry label from
+    // `strings.dart`.
     await tester.pumpWidget(_app(
       const ErrorStatusView(message: 'Check your connection.'),
     ));
@@ -51,8 +51,7 @@ void main() {
     expect(
         find.text('Check your connection and try again.'), findsOneWidget);
 
-    // The label comes from the catalogue (common.retry = "Try again") so a
-    // translated build never shows English here.
+    // The button text comes from `strings.dart` (`common.retry = "Try again"`).
     final retry = find.widgetWithText(FilledButton, 'Try again');
     expect(retry, findsOneWidget);
     expect(tester.getSize(retry).height, greaterThanOrEqualTo(48),

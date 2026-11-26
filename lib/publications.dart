@@ -15,7 +15,7 @@ import 'widgets/status_views.dart';
 class _Publication {
   const _Publication(this.titleKey, this.url);
 
-  /// Catalogue key, so the tab labels follow the app language.
+  /// Key in `strings.dart` for the translated tab label.
   final String titleKey;
   final String url;
 }
@@ -284,8 +284,8 @@ class PublicationWebViewState extends State<PublicationWebView>
 
   Future<void> _enterPipVisual() async {
     if (!_isVimeoPage) return;
-    // Tell the parent shell to hide its chrome (tab bar, selector) without
-    // detaching the WebView so playback is uninterrupted.
+    // Tell the app shell to hide its header and bottom navigation bar without
+    // detaching the WebView so video playback keeps running smoothly.
     vimeoPipActive.value = true;
     try {
       await _controller.runJavaScript(

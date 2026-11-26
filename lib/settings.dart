@@ -312,10 +312,9 @@ class AppSettings extends ChangeNotifier {
     _crashReportingEnabled = hasCurrentConsent
         ? (json['crashReportingEnabled'] as bool? ?? false)
         : false;
-    // Note: turning a switch on in Settings ▸ Privacy is itself consent, so no
-    // extra "answered the dialog" gate here — but a payload from an older
-    // (opt-out) build is still discarded above, because its "true" was a
-    // default rather than a choice.
+    // Turning a switch on in Settings > Privacy & data counts as consent on its
+    // own, while older pre-v2 payloads get reset to false above because their
+    // `true` value came from an old default rather than an opt-in choice.
     _privacyNoticeSeen =
         hasCurrentConsent ? (json['privacyNoticeSeen'] as bool? ?? false) : false;
     _language = AppLanguage.fromCode(json['language'] as String?);

@@ -48,9 +48,9 @@ class NetworkCache {
   static const String _entryPrefix = 'network_cache_v1_';
   static const String _indexKey = 'network_cache_index_v1';
 
-  /// How long a cached body is kept on disk before pruning. Note this is the
-  /// *storage* limit — callers decide how fresh a response must be before the
-  /// network is skipped; stale entries are still served offline.
+  /// How long cached responses stay on disk before getting cleaned up. Callers
+  /// choose their own shorter freshness window for skipping network calls, while
+  /// older entries up to 30 days still work as an offline fallback.
   static const Duration maxAge = Duration(days: 30);
 
   /// Returns the cached body for [key], or null when nothing usable is

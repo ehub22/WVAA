@@ -111,7 +111,7 @@ class _NewsletterPageState extends State<NewsletterPage> {
 class _Newsletter {
   const _Newsletter(this.titleKey, this.url);
 
-  /// Catalogue key, so the tab labels follow the app language.
+  /// Key in `strings.dart` for the translated tab label.
   final String titleKey;
   final String url;
 }

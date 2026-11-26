@@ -49,9 +49,9 @@ void main() {
 
   test('settings stored by an older (opt-out) build never opt a student in',
       () async {
-    // An upgrade from a build that recorded "analytics on" as a *default*, not
-    // as consent. Nothing in that payload proves the student agreed, so it is
-    // discarded, the streams stay off, and the first-run dialog is shown again.
+    // Older builds stored `analyticsEnabled: true` as a default without a
+    // consent version, so loading that payload resets both switches to false
+    // and asks the user again.
     SharedPreferences.setMockInitialValues(<String, Object>{
       'westview_settings_v1': jsonEncode(<String, dynamic>{
         'analyticsEnabled': true,
@@ -67,7 +67,7 @@ void main() {
     expect(settings.privacyNoticeSeen, isFalse);
   });
 
-  test('consent recorded by the current model is honoured on reload', () async {
+  test('consent recorded by the current model is honored on reload', () async {
     await settings.setAnalyticsEnabled(true);
     await settings.setPrivacyNoticeSeen();
 

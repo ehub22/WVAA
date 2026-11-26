@@ -1,187 +1,153 @@
 # Westview HS (WVAA)
 
-A companion app for Westview High School (Poway Unified School District), built with Flutter. The app brings together the schedules, calendars, newsletters, student publications, and lunch menu that students use every day, plus a live countdown notification and a home-screen widget that shows the current class period.
+I built WVAA as an Android-first Flutter app for students at Westview High School (Poway Unified School District) so I wouldn't have to jump between separate tabs and links just to check the bell schedule, calendars, newsletters, student publications, and the daily lunch menu. Alongside the in-app schedule, it also runs an ongoing countdown notification and a home-screen widget that track the current period and how much time is left.
 
-> **This is not a Poway Unified app.** It is a student-built project. It is not
-> sponsored or endorsed by Poway Unified School District or Westview High
-> School, and nothing in it should be treated as an official school statement.
-> See [Student safety](#student-safety) and [`docs/SAFETY.md`](docs/SAFETY.md).
+> **This is not a Poway Unified app.** I built this independently as a student project, so it isn't sponsored or endorsed by Poway Unified School District or Westview High School, and nothing inside the app should be treated as an official school statement. See [Student safety](#student-safety) and [`docs/SAFETY.md`](docs/SAFETY.md) for the full details.
 
-> The app is optimized for Android (the primary target). iOS support compiles but is not actively maintained.
+> I actively build and test this app for Android. The iOS target still compiles, but I don't actively maintain it.
 
 ## Features
 
-- **Get help** — a permanent tab with the school counselors (by last-name
-  caseload, with one-tap call and e-mail), 24/7 crisis lines (988, San Diego
-  Access & Crisis Line, Crisis Text Line, Trevor Project), anonymous reporting
-  routes, and 911. Works fully offline; opening it is never logged.
-- **Schedules** — Mon/Fri, Tue/Thu, and Wednesday late-start schedules with a live per-second countdown to the end of the current period. Any period can be renamed (e.g. "Human Body Systems" instead of "Period 1") with teacher and room number.
-- **Special (modified) schedules** — Early-release, assembly, and Link-Crew days are fetched from the school server and override the regular schedule in-app, on the widget, and in the ongoing notification. Results are cached for at least two days so the app still works when the server is unreachable.
-- **Live countdown notification** — An ongoing Android notification shows the current period, teacher/room, and a ticking Chronometer. On the lock screen it shows the period name only (visibility `SECRET`); teacher and room appear once the phone is unlocked. It survives reboots via AlarmManager.
-- **Home-screen widget** — "Current Period" widget shows the active class, a live countdown, and a one-liner about what's next. It self-updates at period boundaries with precise alarms and uses a Chronometer so it ticks without waking the device.
-- **Calendars** — School and Athletics Google Calendars, plus the daily school lunch menu with nutrition-fact details.
-- **Newsletters** — Weekly newsletter, counseling newsletters, and DEN announcements, each in an embedded WebView.
-- **Publications** — Westview Nexus (student newspaper) and Westview Newscast (Vimeo). Vimeo videos automatically enter Android picture-in-picture when you leave the app mid-playback.
-- **Theming** — Material 3 light and dark themes that follow the system setting, built from the school's gold/brass palette with WCAG-AA-checked contrast pairs.
-- **Works on bad Wi-Fi** — Calendars, lunch menus and special schedules cache their last-known content on disk and keep showing it (with a "saved copy" notice) whenever the school network is down. Newsletter/publication WebViews keep their loaded pages and never blank out mid-session.
-- **Refresh everywhere** — Pull-to-refresh on calendars and lunch menus; a refresh button on newsletters and publications; retry buttons on every error screen.
-- **Accessibility** — Four languages (English, Spanish, Simplified Chinese, Filipino) covering every screen the app draws, including all crisis resources; screen-reader semantics on every control (the 911 button is read as "9 1 1"); 48dp minimum tap targets (56dp for the emergency action); font scaling honoured to 200 % with no clipped text; status never conveyed by colour alone; silent notifications; a text-first route for every crisis line. Details in [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
-- **Privacy-first telemetry** — Anonymous crash reports and usage counts, **off until you opt in**, with per-stream switch and automatic scrubbing of anything you typed. See [Privacy](#privacy) below.
-- **Safety controls** — quick exit from a long-press, and the app's last screen hidden in the Android app switcher. Class details are never shown on the lock screen.
+- **Get help:** A permanent tab with Westview's school counselors (listed by last-name caseload with one-tap call and email), 24/7 crisis lines (988, San Diego Access & Crisis Line, Crisis Text Line, and the Trevor Project), anonymous reporting links, and 911. Because all of that contact info is bundled into the app, it works completely offline, and opening the tab is never logged.
+- **Bell schedules:** Regular Mon/Fri, Tue/Thu, and Wednesday late-start schedules with a live per-second countdown to the end of the current period. You can rename any class period (for example, changing "Period 1" to "Human Body Systems") and add your teacher and room number.
+- **Special schedules:** On early-release, assembly, or Link Crew days, the app fetches the modified schedule from the school server and overrides the regular bell schedule in the app, on the widget, and in the countdown notification. Responses stay cached for at least two days so the schedule still loads if the server goes down.
+- **Live countdown notification:** An ongoing Android notification displays the current period, teacher/room, and a ticking `Chronometer`. On a locked phone, the notification stays hidden (`VISIBILITY_SECRET`) so strangers walking by can't read your class schedule; your class details only show up after you unlock the screen. It also reschedules itself across reboots through `AlarmManager`.
+- **Home-screen widget:** The "Current Period" widget shows your active class, a live countdown, and what period comes next. Because `Chronometer` ticks inside the launcher process and `AlarmManager` only wakes the app at period transitions, the timer stays accurate without draining battery.
+- **Calendars and lunch menu:** School and Athletics Google Calendars alongside the daily school lunch menu and nutrition facts.
+- **Newsletters:** The weekly newsletter, counseling newsletters, and DEN announcements, each loaded inside an in-app WebView.
+- **Publications:** The Westview Nexus student newspaper and Westview Newscast on Vimeo. If you leave the app while a Vimeo video is playing, it automatically switches into Android picture-in-picture mode instead of cutting off playback.
+- **Light and dark themes:** Material 3 light and dark palettes built from Westview's gold and brass colors, following your phone's system theme while keeping every text and surface pair above WCAG AA contrast minimums.
+- **Offline fallbacks for bad campus Wi-Fi:** Campus Wi-Fi drops pretty often in certain buildings, so calendars, lunch menus, and special schedules save their last good response on the device and show a "saved copy" banner when a refresh fails. Newsletter and publication WebViews also keep an already-loaded page on screen rather than replacing it with an error screen mid-session.
+- **Manual refresh everywhere:** Pull-to-refresh on calendars and lunch menus, a refresh button in the header on newsletters and publications, and retry buttons whenever an initial load fails.
+- **Languages and accessibility:** Full app translations in English, Spanish, Simplified Chinese, and Filipino, including all crisis and safety text. Controls carry explicit screen-reader labels (for example, the 911 button announces as "9 1 1"), tap targets are at least 48dp (56dp on the 911 button), text scales up to 200% without clipping, status never relies on color alone, notifications stay silent, and every crisis line includes a text or chat option alongside calling. See [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+- **Opt-in anonymous diagnostics:** Optional usage counts and crash reports stay off until you choose to turn them on, with separate switches for each and automatic redaction for anything you typed into your schedule. See [Privacy](#privacy).
+- **Quick exit and app-switcher privacy:** Holding down any Help button sends the app straight to the background, and Android's app switcher blanks out the app preview by default so nobody looking over your shoulder can see what tab you had open.
 
-## Material 3, Android-first
+## Why It Uses Plain Material 3
 
-Android is the only actively supported target, so the UI is plain Material 3 throughout — `NavigationBar`, `SegmentedButton`, Material switches, bottom sheets — instead of cross-platform adaptive widgets. The one deliberate exception is the Publications WebView, which keeps a small platform branch for iOS inline-video playback so the project keeps compiling there.
+Since Android is the only platform I actively support, I used Material 3 components across the whole app (`NavigationBar`, `SegmentedButton`, Material switches, and bottom sheets) rather than trying to maintain separate adaptive widgets for iOS. The one exception is in `lib/publications.dart`, where I kept a small WebKit check for inline video playback so the iOS build still compiles cleanly.
 
 ## Privacy
 
-The app can collect two things, both anonymous, and nothing else:
+If you opt in, the app can send two kinds of anonymous data, and nothing else:
 
-- **Anonymous usage statistics** — counts of which screens are opened and whether refreshes succeeded.
-- **Crash reports** — the error text and a truncated stack trace, when something breaks.
+- **Anonymous usage counts:** Which tabs get opened and whether content refreshes succeed or fail.
+- **Crash reports:** The error message and a shortened stack trace when an unhandled exception happens.
 
-Both are **opt-in**. They start disabled, and nothing is queued or sent until the first-run dialog is answered with "Share anonymously" (or the matching switch is turned on in **Settings ▸ Privacy**). Turning a stream off later drops its queued reports instead of sending them.
+Both switches start turned **off**. Nothing gets queued or sent unless you tap "Share anonymously" on the first-launch prompt or turn the switches on yourself in **Settings > Privacy**. If you turn either switch off later, the app clears any unsent items from storage right away instead of flushing them on the next launch.
 
-It never collects names, student IDs, accounts, contacts, location, or advertising/device identifiers, and it uses no third-party analytics or crash SDKs. Reports go only to the school's own server (`studycs.org`, the same host as the special-schedule data), and are scrubbed first:
+The app doesn't use any third-party analytics or crash SDKs, and it never collects your name, student ID, accounts, contacts, location, or device/advertising IDs. Reports only go to `studycs.org` (the same server that hosts the special-schedule files), and the client scrubs them before they ever hit disk:
 
-- anything typed into "My classes" (class names, teacher names, room numbers) is replaced with `[text]`,
-- anything that looks like an e-mail address or phone number is replaced with `[email]` / `[phone]`,
-- the only identifier is a session id regenerated on every launch.
+- Anything you typed under "My classes" (course names, teacher names, and room numbers) gets replaced with `[text]`.
+- Anything matching an email address or phone number gets replaced with `[email]` or `[phone]`.
+- The only identifier attached to a batch is a random session ID generated in memory each time the app starts.
 
-Opening the **Get help** tab is never recorded, by design.
+Opening the **Get help** tab is never logged at all, even if usage analytics are turned on.
 
-Cached content (calendars, menus, nutrition data) stays on the device and can be wiped from **Settings ▸ Saved content**.
+Saved calendar events, lunch menus, and nutrition facts stay locally on your phone, and you can clear all of them anytime from **Settings > Saved content**.
 
 ## Student safety
 
-Full detail (data sources, verification dates, and the reasoning behind each
-decision) is in [`docs/SAFETY.md`](docs/SAFETY.md). The short version:
+I wrote out the full reasoning, contact sources, and verification dates in [`docs/SAFETY.md`](docs/SAFETY.md), so here is the main summary:
 
-- **Get help is always one tap away** — a navigation tab, a Help button on the
-  schedule screen, and a Settings entry. Counselors, crisis lines and 911 are
-  compiled into the app, so the screen works with no network at all.
-- **Contacts are verified and pinned by tests.** Counselor caseloads, extensions
-  and e-mails come from the school's counseling page (checked November 2025);
-  every hotline number is asserted in `test/support_resources_test.dart` so a
-  typo cannot ship.
-- **The district disclaimer is permanent.** The exact Poway Unified wording
-  ("This activity is not a school-sponsored activity and is not endorsed by the
-  school or Poway Unified School District…") plus its Spanish version appears
-  on the Get-help screen and in Settings, and a one-line version is pinned
-  under the navigation bar on every tab.
-- **Nothing about the schedule appears on a locked phone.** The countdown
-  notification's channel visibility is `SECRET`, and its redacted "public"
-  version (used if visibility is ever loosened) carries the period name only —
-  never the course name, teacher or room.
-- **Quick exit** (long-press any Help button) and **hide in app switcher** are
-  both on by default and can be turned off in **Settings ▸ Safety**. Quick exit
-  works from every tab, since the Help icon is in each tab's header.
-- The app has no full-screen-intent permission, does not show itself over the
-  lock screen, and requests no permissions beyond internet, notifications and
-  what the home-screen widget needs.
+- **Get help is always reachable in one tap:** It sits permanently in the bottom navigation bar, in the top corner of the other tabs, and at the top of Settings. Because all counselor contacts, crisis hotlines, and 911 actions are compiled directly into the app, the screen still works with zero signal.
+- **Contact numbers are verified and locked down by tests:** Counselor caseloads, phone extensions, and email addresses come from Westview's counseling page (verified November 2025), and `test/support_resources_test.dart` checks every hotline number and URI directly so an accidental edit can't ship a broken number.
+- **The Poway Unified disclaimer stays visible:** The required district disclaimer (in both English and Spanish) is shown in full on the Get help screen and in Settings, while a short version stays pinned above the bottom navigation bar on every tab.
+- **Your schedule stays off the lock screen:** The countdown notification channel uses `VISIBILITY_SECRET`, which hides the notification until you unlock your phone. Even its fallback public version only includes the period label and leaves out custom class names, teachers, and room numbers.
+- **Quick exit and hidden app-switcher previews default to on:** Long-pressing any Help icon backgrounds the app immediately without asking "Are you sure?", and the Android recents thumbnail is blanked out while the app is backgrounded. Both toggles live under **Settings > Safety**.
+- **Minimal permissions:** I removed `USE_FULL_SCREEN_INTENT` and set `showWhenLocked="false"` so a schedule timer can never pop up over a locked screen or interrupt another app. The app only asks for internet, notifications, and the alarm/boot permissions needed to update the widget.
 
 ## Language and accessibility
 
-The app ships complete copy in **English, Spanish, Simplified Chinese and
-Filipino**. `Settings ▸ Safety ▸ Language · Idioma · 语言 · Wika` picks a language;
-each option is labelled in all four languages so it is findable from any starting
-point, and **System default** follows the phone.
+Every screen I draw in the app ships in **English, Spanish, Simplified Chinese, and Filipino**. You can switch languages under `Settings > Safety > Language · Idioma · 语言 · Wika`, where the row title includes all four languages so you can still find it if the phone is set to a language you don't read, or leave it on **System default** to follow Android.
 
-Safety copy is never machine-translated at runtime: every string — the 911 card,
-all six crisis lines, the counselor roster, the reporting guidance, the district
-disclaimer — is in `lib/l10n/strings.dart` and checked by `test/l10n_test.dart`,
-which fails if any language is missing a key, leaves a safety string in English,
-or references a key that does not exist. A missing key falls back to English and
-then to the key name, so a typo shows up in tests instead of as a blank label.
+None of the safety copy is machine-translated at runtime. Every string lives in `lib/l10n/strings.dart`, including the 911 card, all six crisis lines, counselor roles, reporting notes, and the district disclaimer, and is checked by `test/l10n_test.dart` and `tools/check_strings.py`. Those checks fail if any language misses a key, leaves a safety string identical to English, or looks up a key in Dart that isn't in the string catalog. If a key were ever missing at runtime, it falls back to English and then to the raw key name so mistakes show up immediately during testing rather than rendering an empty button.
 
-Android also gets translated launcher/widget labels and the Android 13+ per-app
-language picker (`res/xml/locale_config.xml`).
+On Android, launcher and widget descriptions are also translated in `res/values-*/strings.xml`, and `res/xml/locale_config.xml` hooks into the Android 13+ per-app language picker in system settings.
 
-Full accessibility posture — screen readers, colour-blind safety, reduced motion,
-deaf/HoH routes, text scaling, and the known gaps — is in
-[`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). Compatibility risks from a
-student, developer and administrator point of view are in
-[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+For more detail on screen readers, colorblind contrast checks, reduced motion, deaf/hard-of-hearing crisis options, text scaling, and current limitations, see [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md). For device, maintenance, and administrative edge cases, see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
 
 ## Screenshots
 
-Layout mockups rendered from the app's real colour tokens
-(`lib/theme/colors.dart`) and real copy by `python3 tools/render_mockups.py`.
-They are not pixel-exact device screenshots — there is no Flutter SDK in the
-environment that renders them — but every colour and string shown is the one the
-app ships.
+These mockups are generated from the real color tokens in `lib/theme/colors.dart` and the actual app copy using `python3 tools/render_mockups.py`. Because the script renders them with ImageMagick instead of a live Flutter emulator, the spacing isn't pixel-identical to a phone screenshot, though all colors and strings match what ships in the app.
 
 | | |
 | --- | --- |
 | ![Get help — top](docs/screenshots/get-help-1.png) | ![Get help — crisis lines](docs/screenshots/get-help-2.png) |
-| Emergency card and counselor roster | Crisis lines, reporting routes, disclaimer |
+| Emergency card and counselor roster | Crisis lines, reporting links, and disclaimer |
 | ![Schedule with Help](docs/screenshots/home-with-help.png) | ![Settings safety](docs/screenshots/settings-safety.png) |
-| Help button + pinned disclaimer bar | Settings ▸ Safety, including Language |
+| Help button and pinned disclaimer bar | Settings > Safety, including Language |
 | ![Spanish Get help](docs/screenshots/get-help-spanish.png) | ![Language picker](docs/screenshots/language-picker.png) |
-| The same screen in Spanish | Language picker (CJK glyphs omitted: no CJK font in the mockup environment) |
+| Get help screen in Spanish | Language picker (CJK characters omitted because the mockup script runs without a CJK font) |
 | ![Deuteranopia](docs/screenshots/get-help-deuteranopia.png) | ![Palette](docs/screenshots/palette-simulated.png) |
-| Get help under deuteranopia | Brand palette under all four vision types |
+| Get help simulated under deuteranopia | App color palette across all four vision types |
 
 ## Project layout
 
 ```
 lib/
   main.dart              App entry point, Material 3 navigation shell, crash
-                         reporting bootstrap, first-run privacy dialog
-  data.dart              Bell schedules (Mon/Fri, Tue/Thu, Wed)
-  schedule_page.dart     Home/Schedule tab, live countdown, settings FAB
-  special_schedule.dart  Special-schedule fetch + multi-day cache
-  settings.dart          Persisted user settings incl. telemetry consent
-  settings_page.dart     Settings UI (notifications, privacy, classes)
-  telemetry.dart         Anonymous crash reporting + analytics (opt-in, scrubbed)
-  support.dart           Get-help screen: counselors, crisis lines, disclaimer
-  l10n/strings.dart      String catalogue for en/es/zh/tl + AppLanguage
-  safety.dart            Quick exit + recents privacy
-  network_cache.dart     Last-known-good disk cache for network content
-  widget_sync.dart       Pushes schedules/settings to the Android widget
+                         reporting setup, and first-run privacy prompt
+  data.dart              Regular bell schedules (Mon/Fri, Tue/Thu, Wed)
+  schedule_page.dart     Schedule tab, live countdown, and settings button
+  special_schedule.dart  Special-schedule fetcher and multi-day cache
+  settings.dart          Saved user settings and privacy consent state
+  settings_page.dart     Settings screen (safety, notifications, privacy, classes)
+  telemetry.dart         Opt-in anonymous crash reports and usage counts
+  support.dart           Get help screen: counselors, crisis lines, disclaimer
+  l10n/strings.dart      Translations for en/es/zh/tl and AppLanguage logic
+  safety.dart            Quick exit and app-switcher privacy channel
+  network_cache.dart     Local cache for calendars, menus, and nutrition data
+  widget_sync.dart       Syncs schedules and class names to the Android widget
   calendars.dart         Calendar tabs (School, Athletics, Lunches)
-  school_lunch.dart      Lunch menu + nutrition facts (cache-first)
-  newsletter_page.dart   Newsletter tabs
-  publications.dart      Publications tabs + Vimeo PiP handling
-  vimeo_pip.dart         Vimeo player <-> PiP bridge (injected JS)
-  web_page.dart          Shared WebView wrapper (loading/error/retry states)
-  theme/                 App color tokens + light/dark Material 3 ThemeData
-docs/SAFETY.md           Student-safety and developer-safety design notes
-docs/ACCESSIBILITY.md    Languages, screen readers, colour, deaf/HoH, motion
-docs/COMPATIBILITY.md    Student/developer/administrator risk review
-tools/audit_contrast.py  WCAG contrast + colour-blind simulation checker
-tools/render_mockups.py  Renders docs/screenshots/ from the real tokens/copy
+  school_lunch.dart      Daily lunch menu and nutrition facts sheet
+  newsletter_page.dart   Newsletter WebView tabs
+  publications.dart      Publications WebViews and Vimeo PiP handling
+  vimeo_pip.dart         Injected JS bridge between Vimeo's player and Android PiP
+  web_page.dart          Shared WebView wrapper with loading/error/retry UI
+  theme/                 Color tokens and light/dark Material 3 themes
   widgets/
-    section_selector.dart  Material 3 pill tabs + lazy keep-alive stack
-    status_views.dart      Shared loading / empty / error / saved-copy states
+    section_selector.dart  Material 3 pill selector and lazy keep-alive stack
+    status_views.dart      Shared loading, empty, error, and saved-copy views
+
+docs/
+  SAFETY.md              Safety design notes, contact sources, and disclaimers
+  ACCESSIBILITY.md       Translations, screen readers, contrast, and motion notes
+  COMPATIBILITY.md       Device, maintenance, and school-policy compatibility notes
+
+tools/
+  audit_contrast.py      WCAG contrast and colorblind separation checker
+  check_strings.py       Verifies lib/l10n/strings.dart formatting and key parity
+  render_mockups.py      Renders docs/screenshots/ from app colors and copy
+  annotate_ci.py         Formats Flutter test/analyze/build failures for GitHub CI
 
 android/app/src/main/kotlin/com/westviewhs/app/
-  MainActivity.kt                    Flutter activity, PiP callbacks, channel init
-  CustomLiveActivityManager.kt       Custom notification UI for the live activity
-  ScheduleNotificationManager.kt     Ongoing countdown notification + channel
+  MainActivity.kt                    Flutter activity, PiP hooks, and safety channel
+  CustomLiveActivityManager.kt       Custom notification layout for live activities
+  ScheduleNotificationManager.kt     Ongoing countdown notification and channel setup
   ScheduleWidgetProvider.kt          Home-screen widget provider
-  ScheduleWidgetRenderer.kt          Widget rendering + AlarmManager scheduling
-  ScheduleWidgetAlarmReceiver.kt     Broadcast receiver for period ticks
+  ScheduleWidgetRenderer.kt          Widget rendering and AlarmManager scheduling
+  ScheduleWidgetAlarmReceiver.kt     Broadcast receiver for period transitions
 ```
 
-## Special (modified) schedules
+## Special schedules
 
-On days with a special schedule (early release, Link Crew, assemblies, …) the app replaces the regular weekday schedule with the one returned by the school's server and shows a dismissable "A special schedule is in effect today" banner.
+When Westview runs a modified bell schedule (like early release, Link Crew, or an assembly), the app swaps out the regular weekday periods for the schedule returned by the server and shows a dismissible banner letting you know a special schedule is active today.
 
 ```
 GET https://studycs.org/westview/special_schedule2/{month}/{day}
 ```
 
-- `HTTP 200` with a plain-text body containing `.json` → the app downloads `https://studycs.org/<path>` and parses it as a JSON list of `{hour, minute, duration, title, isPM}` entries.
-- `HTTP 200` with an empty body (or any body without `.json`) → no special schedule that day; the regular schedule is shown.
+- If the server returns `HTTP 200` with a body containing `.json`, the app fetches `https://studycs.org/<path>` and parses its JSON list of `{hour, minute, duration, title, isPM}` period entries.
+- If the server returns `HTTP 200` with an empty body (or text without `.json`), there's no special schedule for that date, so the app uses the normal weekday schedule.
 
 ### Caching
 
-Every answer (schedule or "none") is cached on device for **at least 2 days** (3 to leave headroom). The server is never asked more than once per date inside that window, so the app doesn't contribute to load spikes. If the server cannot be reached the last known answer — even a stale one — is still used, and a banner warns that "today's schedule may not be accurate". The cache survives app restarts via SharedPreferences.
+Whether a date has a special schedule or not, the app caches the result on the device for **at least two days** (three days in storage to leave some buffer). Because of that cache window, the app won't hit the server more than once per date, which keeps everyone opening the app before first period from overloading the server at the same time. If the server can't be reached at all, the app keeps using the last saved answer and puts up a warning banner saying today's schedule might be out of date. Everything is stored in `SharedPreferences`, so it stays intact across app restarts.
 
 ### Backup sources
 
-If the primary server is down, the app tries each URL in `fallbackUrls` (empty by default). A backup URL can point at a static host (e.g. a public Google Drive direct-download link) and may use `{month}`/`{day}` placeholders.
+If `studycs.org` goes down, `SpecialScheduleService` can walk through backup URLs in `fallbackUrls` (which is empty by default). You can point a fallback URL at any static file host, such as a public Google Drive direct-download link, with optional `{month}` and `{day}` placeholders:
 
 ```dart
 fallbackUrls.add(
@@ -191,62 +157,60 @@ fallbackUrls.add(
 
 ## Home-screen widget (Android)
 
-Add the widget by long-pressing the home screen → Widgets → Westview HS → drag "Current Period" onto the home screen.
+To add the widget on Android, long-press your home screen, tap **Widgets**, find **Westview HS**, and drag **Current Period** onto your home screen.
 
-- The widget shows the current period and a Chronometer that counts down every second in the launcher process, so no wakeups are needed just to tick the timer.
-- Precise `AlarmManager` wakeups are scheduled for each period transition, plus boot/time/timezone/date change broadcasts, so the widget stays correct even when the app hasn't been opened in a while.
-- The Flutter app pushes schedules (including any special schedule and custom class/teacher/room names) via the `home_widget` plugin. Until the app runs once, built-in defaults (matching `lib/data.dart`) are used.
+- Inside the widget, Android's native `Chronometer` view ticks every second inside the home launcher process, so the app doesn't have to wake up every second just to update the clock.
+- `AlarmManager` schedules an exact wakeup right when each period starts or ends (alongside listeners for reboot, time, time zone, and date changes), which keeps the widget accurate even if you haven't opened the main app in days.
+- Whenever you edit class names or load a special schedule in Flutter, `widget_sync.dart` pushes the updated list to native `SharedPreferences` through `home_widget`. Before the Flutter app has run for the first time, the widget falls back to built-in default schedules matching `lib/data.dart`.
 
 ## Settings
 
-A settings button in the bottom-right of the home screen opens:
+Tapping the gear button in the bottom-right corner of the Schedule tab opens Settings:
 
-- **Safety** — Get help now, quick exit, hide preview in app switcher, and
-  **Language** (System default, English, Español, 简体中文, Filipino).
+- **Safety:** Quick access to Get help, toggles for quick exit and hiding the app-switcher preview, and the **Language** picker (System default, English, Español, 简体中文, and Filipino).
+- **Notifications:** The main notification switch; turning this off stops the app from posting any notifications at all.
+- **Live activity:** Controls the ongoing period countdown notification (only active when Notifications are also turned on).
+- **Show teacher / Show room number:** Controls whether teacher names and room numbers appear on the schedule tab, the countdown notification, and the home-screen widget.
+- **My classes:** Lets you rename Period 1 through Period 4 and fill in your teacher and room number for each class.
+- **Privacy and saved content:** Separate opt-in switches for anonymous usage stats and crash reports, plus a button to clear cached calendars and lunch menus.
+- **About this app:** Shows the full Poway Unified disclaimer in English and Spanish, explains that the app is student-built, and reminds users that the app itself isn't a monitored crisis service.
 
-- **Notifications** — master switch; when off the app posts no notifications at all.
-- **Live activity** — ongoing countdown notification (only runs while notifications are enabled).
-- **Show teacher / Show room number** — whether teacher/room show up in the schedule list, notification, and widget.
-- **My classes** — rename any period and enter teacher / room number.
-- **About this app** — the district disclaimer (English + Spanish), what the
-  app is not, and the "not a crisis service" notice.
-
-All settings are persisted immediately and applied across the schedule, notification, and widget.
+Changes save right away and sync immediately to the schedule tab, notification, and widget.
 
 ## Lock-screen notifications
 
-The live countdown notification is posted as an ongoing, silent status notification on a channel with `IMPORTANCE_LOW` and `VISIBILITY_SECRET`. Secret means the notification is hidden from the lock screen entirely — no period name, course name, teacher or room — and only appears once the phone is unlocked. (The notification also carries a separate "public version" that shows the period name alone, so even if the channel's visibility is ever loosened, teacher and room still never appear.) Tapping it opens the app (never over the lock screen: the activity is `showWhenLocked="false"` and the app holds no `USE_FULL_SCREEN_INTENT` permission).
+I set up the live countdown as a silent, ongoing notification on a channel with `IMPORTANCE_LOW` and `VISIBILITY_SECRET`. Because the channel visibility is `SECRET`, Android hides the notification on a locked screen instead of putting your period, teacher, or room number where anyone nearby could see it; those details only appear once you unlock your phone. I also attached a stripped-down public version that only shows the period name, so even if someone loosens the lock-screen setting in Android's system settings, teacher and room info still won't show up on a locked screen. Tapping the notification opens the app normally after unlock, since `MainActivity` sets `showWhenLocked="false"` and doesn't carry `USE_FULL_SCREEN_INTENT`.
 
-On Android 13+ the app asks for `POST_NOTIFICATIONS` on first launch (only when live activities are enabled, which is the default). Declining it breaks nothing: the schedule, widget and Get-help tab all keep working.
+On Android 13 and newer, the app asks for `POST_NOTIFICATIONS` on first launch if live activities are enabled. If you deny that permission, everything else keeps working normally, including the schedule tab, the home-screen widget, and Get help.
 
-Students who want class details hidden everywhere can turn off **Show teacher** / **Show room number** in Settings; those switches apply to the schedule, the notification and the widget.
+If you'd rather hide your teacher or room number everywhere, even when your phone is unlocked, turning off **Show teacher** or **Show room number** in Settings removes them from the schedule list, notification, and widget at the same time.
 
 ## Building
 
-### Local (release APK, sideload)
+### Local APK (for sideloading)
 
 ```sh
 flutter pub get
 flutter build apk --release
 ```
 
-Output: `build/app/outputs/flutter-apk/app-release.apk` (signed with the debug keystore — fine for sideloading).
+This writes `build/app/outputs/flutter-apk/app-release.apk`, signed with the debug keystore so you can install it directly on an Android phone.
 
-### Google Play
+### Google Play signing
 
-Configure a real signing keystore per the [Flutter signing guide](https://docs.flutter.dev/deployment/android#signing-the-app), then generate `android/key.properties` and point `release.signingConfig` at it.
+If you want to publish a build to Google Play, set up a real upload keystore following the [Flutter Android signing guide](https://docs.flutter.dev/deployment/android#signing-the-app), create `android/key.properties`, and update `release.signingConfig` in `android/app/build.gradle.kts`.
 
 ### GitHub Actions
 
-`.github/workflows/build-apk.yml` builds a release APK on every push to `main` and every pull request targeting `main`, and uploads it as a downloadable workflow artifact (kept for 30 days). Pushing a tag `vX.Y.Z` additionally creates a GitHub Release with the APK attached. The workflow also accepts `workflow_dispatch` for manual runs. `versionCode` is set to the GitHub Actions run number so builds are monotonically increasing.
+`.github/workflows/build-apk.yml` runs on pushes and pull requests to `main` (plus manual `workflow_dispatch` runs), builds a release APK, and uploads it as a 30-day workflow artifact. Pushing a `vX.Y.Z` tag also creates a GitHub Release with the APK attached. In CI, `versionCode` uses `GITHUB_RUN_NUMBER` so every new build gets a higher version number automatically.
 
 ## Architecture notes
 
-- **State** — `AppSettings` and `SpecialScheduleService` are singletons extending `ChangeNotifier`; pages consume them via `ListenableBuilder` and add/remove listeners in `initState`/`dispose`.
-- **Timer** — a single 1-second `Timer.periodic` in `SchedulePage` drives the countdown, widget sync, and midnight-rollover detection; all other state updates are event-driven.
-- **Network** — HTTP calls go through a `http.Client` injected into `SpecialScheduleService` (for testability) with a 10-second timeout; failures never crash the UI.
-- **PiP** — Vimeo playback is detected via a JS bridge injected into the WebView (`vimeo_pip.dart`) that talks to Vimeo's postMessage player API. When the app backgrounds mid-playback the Flutter shell hides its chrome so the player can fill the activity surface before Android captures it for picture-in-picture.
-- **Package name** — Android application ID / namespace is `com.westviewhs.app`.
+- **State management:** `AppSettings` and `SpecialScheduleService` are `ChangeNotifier` singletons, and screens rebuild from them using `ListenableBuilder` or listener hooks in `initState` and `dispose`.
+- **Countdown timer:** One 1-second `Timer.periodic` in `SchedulePage` handles the on-screen countdown, midnight date rollovers, and syncing updates to the widget, while the rest of the app updates only when events happen.
+- **Networking:** `SpecialScheduleService` takes an injected `http.Client` (which makes mocking responses in tests straightforward) with a 10-second timeout, and failed requests fall back to cached data instead of crashing the screen.
+- **Vimeo picture-in-picture:** `vimeo_pip.dart` injects a small JavaScript bridge into the Publications WebView so it can watch playback events through Vimeo's `postMessage` API. When you background the app during playback, the Flutter shell hides its own headers and navigation bar so the video fills the entire activity window before Android shrinks it into PiP.
+- **Package ID:** The Android `applicationId` and namespace are both `com.westviewhs.app`.
 
 ## Tests
 
@@ -254,19 +218,13 @@ Configure a real signing keystore per the [Flutter signing guide](https://docs.f
 flutter test
 ```
 
-Tests cover schedule time math, settings persistence, the special-schedule parser
-and caching behavior (using `MockClient`), Vimeo URL detection, the crisis-contact
-data, and the localization/accessibility contract (`test/l10n_test.dart`: all four
-catalogues in sync, no untranslated safety strings, every catalogue key that the
-code looks up exists, the Help screen renders in every language at 200 % text
-scale, and the 911 button announces "9 1 1").
+The test suite checks schedule period transitions, settings storage, special-schedule parsing and multi-day caching (with `MockClient`), Vimeo URL matching, crisis hotline and counselor contact numbers, and localization/accessibility rules in `test/l10n_test.dart` (making sure all four languages have matching keys, safety strings are actually translated, every key used in `lib/` exists, the Get help screen lays out cleanly at 200% font scale in every language, and the 911 button exposes the `"9 1 1"` screen-reader label).
 
-CI additionally runs the contrast audit before building:
+Before building the APK, CI also runs two Python checks:
 
 ```sh
+python3 tools/check_strings.py
 python3 tools/audit_contrast.py --strict
 ```
 
-which fails the build if any theme pair drops below WCAG AA or if the palette
-stops being distinguishable under deuteranopia, protanopia or tritanopia.
-
+`check_strings.py` verifies `lib/l10n/strings.dart` formatting and key parity, while `audit_contrast.py --strict` fails the build if any light or dark color pair drops below WCAG AA contrast or if the active-period highlight becomes hard to tell apart under deuteranopia, protanopia, or tritanopia.

@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-/// Whether Android is currently presenting the Vimeo player in picture-in-picture.
+/// Tracks whether Android is currently showing the Vimeo player in PiP mode.
 ///
-/// Android PiP captures the whole activity, not an individual Flutter widget. The
-/// app shell listens to this value and removes all of its chrome while PiP is
-/// active so the WebView can occupy the complete activity surface.
+/// Because Android PiP captures the whole activity window rather than a single
+/// widget, the app shell watches this flag and hides its headers and navigation
+/// bar while PiP is active so the video fills the entire window.
 final ValueNotifier<bool> vimeoPipActive = ValueNotifier<bool>(false);
 
 /// Returns whether [url] belongs to Vimeo.

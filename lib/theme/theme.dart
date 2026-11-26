@@ -103,10 +103,9 @@ ThemeData _baseTheme({
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    // Reduced motion: when the OS asks for animation-free UI, route changes
-    // still *work*, they just appear instantly instead of sliding. Flutter
-    // honours `MediaQuery.disableAnimations` for implicit animations, but page
-    // transitions are driven by the theme, so they are switched here.
+    // When system animations are turned off, swap pages immediately instead of
+    // sliding. Flutter honors `MediaQuery.disableAnimations` for implicit
+    // animations on its own, while route transitions come from the theme here.
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: <TargetPlatform, PageTransitionsBuilder>{
         TargetPlatform.android: _AccessiblePageTransitionsBuilder(),
@@ -240,12 +239,8 @@ final ThemeData darkTheme = _baseTheme(
   surfaceContainerLow: surfaceContainerLowDark,
 );
 
-/// Platform default page transition, but instant when the OS asks for reduced
-/// motion.
-///
-/// A vestibular-disorder accommodation: a student who has turned off
-/// animations system-wide should not get a full-width slide every time they
-/// open the Help screen.
+/// Uses Android's standard zoom page transition normally, or switches instantly
+/// when the user has turned off animations in system accessibility settings.
 class _AccessiblePageTransitionsBuilder extends PageTransitionsBuilder {
   const _AccessiblePageTransitionsBuilder();
 

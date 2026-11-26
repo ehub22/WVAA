@@ -78,17 +78,14 @@ jobs:
           print(f"::notice title=Flutter::{sys.argv[1]}")
           PY
 
-             # Configure Gradle caching. We keep the fast part of the Gradle cache
-      # (downloaded dependencies, wrapper distributions, transforms, compiled
-      # build scripts) but we deliberately do NOT cache the local build cache.
+      # Cache Gradle downloads and wrapper files without caching `build-cache-1`.
       #
-      # `gradle/actions/setup-gradle@v4` restores `caches/build-cache-1` from a
-      # previous run when the exact commit key is not found. Flutter's Gradle
-      # integration can then reuse a prior run's compiled artifacts and emit an
-      # APK that is byte-for-byte identical to the old one even when the Dart or
-      # Kotlin source changed. Excluding the build cache here (plus disabling it
-      # in android/gradle.properties) prevents that stale-output reuse while
-      # still saving time on dependency downloads.
+      # If `setup-gradle@v4` restores `caches/build-cache-1` from an earlier run,
+      # Flutter's Gradle integration can reuse old compiled outputs and produce
+      # an APK identical to the previous build even after Dart or Kotlin files
+      # changed. Leaving `build-cache-1` out here (and disabling it in
+      # android/gradle.properties) avoids stale APKs while still speeding up
+      # dependency downloads.
       - name: Set up Gradle cache (dependencies only)
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -96,9 +93,8 @@ jobs:
             caches/build-cache-1
             caches/keyrings
 
-      # Remove build outputs and Flutter/Dart intermediates before building so a
-      # CI run never ships a leftover APK from a previous checkout. This does not
-      # clear the Gradle dependency cache set up above.
+      # Clear previous build outputs and Dart intermediates so CI never uploads
+      # a leftover APK without wiping the Gradle dependency cache above.
       - name: Clean stale build outputs
         run: flutter clean
 
@@ -106,23 +102,21 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      # Fail fast on accessibility regressions before spending 10 minutes on a
-      # Gradle build: the theme's contrast pairs and the four-language string
-      # catalogue are both checked by `flutter test` + the contrast audit.
+      # Run the fast Python checks and unit tests before spending several minutes
+      # on a full Gradle APK build.
       - name: Verify WCAG contrast of the theme
         run: python3 tools/audit_contrast.py --strict
 
-      # The string catalogue is a large hand-edited Dart map; a stray comma
-      # there is a *compile* error that surfaces as "the Dart compiler exited
-      # unexpectedly" 200 lines later. Check its structure directly so the
-      # failure names the offending line.
-      - name: Check the string catalogue
+      # `lib/l10n/strings.dart` is a large hand-edited Dart map where a missing
+      # comma causes a vague Dart compiler failure later on, so check its
+      # formatting and key parity directly first.
+      - name: Check string translations
         run: python3 tools/check_strings.py
 
       - name: Run Flutter tests (includes the l10n/a11y suite)
-        # Failure text is re-emitted as GitHub *annotations* (see
-        # tools/annotate_ci.py): annotations are small and readable through the
-        # check-run API even where the full step log download is not.
+        # Emit failures as GitHub annotations via `tools/annotate_ci.py` so
+        # error details show up directly in the check-run API even when raw logs
+        # are awkward to download.
         shell: bash
         run: |
           set +e
@@ -132,14 +126,12 @@ jobs:
           cat /tmp/test.log
           exit $status
 
-      # Build a release APK. The versionCode is set to the GitHub run number so
-      # each build is monotonically increasing. The APK is signed with Flutter's
-      # auto-generated debug key (see android/app/build.gradle.kts). To publish
-      # on Google Play, configure a real keystore (see the README).
+      # Build the release APK using `github.run_number` for `versionCode` so
+      # every CI build gets a higher version number automatically. Sideload
+      # builds use Flutter's debug signing config (`android/app/build.gradle.kts`).
       - name: Build release APK
-        # Same trick as the test step: re-emit the interesting lines of the
-        # build output as annotations, which stay readable when the full step
-        # log cannot be downloaded.
+        # Emit key Gradle/Dart error lines as GitHub annotations just like the
+        # test step above.
         shell: bash
         run: |
           set +e
@@ -150,9 +142,8 @@ jobs:
           tail -n 120 /tmp/build.log
           exit $status
 
-      # The step log cannot be downloaded in every review environment, and
-      # annotations are capped in size, so keep the full build log as the
-      # authoritative record of a failed build.
+      # Upload the full build log whenever the APK step fails since GitHub
+      # annotations are capped in length.
       - name: Upload build log (on failure)
         if: failure()
         uses: actions/upload-artifact@v4

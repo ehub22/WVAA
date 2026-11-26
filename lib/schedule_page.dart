@@ -180,8 +180,8 @@ class _SchedulePageState extends State<SchedulePage>
 
     if (enabled && currentEndTime != null && currentPeriodName != null) {
       final displayName = _settings.displayName(currentPeriodName);
-      // The countdown notification is visible on the lock screen, so teacher
-      // and room only travel with it when the student has left those on.
+      // Notification visibility is SECRET until the phone is unlocked, and
+      // teacher/room only get included here if those switches are on in Settings.
       final details = _settings.detailsFor(currentPeriodName);
       final signature =
           '$displayName|$details|${currentEndTime.millisecondsSinceEpoch}';
@@ -368,11 +368,10 @@ class _SchedulePageState extends State<SchedulePage>
                                                 ),
                                           ),
                                           const SizedBox(height: 4),
-                                          // A screen-reader user gets the
-                                          // same information once, not a
-                                          // re-announcement every second: the
-                                          // digits are excluded and replaced
-                                          // by a short group label.
+                                          // Hide the ticking digits from TalkBack
+                                          // so it doesn't re-read the clock every
+                                          // second, and expose a single summary
+                                          // label instead.
                                           Semantics(
                                             container: true,
                                             excludeSemantics: true,
@@ -384,8 +383,8 @@ class _SchedulePageState extends State<SchedulePage>
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                // Explicit, colour-independent
-                                                // "this is happening now" cue.
+                                                // Explicit icon + text cue so active
+                                                // periods don't rely on color alone.
                                                 _NowBadge(
                                                   color: scheme.onPrimaryContainer,
                                                   label:
@@ -643,12 +642,11 @@ int getCurrentDayOfWeek([DateTime? customNow]) {
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
-/// Explicit "now" cue on the current-period card.
+/// "Now" badge shown on the active period card.
 ///
-/// Colour alone must never be the only thing distinguishing the current period
-/// (WCAG 1.4.1): this adds a check glyph and the word "Now" on top of the
-/// primaryContainer tint, so the state survives colour-blindness, greyscale,
-/// and a washed-out screen in sunlight.
+/// Pairing the play icon and "Now" label with `primaryContainer` keeps the
+/// active period clear under colorblindness, grayscale mode, or bright sun
+/// instead of relying on color alone (WCAG 1.4.1).
 class _NowBadge extends StatelessWidget {
   const _NowBadge({required this.color, required this.label});
 
@@ -678,7 +676,7 @@ class _NowBadge extends StatelessWidget {
   }
 }
 
-/// Small dismissable notice banner shown above the schedule.
+/// Dismissible banner shown above the schedule list.
 class _ScheduleNotice extends StatelessWidget {
   const _ScheduleNotice({
     required this.icon,

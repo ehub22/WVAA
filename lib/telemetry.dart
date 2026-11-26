@@ -9,37 +9,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'settings.dart';
 
-/// Where anonymous reports are delivered. Points at the same school server
-/// that already hosts the special-schedule data; if the school has not stood
-/// up a collector yet the endpoint answers 404 and queued reports are simply
-/// dropped — telemetry never affects the app or the user.
+/// Endpoint for optional anonymous diagnostics. It uses the same `studycs.org`
+/// server that hosts special-schedule files; if the collector isn't running and
+/// returns 404, queued items are dropped quietly without affecting the app.
 const String telemetryEndpoint =
     'https://studycs.org/westview/app-metrics';
 
-/// Privacy-first crash reporting and usage analytics.
+/// Opt-in crash reporting and anonymous usage counts.
 ///
-/// What is collected (and all that is collected):
-///  * the event name and a handful of scalar properties (screen name, result);
-///  * for crashes: the error text and a truncated stack trace;
-///  * coarse environment info: platform, OS family, app locale language;
-///  * a random per-launch session id, regenerated every start.
+/// What gets sent when enabled:
+///  * Event names with a few basic properties (like tab name or refresh status)
+///  * Crash error messages and shortened stack traces
+///  * Platform name, app locale language code, and a random per-launch session ID
 ///
-/// What is never collected: names, student IDs, accounts, contacts, location,
-/// advertising/device identifiers, or any content the student typed. There are
-/// no third-party SDKs; reports go only to the endpoint above.
+/// What never gets sent: names, student IDs, accounts, contacts, location,
+/// device models, install IDs, or advertising IDs. There are no third-party
+/// analytics SDKs—batches only go to [telemetryEndpoint].
 ///
-/// Both streams are **opt-in**: nothing is queued or sent until the student
-/// chooses "Share anonymous data" in the first-run dialog (or turns the
-/// matching switch on in Settings ▸ Privacy). The default is off, so a crash
-/// on first launch never sends anything before consent exists.
+/// Both switches start turned **off**, so nothing is queued or sent unless the
+/// user picks "Share anonymously" in the first-launch prompt or enables a
+/// switch under Settings > Privacy & data.
 ///
-/// Reports are additionally scrubbed before leaving the device:
-///  * text the student typed into Settings (class names, teachers, rooms) is
-///    redacted from error strings and stack traces;
-///  * the crash `context` is a fixed, developer-authored label, never user
-///    input;
-///  * there is intentionally no device model, IDFA/GAID, or installation id in
-///    the payload — only a session id that is regenerated every launch.
+/// Before any crash text is saved or sent, [_scrub] strips out custom class
+/// names, teachers, and rooms from Settings along with email and phone patterns.
 class Telemetry {
   Telemetry._({http.Client? client}) : _client = client ?? http.Client();
 
@@ -160,17 +152,16 @@ class Telemetry {
     }
   }
 
-  /// Removes anything the student typed into their own settings from a free
-  /// text payload. A crash message that happens to quote a renamed class or a
-  /// teacher's name is exactly the kind of detail this app promises never to
-  /// collect.
+  /// Strips anything typed into "My classes" out of crash text before saving
+  /// or sending, so a stack trace or exception message that quotes a custom
+  /// class or teacher name won't leak it.
   String _scrub(String value) {
     var scrubbed = value;
     for (final period in AppSettings.instance.userTypedValues) {
       scrubbed = scrubbed.replaceAll(period, '[text]');
     }
-    // Anything that still looks like an e-mail address or a phone number is
-    // masked too — a stray address must never reach the server.
+    // Mask email addresses and phone numbers too in case an error string
+    // includes one.
     scrubbed = scrubbed.replaceAll(_emailPattern, '[email]');
     scrubbed = scrubbed.replaceAll(_phonePattern, '[phone]');
     return scrubbed;
@@ -223,7 +214,7 @@ class Telemetry {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_queueKey, jsonEncode(_queue));
     } catch (_) {
-      // Storage unavailable — telemetry is best effort by design.
+      // If storage isn't available, skip saving without crashing.
     }
   }
 

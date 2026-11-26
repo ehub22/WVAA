@@ -2,13 +2,12 @@ import 'package:flutter/widgets.dart';
 
 import '../settings.dart';
 
-/// Languages the app ships strings for.
+/// Languages supported across the app's own UI.
 ///
-/// Scope note: **every safety-critical surface is translated** — the Get-help
-/// screen (counselors, crisis lines, reporting), the disclaimers, navigation and
-/// Settings. The embedded WebViews (newsletters, publications, calendars) are
-/// the school's own pages and are rendered in whatever language those pages
-/// use; the app cannot translate them.
+/// Every screen drawn by Flutter is translated here, including Get help
+/// (counselors, crisis lines, and reporting), the disclaimers, navigation, and
+/// Settings. Embedded WebViews (newsletters and publications) load Westview's
+/// external pages directly, so they stay in whatever language those pages use.
 enum AppLanguage {
   system('system', 'System default', 'Sistema'),
   english('en', 'English', 'English'),
@@ -18,18 +17,17 @@ enum AppLanguage {
 
   const AppLanguage(this.code, this.nativeName, this.shortName);
 
-  /// BCP-47 tag; [system] is resolved against the device locale.
+  /// BCP-47 tag; [system] resolves against the phone's current locale.
   final String code;
 
-  /// Name shown in the language picker, in that language.
+  /// Language name written in that language for the picker.
   final String nativeName;
 
-  /// Compact form for the app bar / chips.
+  /// Shorter label used in compact spots.
   final String shortName;
 
-  /// The language's own name plus how to say it in the other shipped
-  /// languages, so the picker is usable by a student who cannot yet read
-  /// English (e.g. "Español · Spanish · 西班牙语 · Espanyol").
+  /// Shows each language in all four supported scripts so you can still find
+  /// your language if the app got switched to one you don't read.
   String get pluralLabel => switch (this) {
         AppLanguage.system => 'System · Sistema · 系统 · Sistema',
         AppLanguage.english => 'English · Inglés · 英语 · Ingles',
@@ -43,7 +41,7 @@ enum AppLanguage {
         orElse: () => AppLanguage.system,
       );
 
-  /// The concrete language tag to use for [deviceLocale].
+  /// Resolves which language map to use for [deviceLocale].
   String resolve(Locale deviceLocale) {
     if (this != AppLanguage.system) return code;
     switch (deviceLocale.languageCode) {
@@ -60,16 +58,17 @@ enum AppLanguage {
   }
 }
 
-/// String catalogue.
+/// App string lookup table.
 ///
-/// Deliberately hand-rolled rather than generated: the app only needs a handful
-/// of screens translated, there is no build-time code generation in this repo,
-/// and a missing key falling back to English is the right failure mode for a
-/// safety screen (never an empty label).
+/// I kept this as a plain Dart map instead of setting up ARB code generation
+/// because there are only around 200 keys, `flutter test` can check key parity
+/// directly without a `build_runner` step, and falling back to English (and
+/// then the key name) means a typo shows up in tests instead of rendering a
+/// blank button on the Get help screen.
 class AppStrings {
   const AppStrings(this.languageCode);
 
-  /// Resolved BCP-47 code (`en`, `es`, `zh`, `tl`).
+  /// Resolved BCP-47 tag (`en`, `es`, `zh`, `tl`).
   final String languageCode;
 
   static AppStrings of(BuildContext context) {
@@ -80,17 +79,15 @@ class AppStrings {
 
   static AppStrings forTag(String tag) => AppStrings(tag);
 
-  /// Look up [key]; falls back to English, then to the key itself so a typo is
-  /// visible in tests rather than silently blank.
+  /// Looks up [key], falling back to English and then the raw key name so
+  /// missing keys fail loudly in tests instead of showing up blank.
   String operator [](String key) =>
       _catalog[languageCode]?[key] ?? _catalog['en']![key] ?? key;
 
-  /// True when the catalogue for this language does not have [key] (used by
-  /// tests to keep the four catalogues in sync).
+  /// Returns true if [languageCode] doesn't define [key] (used by l10n tests).
   bool isMissing(String key) => !(_catalog[languageCode]?.containsKey(key) ?? false);
 
-  /// Keys that must exist in every language: anything a student can be reading
-  /// while in distress, plus the legal disclaimer.
+  /// Safety and disclaimer keys that `l10n_test.dart` checks in every language.
   static List<String> get criticalKeys => _catalog['en']!
       .keys
       .where((k) => k.startsWith('help.') || k.startsWith('disclaimer.'))
@@ -100,7 +97,9 @@ class AppStrings {
 }
 
 // ===========================================================================
-// Catalogues
+// String maps (en, es, zh, tl)
+// Note: Chinese (`zh`) strings should get a pass from a fluent speaker when
+// available; `tools/check_strings.py` enforces formatting and key parity.
 // ===========================================================================
 
 const Map<String, Map<String, String>> _catalog = {
@@ -118,258 +117,231 @@ const Map<String, Map<String, String>> _catalog = {
     'common.close': 'Close',
     'common.cancel': 'Cancel',
     'common.openInBrowser': 'Open in browser',
-    'common.copyNumber':
-        'Copy this number',
-    'sms.confirmTitle':
-        'Send this text?',
-    'sms.openApp':
-        'Open Messages',
+    'common.copyNumber': 'Copy this number',
+    'sms.confirmTitle': 'Send this text?',
+    'sms.openApp': 'Open Messages',
     'sms.editNote':
-        'Your messaging app will open with this message ready to send. You can edit or add to it first.',
+        'Your messaging app will open with this keyword filled in so you can '
+        'review or add to it before sending.',
 
     'disclaimer.short':
-        'Not a Poway Unified app. Not sponsored or endorsed by Poway Unified '
-            'School District or Westview High School.',
+        'Not a Poway Unified app. Built independently by students and not '
+        'sponsored or endorsed by Poway Unified School District or Westview '
+        'High School.',
     'disclaimer.title': 'This app is not part of Poway Unified',
     'disclaimer.plain':
-        'In plain terms: Westview HS (WVAA) is a student-built companion app. '
-            'Poway Unified School District and Westview High School did not '
-            'make it, do not run it, and have not reviewed it. Anything shown '
-            'here may be out of date or wrong — always confirm with the school '
-            'office, your counselor, or the school website.',
+        'Westview HS (WVAA) is an independent app built by students rather '
+        'than Poway Unified School District or Westview High School. Because '
+        'the school does not run or review this app, schedules, links, or '
+        'contacts shown here could be out of date, so confirm important '
+        'details with the school office, your counselor, or Westview\'s '
+        'website.',
     'disclaimer.crisis':
         'This app is not a crisis service and is not monitored. If you or '
-            'someone else is in danger, call 911. In an emotional crisis, call '
-            'or text 988.',
+        'someone else is in danger, call 911. During an emotional crisis, call '
+        'or text 988.',
     'disclaimer.translationNote':
-        'Translations of the disclaimer are provided to help you understand it. '
-            'The official English and Spanish wording required by the district '
-            'is the version that governs.',
+        'Translated summaries are included to make this notice easier to read, '
+        'while the official English and Spanish text required by the district '
+        'remains the binding version.',
 
     'help.title': 'Get help',
     'help.emergency.title': 'In immediate danger?',
     'help.emergency.body':
-        'Call 911 now if you or someone else is about to be hurt, or you need '
-            'help right this minute.',
+        'Call 911 right away if you or someone else is in danger of being hurt '
+        'and needs immediate help.',
     'help.emergency.call': 'Call 911',
     'help.emergency.note':
-        'If you’re not sure whether it’s an emergency, call or text 988. '
-            'Someone will answer and help you figure out next steps.',
+        'If you are unsure whether a situation is an emergency, call or text '
+        '988 so a counselor can help you figure out what to do next.',
 
     'help.counselor.title': 'Talk to a counselor at Westview',
     'help.counselor.body':
-        'Counselors are in the Wolverine Center during the school day. You can '
-            'drop in, ask a teacher to help you get there, or email your '
-            'counselor directly — you don’t need to explain everything to make '
-            'the appointment.',
+        'Westview counselors are available in the Wolverine Center during '
+        'school hours. Students can stop by in person, ask a teacher for a '
+        'pass, or email their counselor directly without having to explain '
+        'everything in the message.',
     'help.counselor.callOffice': 'Call the office',
     'help.counselor.website': 'Counseling website',
     'help.counselor.find': 'Find your counselor',
-    'help.counselor.byLast': 'By the first letter of your last name.',
+    'help.counselor.byLast': 'Assigned by the first letter of your last name.',
     'help.counselor.career': 'College & career questions',
     'help.counselor.verified':
-        'Staff and caseloads can change during the year. Check the school '
-            'website or the counseling office if your name’s letter isn’t '
-            'listed. (List checked November 2025.)',
+        'Counselor assignments can change during the school year, so check '
+        'Westview\'s website or the counseling office if your last name does '
+        'not match the list below. (Checked November 2025.)',
 
-    'help.crisis.title': 'Crisis lines — free, confidential, 24/7',
+    'help.crisis.title': '24/7 free and confidential crisis lines',
     'help.crisis.call': 'Call',
     'help.crisis.text': 'Text',
     'help.crisis.deaf':
-        'Hard of hearing, or can’t speak on the phone? Every option below also '
-            'works by text or online. 988 and the Crisis Text Line are '
-            'text-first, and San Diego County’s line can be reached through a '
-            'relay operator: dial 711.',
+        'If you are deaf, hard of hearing, or unable to speak out loud, every '
+        'service below can also be reached by text or online. Both 988 and '
+        'Crisis Text Line support texting directly, while the San Diego County '
+        'line accepts 711 relay calls.',
 
     'help.report.title': 'Report a safety concern',
     'help.report.body':
-        'Worried about a classmate, a threat, a weapon, or something you saw '
-            'online? Tell a trusted adult — a teacher, your counselor, a coach, '
-            'or a parent. You can also report it anonymously:',
+        'If you are worried about a classmate, a threat, a weapon, or '
+        'something posted online, tell a trusted adult such as a teacher, '
+        'counselor, coach, or parent. Concerns can also be reported '
+        'anonymously through these lines:',
     'help.report.note':
-        'You don’t have to be certain. Reports can be wrong and that’s okay — '
-            'the people who check them are trained for it.',
+        'You do not need complete proof before reporting a concern, because '
+        'trained staff review each tip to see what support is needed.',
 
     'help.about.title': 'About this app',
 
     'hotline.988.name': '988 Suicide & Crisis Lifeline',
     'hotline.988.desc':
-        'Free, confidential support for anyone in emotional distress or '
-            'suicidal crisis. Call or text any time, day or night.',
+        'Free, confidential 24/7 support by phone or text for anyone '
+        'experiencing emotional distress or a suicidal crisis.',
     'hotline.988.call': 'Call 988',
     'hotline.988.sms': 'Text 988',
     'hotline.sdaocl.name': 'San Diego Access & Crisis Line',
     'hotline.sdaocl.desc':
-        'San Diego County’s 24/7 line for mental health and substance use '
-            'crises, for you or someone you’re worried about. Free interpreters '
-            'in 200+ languages. They can also send a Mobile Crisis Response '
-            'Team.',
+        'San Diego County\'s 24/7 line for mental health or substance-use '
+        'crises affecting you or someone you know, with free interpreters in '
+        'over 200 languages and mobile crisis response teams when needed.',
     'hotline.sdaocl.call': 'Call 1-888-724-7240',
     'hotline.crisistext.name': 'Crisis Text Line',
     'hotline.crisistext.desc':
-        'Prefer typing to talking? Text a trained volunteer about anything '
-            'that’s weighing on you. Free, 24/7, and confidential.',
+        'Connects you by text with a trained crisis counselor at any hour if '
+        'typing is easier than speaking on a call. Free and confidential.',
     'hotline.crisistext.sms': 'Text HOME to 741741',
     'hotline.trevor.name': 'The Trevor Project',
     'hotline.trevor.desc':
-        'Crisis and suicide-prevention support for LGBTQ+ young people, 24/7. '
-            'You deserve to be taken seriously.',
+        'Free, confidential 24/7 crisis and suicide-prevention support for '
+        'LGBTQ+ youth by phone or text.',
     'hotline.trevor.call': 'Call 1-866-488-7386',
     'hotline.trevor.sms': 'Text START to 678678',
     'hotline.sandyhook.name': 'Say Something Anonymous Reporting',
     'hotline.sandyhook.desc':
-        'Anonymous way to report threats, weapons, or someone who may be in '
-            'danger — answered by crisis counselors. Good for “I’m worried '
-            'about a classmate,” not just emergencies.',
+        'Anonymous reporting line answered by crisis counselors for threats, '
+        'weapons, or concern that a classmate may be at risk of harm.',
     'hotline.sandyhook.call': 'Call 1-844-5-SAYNOW',
-    'hotline.pusdtip.name': 'PUSD “See Something, Say Something” Tip Line',
+    'hotline.pusdtip.name': 'PUSD "See Something, Say Something" Tip Line',
     'hotline.pusdtip.desc':
-        'Poway Unified’s 24-hour anonymous tip line, monitored by law '
-            'enforcement, for school threats and safety concerns. The number '
-            'is on the back of your student ID.',
+        'Poway Unified\'s 24-hour anonymous tip line monitored by law '
+        'enforcement for campus threats and safety concerns (also printed on '
+        'the back of student IDs).',
     'hotline.pusdtip.call': 'Call 1-844-PUSD-TIP',
 
     'settings.title': 'Settings',
     'settings.safety': 'Safety',
     'settings.getHelp': 'Get help now',
     'settings.getHelpSub':
-        'Westview counselors, crisis lines and hotlines, and how to report a '
-            'safety concern. Works offline.',
+        'Westview counselors, 24/7 crisis lines, and anonymous safety '
+        'reporting. Available offline.',
     'settings.quickExit': 'Quick exit',
     'settings.quickExitSub':
-        'Long-press the Help button to leave the app immediately. Nothing you '
-            'looked at stays on screen.',
+        'Hold down the Help button to close this screen and move the app to '
+        'the background right away.',
     'settings.hideRecents': 'Hide preview in app switcher',
     'settings.hideRecentsSub':
-        'Stops the app’s last screen from showing in your recent-apps list '
-            '(Android).',
+        'Blanks out the app\'s thumbnail in Android\'s recent-apps list while '
+        'in the background.',
     'settings.language': 'Language',
-    'settings.languageSub': 'Applies to Help, Settings and navigation.',
+    'settings.languageSub': 'Applies to Help, Settings, and navigation.',
     'settings.privacy': 'Privacy & data',
     'settings.about': 'About this app',
 
     'privacy.title': 'Your privacy',
     'privacy.intro':
-        'This app can send two things to the school’s own server, and nothing '
-            'else:',
+        'If enabled, this app sends only two kinds of anonymous data to the '
+        'school server:',
     'privacy.bullet1':
-        '• Anonymous usage counts — which screens are opened and whether a '
-            'refresh worked. No names, no accounts.',
+        '• Anonymous usage counts: which tabs are opened and whether refreshes '
+        'succeed, without names or accounts.',
     'privacy.bullet2':
-        '• Crash reports — the error text, with anything you typed into '
-            'Settings removed, so bugs can be fixed.',
+        '• Crash reports: error details with any class names, teachers, or '
+        'rooms typed into Settings removed before sending.',
     'privacy.never':
-        'It never collects your name, student ID, contacts, location, or '
-            'advertising identifiers, and it shares nothing with third '
-            'parties. There is no third-party analytics.',
+        'The app does not use third-party analytics and never collects names, '
+        'student IDs, contacts, location, or advertising identifiers.',
     'privacy.offUntil':
-        'Both are off unless you turn them on, and you can change this any time '
-            'in Settings ▸ Privacy.',
-    'privacy.dontShare': 'Don’t share',
+        'Both options stay off unless turned on, and either setting can be '
+        'changed anytime under Settings > Privacy & data.',
+    'privacy.dontShare': 'Don\'t share',
     'privacy.share': 'Share anonymously',
-    'settings.notifications':
-        'Notifications',
-    'settings.notificationsSub':
-        'Allow Westview HS to send notifications',
-    'settings.liveActivity':
-        'Live activity',
+    'settings.notifications': 'Notifications',
+    'settings.notificationsSub': 'Allow Westview HS to send notifications',
+    'settings.liveActivity': 'Live activity',
     'settings.liveOn':
-        'Ongoing notification with a countdown to the end of the current period',
-    'settings.liveOff':
-        'Turn notifications on to use the live activity',
-    'settings.privacyData':
-        'Privacy & data',
-    'settings.analytics':
-        'Anonymous usage statistics',
+        'Ongoing notification with a countdown to the end of the current '
+        'period',
+    'settings.liveOff': 'Turn notifications on to use the live activity',
+    'settings.privacyData': 'Privacy & data',
+    'settings.analytics': 'Anonymous usage statistics',
     'settings.analyticsSub':
-        'Counts of which screens are opened and whether refreshes succeed. Never identifies you.',
-    'settings.crash':
-        'Crash reports',
+        'Counts which screens open and whether refreshes succeed, without '
+        'identifying you.',
+    'settings.crash': 'Crash reports',
     'settings.crashSub':
-        'Error text and stack trace when the app breaks, so it can be fixed. Never identifies you.',
-    'settings.collectTitle':
-        "What we collect (and don't)",
+        'Sends error details and stack traces when something crashes so bugs '
+        'can be fixed, without identifying you.',
+    'settings.collectTitle': 'What this app collects',
     'settings.collectBody':
-        'Both switches above are off unless you turned them on. When on, the app sends anonymous usage counts and crash reports so it can be fixed — with anything you typed into Settings removed first. It never collects your name, student ID, contacts, location or advertising identifiers. Reports go only to the school server.',
-    'settings.savedContent':
-        'Saved content',
-    'settings.clear':
-        'Clear saved content',
+        'Both switches stay off until enabled. When turned on, the app sends '
+        'anonymous usage counts and crash reports to the school server after '
+        'stripping anything typed into My classes, and it never collects '
+        'names, student IDs, contacts, location, or advertising IDs.',
+    'settings.savedContent': 'Saved content',
+    'settings.clear': 'Clear saved content',
     'settings.clearSub':
-        'Removes calendars, lunch menus and nutrition data saved for offline use. They download again next time you open them.',
-    'settings.cleared':
-        'Saved content cleared',
-    'settings.classDetails':
-        'Class details',
-    'settings.showTeacher':
-        'Show teacher',
+        'Removes cached calendars, lunch menus, and nutrition data stored for '
+        'offline viewing so they download fresh next time.',
+    'settings.cleared': 'Saved content cleared',
+    'settings.classDetails': 'Class details',
+    'settings.showTeacher': 'Show teacher',
     'settings.showTeacherSub':
-        'Show the teacher in the schedule, notification and widget',
-    'settings.showRoom':
-        'Show room number',
+        'Show teacher names in the schedule, notification, and widget',
+    'settings.showRoom': 'Show room number',
     'settings.showRoomSub':
-        'Show the room in the schedule, notification and widget',
-    'settings.myClasses':
-        'My classes',
-    'settings.resetClasses':
-        'Reset all class names',
-    'settings.resetTitle':
-        'Reset class names?',
+        'Show room numbers in the schedule, notification, and widget',
+    'settings.myClasses': 'My classes',
+    'settings.resetClasses': 'Reset all class names',
+    'settings.resetTitle': 'Reset class names?',
     'settings.resetBody':
-        'This removes every custom name, teacher and room you entered.',
-    'settings.reset':
-        'Reset',
-    'settings.tapToAdd':
-        'Tap to add a name, teacher or room',
-    'settings.editClass':
-        'Class name',
-    'settings.leaveEmpty':
-        'Leave empty to keep the current name',
-    'settings.teacher':
-        'Teacher',
-    'settings.room':
-        'Room number',
-    'settings.clearField':
-        'Clear',
-    'settings.cancel':
-        'Cancel',
-    'settings.save':
-        'Save',
+        'This clears every custom class name, teacher, and room number you '
+        'entered.',
+    'settings.reset': 'Reset',
+    'settings.tapToAdd': 'Tap to add a class name, teacher, or room',
+    'settings.editClass': 'Class name',
+    'settings.leaveEmpty': 'Leave empty to keep the default period name',
+    'settings.teacher': 'Teacher',
+    'settings.room': 'Room number',
+    'settings.clearField': 'Clear',
+    'settings.cancel': 'Cancel',
+    'settings.save': 'Save',
     'settings.notCrisis':
-        'This app is not a crisis service and is not monitored. If you or someone else is in danger, call 911. In an emotional crisis, call or text 988.',
+        'This app is not a crisis service and is not monitored. If you or '
+        'someone else is in danger, call 911. During an emotional crisis, call '
+        'or text 988.',
     'settings.verified':
-        'Schedules, menus and links can be out of date or wrong. Always confirm time-sensitive information with the school office. Counselor contacts were last checked November 2025; the counseling office or the school website is the authoritative source.',
-    'settings.langLabel':
-        'Language',
-    'settings.langSystem':
-        'System default',
-    'schedule.monFri':
-        'Mon/Fri',
-    'schedule.tueThu':
-        'Tue/Thu',
-    'schedule.wed':
-        'Wed',
-    'schedule.noActivePeriod':
-        'No active period',
-    'schedule.now':
-        'Now',
+        'Because schedules, menus, and links can change during the year, '
+        'confirm time-sensitive details with the school office. Counselor '
+        'contacts were last checked in November 2025 against Westview\'s '
+        'counseling webpage.',
+    'settings.langLabel': 'Language',
+    'settings.langSystem': 'System default',
+    'schedule.monFri': 'Mon/Fri',
+    'schedule.tueThu': 'Tue/Thu',
+    'schedule.wed': 'Wed',
+    'schedule.noActivePeriod': 'No active period',
+    'schedule.now': 'Now',
     'schedule.endsAt': 'ends at',
-    'schedule.special':
-        'A special schedule is in effect today',
+    'schedule.special': 'A special schedule is in effect today',
     'schedule.mayNotBeAccurate':
-        "Couldn't reach the special-schedule server, so today's schedule may not be accurate.",
-    'schedule.dismiss':
-        'Dismiss',
-    'schedule.checking':
-        'Checking for schedule updates',
-    'schedule.settings':
-        'Settings',
-    'schedule.help':
-        'Help',
+        'Could not reach the special-schedule server, so today\'s schedule '
+        'might be out of date.',
+    'schedule.dismiss': 'Dismiss',
+    'schedule.checking': 'Checking for schedule updates',
+    'schedule.settings': 'Settings',
+    'schedule.help': 'Help',
     'schedule.helpTooltip':
-        "Get help now. Long-press to leave the app quickly if this screen shouldn't be seen.",
-    'common.selected':
-        'Selected',
+        'Get help now. Hold down this button to close the app right away.',
+    'common.selected': 'Selected',
     'common.refresh': 'Refresh page',
     'common.dismiss': 'Dismiss',
     'common.retry': 'Try again',
@@ -379,17 +351,22 @@ const Map<String, Map<String, String>> _catalog = {
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview Newscast',
     'web.errorTitle': 'Couldn\'t open this page',
-    'web.errorBody': 'The page could not be loaded. Check your connection and try again.',
+    'web.errorBody':
+        'The page could not be loaded. Check your connection and try again.',
     'web.loading': 'Loading page…',
-    'web.stale': 'Couldn\'t refresh — still showing the last loaded page.',
+    'web.stale': 'Refresh failed, so the previously loaded page is still shown.',
     'calendar.tabSchool': 'School Calendar',
     'calendar.tabAthletics': 'Athletics',
     'calendar.tabLunch': 'School Lunches',
     'calendar.errorTitle': 'Couldn\'t load calendar events',
-    'calendar.errorBody': 'Couldn\'t reach the calendar server. Check your connection and try again.',
+    'calendar.errorBody':
+        'Could not reach the calendar server. Check your connection and try '
+        'again.',
     'calendar.loading': 'Loading events…',
     'calendar.emptyTitle': 'No upcoming events',
-    'calendar.emptyBody': 'This calendar has nothing scheduled right now. Pull down to refresh.',
+    'calendar.emptyBody':
+        'Nothing is scheduled on this calendar right now. Pull down to '
+        'refresh.',
     'calendar.savedCopy': 'Saved copy from',
     'calendar.untitled': 'Untitled event',
     'calendar.description': 'Description',
@@ -398,7 +375,8 @@ const Map<String, Map<String, String>> _catalog = {
     'calendar.today': 'Today',
     'calendar.yesterday': 'Yesterday',
     'calendar.tomorrow': 'Tomorrow',
-    'calendar.weekdays': 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
+    'calendar.weekdays':
+        'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
     'calendar.am': 'AM',
     'calendar.pm': 'PM',
     'schedule.refresh': 'Refreshing schedule…',
@@ -407,12 +385,15 @@ const Map<String, Map<String, String>> _catalog = {
     'common.loading': 'Loading…',
     'common.errorTitle': 'Can\'t load this right now',
     'help.iconTooltip': 'Get help now',
-    'help.iconTooltipQuickExit': '%s (long-press leaves the app immediately)',
+    'help.iconTooltipQuickExit': '%s (hold down to leave the app right away)',
     'lunch.errorTitle': 'Couldn\'t load the lunch menu',
-    'lunch.errorBody': 'Couldn\'t reach the menu server. Check your connection and try again.',
+    'lunch.errorBody':
+        'Could not reach the menu server. Check your connection and try again.',
     'lunch.loading': 'Loading the menu…',
     'lunch.emptyTitle': 'No lunch menu published',
-    'lunch.emptyBody': 'This month\'s menu hasn\'t been published yet. Pull down to refresh.',
+    'lunch.emptyBody':
+        'This month\'s lunch menu has not been posted yet. Pull down to '
+        'refresh.',
     'lunch.savedCopy': 'Saved menu from',
     'lunch.noSchool': 'No school',
     'lunch.entrees': 'Lunch Entrees',
@@ -456,138 +437,138 @@ const Map<String, Map<String, String>> _catalog = {
     'common.close': 'Cerrar',
     'common.cancel': 'Cancelar',
     'common.openInBrowser': 'Abrir en el navegador',
-    'common.copyNumber':
-        'Copiar este número',
-    'sms.confirmTitle':
-        '¿Enviar este mensaje?',
-    'sms.openApp':
-        'Abrir Mensajes',
+    'common.copyNumber': 'Copiar este número',
+    'sms.confirmTitle': '¿Enviar este mensaje?',
+    'sms.openApp': 'Abrir Mensajes',
     'sms.editNote':
-        'Se abrirá tu aplicación de mensajes con este texto listo para enviar. Puedes editarlo o añadir más antes de enviarlo.',
+        'Se abrirá tu aplicación de mensajes con esta palabra clave lista para '
+        'que puedas revisarla o agregar más texto antes de enviarla.',
 
     'disclaimer.short':
-        'No es una aplicación de Poway Unified. No está patrocinada ni avalada '
-            'por el Distrito Escolar Unificado de Poway ni por Westview High '
-            'School.',
+        'No es una aplicación de Poway Unified. Fue creada de forma '
+        'independiente por estudiantes y no está patrocinada ni avalada por el '
+        'Distrito Escolar Unificado de Poway ni por Westview High School.',
     'disclaimer.title': 'Esta aplicación no forma parte de Poway Unified',
     'disclaimer.plain':
-        'En palabras simples: Westview HS (WVAA) es una aplicación hecha por '
-            'estudiantes. El Distrito Escolar Unificado de Poway y Westview '
-            'High School no la crearon, no la administran y no la han revisado. '
-            'Lo que aparece aquí puede estar desactualizado o ser incorrecto; '
-            'confirma siempre con la oficina de la escuela, tu consejero o el '
-            'sitio web de la escuela.',
+        'Westview HS (WVAA) es una aplicación independiente creada por '
+        'estudiantes y no por el Distrito Escolar Unificado de Poway ni '
+        'Westview High School. Como la escuela no la administra ni la revisa, '
+        'los horarios, enlaces o contactos pueden no estar al día, así que '
+        'confirma los detalles importantes con la oficina escolar, tu '
+        'consejero o el sitio web de Westview.',
     'disclaimer.crisis':
         'Esta aplicación no es un servicio de crisis y nadie la monitorea. Si '
-            'tú o alguien más está en peligro, llama al 911. En una crisis '
-            'emocional, llama o envía un texto al 988.',
+        'tú o alguien más está en peligro, llama al 911. Durante una crisis '
+        'emocional, llama o envía un texto al 988.',
     'disclaimer.translationNote':
-        'Las traducciones del aviso legal se ofrecen para ayudarte a '
-            'entenderlo. La versión oficial en inglés y español que exige el '
-            'distrito es la que rige.',
+        'Los resúmenes traducidos se incluyen para facilitar la lectura, pero '
+        'el texto oficial en inglés y español exigido por el distrito sigue '
+        'siendo la versión vigente.',
 
     'help.title': 'Ayuda',
     'help.emergency.title': '¿Peligro inmediato?',
     'help.emergency.body':
-        'Llama al 911 ahora si tú o alguien más está a punto de salir herido, '
-            'o si necesitas ayuda en este momento.',
+        'Llama al 911 de inmediato si tú o alguien más corre peligro de salir '
+        'herido y necesita ayuda urgente.',
     'help.emergency.call': 'Llamar al 911',
     'help.emergency.note':
-        'Si no sabes si es una emergencia, llama o envía un texto al 988. '
-            'Alguien contestará y te ayudará a decidir qué hacer.',
+        'Si no estás seguro de si una situación es una emergencia, llama o '
+        'envía un texto al 988 para que un consejero te ayude a decidir qué '
+        'hacer.',
 
     'help.counselor.title': 'Habla con un consejero de Westview',
     'help.counselor.body':
-        'Los consejeros están en el Wolverine Center durante el día escolar. '
-            'Puedes pasar sin cita, pedirle a un maestro que te ayude a llegar, '
-            'o escribirle a tu consejero directamente. No tienes que explicar '
-            'todo para pedir una cita.',
+        'Los consejeros de Westview están disponibles en el Wolverine Center '
+        'durante el horario escolar. Puedes pasar en persona, pedirle un pase '
+        'a un maestro o enviar un correo directo a tu consejero sin tener que '
+        'explicar todo en el mensaje.',
     'help.counselor.callOffice': 'Llamar a la oficina',
     'help.counselor.website': 'Sitio de consejería',
     'help.counselor.find': 'Encuentra a tu consejero',
-    'help.counselor.byLast': 'Según la primera letra de tu apellido.',
+    'help.counselor.byLast': 'Asignado según la primera letra de tu apellido.',
     'help.counselor.career': 'Preguntas sobre universidad y carrera',
     'help.counselor.verified':
-        'El personal y las letras asignadas pueden cambiar durante el año. '
-            'Consulta el sitio web de la escuela o la oficina de consejería si '
-            'la letra de tu apellido no aparece. (Lista revisada en noviembre '
-            'de 2025.)',
+        'Las asignaciones de consejeros pueden cambiar durante el año escolar, '
+        'así que revisa el sitio web de Westview o consulta en la oficina de '
+        'consejería si tu apellido no coincide con la lista. (Revisado en '
+        'noviembre de 2025.)',
 
-    'help.crisis.title': 'Líneas de crisis — gratis, confidenciales, 24/7',
+    'help.crisis.title': 'Líneas de crisis gratuitas y confidenciales 24/7',
     'help.crisis.call': 'Llamar',
     'help.crisis.text': 'Texto',
     'help.crisis.deaf':
-        '¿Tienes pérdida auditiva o no puedes hablar por teléfono? Todas las '
-            'opciones de abajo también funcionan por texto o en línea. El 988 y '
-            'Crisis Text Line están pensados para texto, y a la línea del '
-            'Condado de San Diego también se llega con un operador de relevo: '
-            'marca 711.',
+        'Si eres sordo, tienes dificultad auditiva o no puedes hablar en voz '
+        'alta, todos los servicios de abajo también atienden por texto o en '
+        'línea. El 988 y Crisis Text Line funcionan directamente por mensaje '
+        'de texto, mientras que la línea del Condado de San Diego acepta '
+        'llamadas de relevo marcando el 711.',
 
     'help.report.title': 'Reportar un problema de seguridad',
     'help.report.body':
-        '¿Te preocupa un compañero, una amenaza, un arma o algo que viste en '
-            'línea? Cuéntale a un adulto de confianza: un maestro, tu consejero, '
-            'un entrenador o un familiar. También puedes reportarlo de forma '
-            'anónima:',
+        'Si te preocupa un compañero, una amenaza, un arma o algo publicado en '
+        'línea, avísale a un adulto de confianza como un maestro, consejero, '
+        'entrenador o familiar. También puedes reportarlo de forma anónima en '
+        'estas líneas:',
     'help.report.note':
-        'No tienes que estar seguro. Los reportes pueden equivocarse y está '
-            'bien: quienes los revisan están capacitados para eso.',
+        'No necesitas tener pruebas completas antes de hacer un reporte, ya '
+        'que personal capacitado revisa cada aviso para ver qué apoyo hace '
+        'falta.',
 
     'help.about.title': 'Sobre esta aplicación',
 
     'hotline.988.name': 'Línea 988 de Prevención del Suicidio y Crisis',
     'hotline.988.desc':
-        'Apoyo gratuito y confidencial para cualquier persona en angustia '
-            'emocional o crisis suicida. Llama o envía un texto a cualquier '
-            'hora, de día o de noche.',
+        'Apoyo gratuito y confidencial las 24 horas por teléfono o mensaje de '
+        'texto para cualquier persona con angustia emocional o crisis suicida.',
     'hotline.988.call': 'Llamar al 988',
     'hotline.988.sms': 'Texto al 988',
     'hotline.sdaocl.name': 'Línea de Acceso y Crisis de San Diego',
     'hotline.sdaocl.desc':
-        'La línea 24/7 del Condado de San Diego para crisis de salud mental y '
-            'de consumo de sustancias, para ti o para alguien que te preocupa. '
-            'Intérpretes gratuitos en más de 200 idiomas. También pueden enviar '
-            'un equipo móvil de respuesta a crisis.',
+        'Línea 24/7 del Condado de San Diego para crisis de salud mental o '
+        'consumo de sustancias que te afecten a ti o a un conocido, con '
+        'intérpretes gratuitos en más de 200 idiomas y equipos móviles de '
+        'respuesta cuando se necesitan.',
     'hotline.sdaocl.call': 'Llamar al 1-888-724-7240',
     'hotline.crisistext.name': 'Crisis Text Line (línea de texto)',
     'hotline.crisistext.desc':
-        '¿Prefieres escribir a hablar? Envía un texto a un voluntario '
-            'capacitado sobre lo que te preocupa. Gratis, 24/7 y confidencial.',
+        'Te comunica por mensaje de texto con un consejero capacitado a '
+        'cualquier hora si te resulta más fácil escribir que hablar por '
+        'teléfono. Gratis y confidencial.',
     'hotline.crisistext.sms': 'Envía HOME al 741741',
     'hotline.trevor.name': 'The Trevor Project',
     'hotline.trevor.desc':
-        'Apoyo en crisis y prevención del suicidio para jóvenes LGBTQ+, 24/7. '
-            'Mereces que te tomen en serio.',
+        'Apoyo gratuito y confidencial las 24 horas en situaciones de crisis y '
+        'prevención del suicidio para jóvenes LGBTQ+, por teléfono o texto.',
     'hotline.trevor.call': 'Llamar al 1-866-488-7386',
     'hotline.trevor.sms': 'Envía START al 678678',
     'hotline.sandyhook.name': 'Reportes anónimos Say Something',
     'hotline.sandyhook.desc':
-        'Forma anónima de reportar amenazas, armas o alguien que pueda estar en '
-            'peligro; contestan consejeros de crisis. Sirve para “me preocupa un '
-            'compañero”, no solo para emergencias.',
+        'Línea anónima atendida por consejeros de crisis para reportar '
+        'amenazas, armas o preocupación por un compañero que pueda estar en '
+        'riesgo.',
     'hotline.sandyhook.call': 'Llamar al 1-844-5-SAYNOW',
-    'hotline.pusdtip.name': 'Línea de reportes “See Something, Say Something” '
-        'de PUSD',
+    'hotline.pusdtip.name':
+        'Línea de reportes "See Something, Say Something" de PUSD',
     'hotline.pusdtip.desc':
-        'Línea anónima de Poway Unified, disponible 24 horas y monitoreada por '
-            'la policía, para amenazas y problemas de seguridad escolar. El '
-            'número está en el reverso de tu credencial de estudiante.',
+        'Línea anónima de 24 horas de Poway Unified monitoreada por las '
+        'autoridades para amenazas y problemas de seguridad escolar (también '
+        'impresa detrás de la credencial estudiantil).',
     'hotline.pusdtip.call': 'Llamar al 1-844-PUSD-TIP',
 
     'settings.title': 'Ajustes',
     'settings.safety': 'Seguridad',
     'settings.getHelp': 'Obtener ayuda ahora',
     'settings.getHelpSub':
-        'Consejeros de Westview, líneas de crisis y cómo reportar un problema '
-            'de seguridad. Funciona sin conexión.',
+        'Consejeros de Westview, líneas de crisis 24/7 y reportes anónimos de '
+        'seguridad. Funciona sin conexión.',
     'settings.quickExit': 'Salida rápida',
     'settings.quickExitSub':
-        'Mantén presionado el botón de Ayuda para salir de la aplicación de '
-            'inmediato. Nada de lo que mirabas queda en pantalla.',
-    'settings.hideRecents': 'Ocultar la vista previa en el selector de apps',
+        'Mantén presionado el botón de Ayuda para cerrar esta pantalla y '
+        'enviar la aplicación a segundo plano al instante.',
+    'settings.hideRecents': 'Ocultar vista previa en apps recientes',
     'settings.hideRecentsSub':
-        'Evita que la última pantalla aparezca en la lista de aplicaciones '
-            'recientes (Android).',
+        'Oculta la miniatura de la aplicación en la lista de apps recientes de '
+        'Android mientras está en segundo plano.',
     'settings.language': 'Idioma',
     'settings.languageSub': 'Se aplica a Ayuda, Ajustes y la navegación.',
     'settings.privacy': 'Privacidad y datos',
@@ -595,126 +576,107 @@ const Map<String, Map<String, String>> _catalog = {
 
     'privacy.title': 'Tu privacidad',
     'privacy.intro':
-        'Esta aplicación puede enviar dos cosas al servidor de la escuela, y '
-            'nada más:',
+        'Si lo activas, esta aplicación envía solo dos tipos de datos anónimos '
+        'al servidor escolar:',
     'privacy.bullet1':
-        '• Conteos de uso anónimos: qué pantallas se abren y si una '
-            'actualización funcionó. Sin nombres ni cuentas.',
+        '• Conteos de uso anónimos: qué pestañas se abren y si las '
+        'actualizaciones funcionan, sin nombres ni cuentas.',
     'privacy.bullet2':
-        '• Reportes de fallos: el texto del error, con lo que escribiste en '
-            'Ajustes eliminado, para poder corregirlo.',
+        '• Reportes de fallos: detalles del error después de borrar cualquier '
+        'clase, maestro o salón escrito en Ajustes.',
     'privacy.never':
-        'Nunca recopila tu nombre, número de estudiante, contactos, ubicación '
-            'ni identificadores publicitarios, y no comparte nada con terceros. '
-            'No hay analítica de terceros.',
+        'La aplicación no usa analítica de terceros y nunca recopila nombres, '
+        'números de estudiante, contactos, ubicación ni identificadores '
+        'publicitarios.',
     'privacy.offUntil':
-        'Ambas funciones están desactivadas a menos que las actives, y puedes '
-            'cambiarlo cuando quieras en Ajustes ▸ Privacidad.',
+        'Ambas opciones permanecen desactivadas a menos que las actives, y '
+        'puedes cambiarlas cuando quieras en Ajustes > Privacidad y datos.',
     'privacy.dontShare': 'No compartir',
     'privacy.share': 'Compartir de forma anónima',
-    'settings.notifications':
-        'Notificaciones',
+    'settings.notifications': 'Notificaciones',
     'settings.notificationsSub':
         'Permitir que Westview HS envíe notificaciones',
-    'settings.liveActivity':
-        'Actividad en curso',
+    'settings.liveActivity': 'Actividad en curso',
     'settings.liveOn':
-        'Notificación permanente con cuenta regresiva hasta el final del período actual',
+        'Notificación continua con cuenta regresiva hasta el final del período '
+        'actual',
     'settings.liveOff':
         'Activa las notificaciones para usar la actividad en curso',
-    'settings.privacyData':
-        'Privacidad y datos',
-    'settings.analytics':
-        'Estadísticas de uso anónimas',
+    'settings.privacyData': 'Privacidad y datos',
+    'settings.analytics': 'Estadísticas de uso anónimas',
     'settings.analyticsSub':
-        'Cuántas veces se abren las pantallas y si las actualizaciones funcionan. Nunca te identifica.',
-    'settings.crash':
-        'Reportes de fallos',
+        'Cuenta qué pantallas se abren y si las actualizaciones funcionan, sin '
+        'identificarte.',
+    'settings.crash': 'Reportes de fallos',
     'settings.crashSub':
-        'El texto del error y el rastro de pila cuando falla la aplicación, para poder corregirlo. Nunca te identifica.',
-    'settings.collectTitle':
-        'Qué recopilamos (y qué no)',
+        'Envía detalles del error y rastros de pila cuando algo falla para '
+        'poder corregirlo, sin identificarte.',
+    'settings.collectTitle': 'Qué recopila esta aplicación',
     'settings.collectBody':
-        'Las dos opciones de arriba están desactivadas a menos que las actives. Cuando están activas, la aplicación envía conteos de uso anónimos y reportes de fallos para poder mejorarla, después de eliminar lo que hayas escrito en Ajustes. Nunca recopila tu nombre, número de estudiante, contactos, ubicación ni identificadores publicitarios. Los reportes van solo al servidor de la escuela.',
-    'settings.savedContent':
-        'Contenido guardado',
-    'settings.clear':
-        'Borrar contenido guardado',
+        'Ambos interruptores permanecen apagados hasta que los actives. Cuando '
+        'están activos, la aplicación envía conteos de uso anónimos y reportes '
+        'de fallos al servidor escolar después de quitar lo que hayas escrito '
+        'en Mis clases, y nunca recopila nombres, ID estudiantil, contactos, '
+        'ubicación ni ID publicitarios.',
+    'settings.savedContent': 'Contenido guardado',
+    'settings.clear': 'Borrar contenido guardado',
     'settings.clearSub':
-        'Elimina calendarios, menús de almuerzo y datos de nutrición guardados para uso sin conexión. Se descargan de nuevo cuando los abras.',
-    'settings.cleared':
-        'Contenido guardado borrado',
-    'settings.classDetails':
-        'Datos de las clases',
-    'settings.showTeacher':
-        'Mostrar maestro',
+        'Elimina calendarios, menús de almuerzo y datos nutricionales '
+        'guardados para consulta sin conexión para que se descarguen de nuevo.',
+    'settings.cleared': 'Contenido guardado borrado',
+    'settings.classDetails': 'Datos de las clases',
+    'settings.showTeacher': 'Mostrar maestro',
     'settings.showTeacherSub':
-        'Mostrar el maestro en el horario, la notificación y el widget',
-    'settings.showRoom':
-        'Mostrar número de salón',
+        'Mostrar nombres de maestros en el horario, la notificación y el '
+        'widget',
+    'settings.showRoom': 'Mostrar número de salón',
     'settings.showRoomSub':
-        'Mostrar el salón en el horario, la notificación y el widget',
-    'settings.myClasses':
-        'Mis clases',
-    'settings.resetClasses':
-        'Restablecer todos los nombres',
-    'settings.resetTitle':
-        '¿Restablecer los nombres?',
+        'Mostrar números de salón en el horario, la notificación y el widget',
+    'settings.myClasses': 'Mis clases',
+    'settings.resetClasses': 'Restablecer todos los nombres',
+    'settings.resetTitle': '¿Restablecer los nombres?',
     'settings.resetBody':
-        'Esto elimina todos los nombres, maestros y salones que ingresaste.',
-    'settings.reset':
-        'Restablecer',
-    'settings.tapToAdd':
-        'Toca para añadir nombre, maestro o salón',
-    'settings.editClass':
-        'Nombre de la clase',
+        'Esto borra todos los nombres de clases, maestros y salones que '
+        'ingresaste.',
+    'settings.reset': 'Restablecer',
+    'settings.tapToAdd': 'Toca para añadir clase, maestro o salón',
+    'settings.editClass': 'Nombre de la clase',
     'settings.leaveEmpty':
-        'Déjalo vacío para mantener el nombre actual',
-    'settings.teacher':
-        'Maestro',
-    'settings.room':
-        'Número de salón',
-    'settings.clearField':
-        'Borrar',
-    'settings.cancel':
-        'Cancelar',
-    'settings.save':
-        'Guardar',
+        'Déjalo vacío para conservar el nombre predeterminado del período',
+    'settings.teacher': 'Maestro',
+    'settings.room': 'Número de salón',
+    'settings.clearField': 'Borrar',
+    'settings.cancel': 'Cancelar',
+    'settings.save': 'Guardar',
     'settings.notCrisis':
-        'Esta aplicación no es un servicio de crisis y nadie la monitorea. Si tú o alguien más está en peligro, llama al 911. En una crisis emocional, llama o envía un texto al 988.',
+        'Esta aplicación no es un servicio de crisis y nadie la monitorea. Si '
+        'tú o alguien más está en peligro, llama al 911. Durante una crisis '
+        'emocional, llama o envía un texto al 988.',
     'settings.verified':
-        'Los horarios, menús y enlaces pueden estar desactualizados o ser incorrectos. Confirma siempre la información urgente con la oficina de la escuela. Los contactos de consejería se revisaron por última vez en noviembre de 2025; la oficina de consejería y el sitio web de la escuela son la fuente oficial.',
-    'settings.langLabel':
-        'Idioma',
-    'settings.langSystem':
-        'Predeterminado del sistema',
-    'schedule.monFri':
-        'Lun/Vie',
-    'schedule.tueThu':
-        'Mar/Jue',
-    'schedule.wed':
-        'Mié',
-    'schedule.noActivePeriod':
-        'Ningún período activo',
-    'schedule.now':
-        'Ahora',
+        'Como los horarios, menús y enlaces pueden cambiar durante el año, '
+        'confirma los detalles urgentes con la oficina escolar. Los contactos '
+        'de consejería se verificaron en noviembre de 2025 en el sitio web de '
+        'consejería de Westview.',
+    'settings.langLabel': 'Idioma',
+    'settings.langSystem': 'Predeterminado del sistema',
+    'schedule.monFri': 'Lun/Vie',
+    'schedule.tueThu': 'Mar/Jue',
+    'schedule.wed': 'Mié',
+    'schedule.noActivePeriod': 'Ningún período activo',
+    'schedule.now': 'Ahora',
     'schedule.endsAt': 'termina a las',
-    'schedule.special':
-        'Hoy hay un horario especial',
+    'schedule.special': 'Hoy aplica un horario especial',
     'schedule.mayNotBeAccurate':
-        'No se pudo conectar con el servidor, así que el horario de hoy puede no ser exacto.',
-    'schedule.dismiss':
-        'Cerrar',
-    'schedule.checking':
-        'Buscando cambios de horario',
-    'schedule.settings':
-        'Ajustes',
-    'schedule.help':
-        'Ayuda',
+        'No se pudo conectar con el servidor de horarios especiales, por lo '
+        'que el horario de hoy podría no estar actualizado.',
+    'schedule.dismiss': 'Cerrar',
+    'schedule.checking': 'Buscando cambios de horario',
+    'schedule.settings': 'Ajustes',
+    'schedule.help': 'Ayuda',
     'schedule.helpTooltip':
-        'Obtener ayuda ahora. Mantén presionado para salir de la aplicación rápidamente si no quieres que se vea esta pantalla.',
-    'common.selected':
-        'Seleccionado',
+        'Obtener ayuda ahora. Mantén presionado este botón para cerrar la '
+        'aplicación al instante.',
+    'common.selected': 'Seleccionado',
     'common.refresh': 'Actualizar',
     'common.dismiss': 'Descartar',
     'common.retry': 'Reintentar',
@@ -724,17 +686,24 @@ const Map<String, Map<String, String>> _catalog = {
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Noticiero de Westview',
     'web.errorTitle': 'No se pudo abrir esta página',
-    'web.errorBody': 'No se pudo cargar la página. Revisa tu conexión e inténtalo de nuevo.',
+    'web.errorBody':
+        'No se pudo cargar la página. Revisa tu conexión e inténtalo de nuevo.',
     'web.loading': 'Cargando página…',
-    'web.stale': 'No se pudo actualizar; se sigue mostrando la última página cargada.',
+    'web.stale':
+        'Falló la actualización, por lo que se sigue mostrando la página '
+        'cargada anteriormente.',
     'calendar.tabSchool': 'Calendario escolar',
     'calendar.tabAthletics': 'Deportes',
     'calendar.tabLunch': 'Almuerzos escolares',
     'calendar.errorTitle': 'No se pudieron cargar los eventos',
-    'calendar.errorBody': 'No se pudo conectar con el servidor del calendario. Revisa tu conexión e inténtalo de nuevo.',
+    'calendar.errorBody':
+        'No se pudo conectar con el servidor del calendario. Revisa tu '
+        'conexión e inténtalo de nuevo.',
     'calendar.loading': 'Cargando eventos…',
     'calendar.emptyTitle': 'No hay eventos próximos',
-    'calendar.emptyBody': 'Este calendario no tiene nada programado ahora. Desliza hacia abajo para actualizar.',
+    'calendar.emptyBody':
+        'No hay eventos programados en este calendario ahora mismo. Desliza '
+        'hacia abajo para actualizar.',
     'calendar.savedCopy': 'Copia guardada del',
     'calendar.untitled': 'Evento sin título',
     'calendar.description': 'Descripción',
@@ -743,7 +712,8 @@ const Map<String, Map<String, String>> _catalog = {
     'calendar.today': 'Hoy',
     'calendar.yesterday': 'Ayer',
     'calendar.tomorrow': 'Mañana',
-    'calendar.weekdays': 'lunes,martes,miércoles,jueves,viernes,sábado,domingo',
+    'calendar.weekdays':
+        'lunes,martes,miércoles,jueves,viernes,sábado,domingo',
     'calendar.am': 'a. m.',
     'calendar.pm': 'p. m.',
     'schedule.refresh': 'Actualizando horario…',
@@ -752,12 +722,17 @@ const Map<String, Map<String, String>> _catalog = {
     'common.loading': 'Cargando…',
     'common.errorTitle': 'No se puede cargar en este momento',
     'help.iconTooltip': 'Obtener ayuda ahora',
-    'help.iconTooltipQuickExit': '%s (mantén presionado para salir de la aplicación de inmediato)',
+    'help.iconTooltipQuickExit':
+        '%s (mantén presionado para salir de inmediato)',
     'lunch.errorTitle': 'No se pudo cargar el menú',
-    'lunch.errorBody': 'No se pudo conectar con el servidor del menú. Revisa tu conexión e inténtalo de nuevo.',
+    'lunch.errorBody':
+        'No se pudo conectar con el servidor del menú. Revisa tu conexión e '
+        'inténtalo de nuevo.',
     'lunch.loading': 'Cargando el menú…',
     'lunch.emptyTitle': 'No hay menú publicado',
-    'lunch.emptyBody': 'El menú de este mes aún no se ha publicado. Desliza hacia abajo para actualizar.',
+    'lunch.emptyBody':
+        'Todavía no se ha publicado el menú de este mes. Desliza hacia abajo '
+        'para actualizar.',
     'lunch.savedCopy': 'Menú guardado del',
     'lunch.noSchool': 'No hay clases',
     'lunch.entrees': 'Platos principales',
@@ -783,7 +758,8 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.emailA11y': 'Enviar correo a %s',
     'help.counselor.emailSubject': 'Pregunta de estudiante para mi consejero',
     'help.counselor.careerTitle': 'Orientación universitaria y profesional',
-    'help.counselor.careerRole': 'Técnica de orientación universitaria y profesional',
+    'help.counselor.careerRole':
+        'Técnica de orientación universitaria y profesional',
     'settings.roomShort': 'Aula',
   },
 
@@ -801,218 +777,177 @@ const Map<String, Map<String, String>> _catalog = {
     'common.close': '关闭',
     'common.cancel': '取消',
     'common.openInBrowser': '在浏览器中打开',
-    'common.copyNumber':
-        '复制此号码',
-    'sms.confirmTitle':
-        '要发送这条短信吗？',
-    'sms.openApp':
-        '打开信息',
+    'common.copyNumber': '复制此号码',
+    'sms.confirmTitle': '要发送这条短信吗？',
+    'sms.openApp': '打开信息',
     'sms.editNote':
-        '你的短信应用会打开，并已填好这条内容。发送前你可以修改或补充。',
+        '系统会打开你的短信应用并预先填入该关键词，发送前你可以检查或补充内容。',
 
     'disclaimer.short':
-        '本应用不属于 Poway 联合学区，未获 Poway 联合学区或 Westview 高中赞助或认可。',
+        '非 Poway 联合学区官方应用。本应用由学生独立开发，未获 Poway 联合学区或 '
+        'Westview 高中赞助或认可。',
     'disclaimer.title': '本应用不属于 Poway 联合学区',
     'disclaimer.plain':
-        '简单来说：Westview HS（WVAA）是由学生开发的辅助应用。Poway 联合学区和 '
-            'Westview 高中没有制作、没有运营，也没有审核过它。这里的任何内容都可能过时或'
-            '有误——请始终向学校办公室、你的辅导员或学校网站确认。',
+        'Westview HS（WVAA）是由学生独立开发的应用，并非由 Poway 联合学区或 '
+        'Westview 高中制作。由于学校不负责运营或审核本应用，这里显示的课表、链接或'
+        '联系方式可能未及时更新，重要信息请向学校办公室、辅导员或 Westview 网站确认。',
     'disclaimer.crisis':
-        '本应用不是危机服务，也没有人实时查看。如果你或他人处于危险中，请拨打 911。'
-            '遇到情绪危机时，请拨打或发送短信至 988。',
+        '本应用不是危机干预服务，也没有人实时查看。如果你或他人面临危险，请拨打 911。'
+        '遇到情绪危机时，请拨打或发送短信至 988。',
     'disclaimer.translationNote':
-        '免责声明的译文仅供帮助你理解。以学区要求的官方英文和西班牙文版本为准。',
+        '译文摘要仅为方便阅读提供；具有约束力的版本仍为学区要求的官方英文和西班牙文文本。',
 
     'help.title': '求助',
     'help.emergency.title': '有立即危险吗？',
-    'help.emergency.body': '如果你或他人即将受到伤害，或你现在就需要帮助，请立即拨打 911。',
+    'help.emergency.body':
+        '如果你或他人正面临受伤危险并需要紧急救助，请立即拨打 911。',
     'help.emergency.call': '拨打 911',
     'help.emergency.note':
-        '如果你不确定是否属于紧急情况，请拨打或发送短信至 988。会有人接听并帮你决定下一步。',
+        '如果你不确定当前情况是否属于紧急情况，请拨打或发短信至 988，辅导员会协助你判断下一步怎么做。',
 
-    'help.counselor.title': '与 Westview 的辅导员谈谈',
+    'help.counselor.title': '与 Westview 的辅导员联系',
     'help.counselor.body':
-        '上课日辅导员在 Wolverine Center。你可以直接走过去，请老师帮你过去，或直接给你'
-            '的辅导员发邮件——预约时不需要解释所有事情。',
+        '上课时间 Westview 辅导员都在 Wolverine Center。你可以直接前往、请老师开通行条，'
+        '或直接发邮件给你的辅导员，邮件里不必一次把所有情况都写完。',
     'help.counselor.callOffice': '致电办公室',
     'help.counselor.website': '辅导网站',
-    'help.counselor.find': '找到你的辅导员',
+    'help.counselor.find': '查找你的辅导员',
     'help.counselor.byLast': '按姓氏首字母分配。',
     'help.counselor.career': '升学与职业问题',
     'help.counselor.verified':
-        '人员和负责的字母范围可能在学年中变动。如果未列出你姓氏的首字母，请查看学校网站'
-            '或咨询办公室。（名单核对时间：2025 年 11 月。）',
+        '辅导员分工在学年中可能调整；如果你的姓氏不在下方列表中，请查询 Westview 网站'
+        '或咨询辅导办公室。（核对时间：2025 年 11 月。）',
 
-    'help.crisis.title': '危机热线——免费、保密、24 小时',
+    'help.crisis.title': '24 小时免费保密危机热线',
     'help.crisis.call': '拨打',
     'help.crisis.text': '短信',
     'help.crisis.deaf':
-        '听力不便或无法用电话交谈？下面的每一种方式也都可以通过短信或网络使用。988 和 '
-            'Crisis Text Line 以短信为主，圣地亚哥县的电话线也可通过中继接线员拨打：拨打 711。',
+        '如果你失聪、听力不便或无法出声通话，下列每项服务也都支持短信或在线联系。988 与 '
+        'Crisis Text Line 可直接收发短信，圣地亚哥县热线也可拨打 711 通过中继服务接通。',
 
-    'help.report.title': '报告安全问题',
+    'help.report.title': '报告安全隐忧',
     'help.report.body':
-        '担心同学、威胁、武器，或在网上看到的内容？请告诉一位你信任的成年人——老师、'
-            '辅导员、教练或家长。你也可以匿名报告：',
+        '如果你担心某位同学、校园威胁、武器或网上看到的内容，请告诉老师、辅导员、教练或'
+        '家长等可信赖的成年人，也可以通过以下渠道匿名报告：',
     'help.report.note':
-        '你不需要百分之百确定。报告可能有误，这没关系——审核报告的人受过专业训练。',
+        '报告前不需要掌握完整证据，受过训练的工作人员会核实每条线索并判断需要哪些支持。',
 
     'help.about.title': '关于本应用',
 
     'hotline.988.name': '988 自杀与危机生命线',
     'hotline.988.desc':
-        '为处于情绪困扰或自杀危机中的任何人提供免费、保密的支持。全天候可拨打或发短信。',
+        '全天 24 小时通过电话或短信，为处于情绪困扰或自杀危机中的人提供免费、保密的支持。',
     'hotline.988.call': '拨打 988',
     'hotline.988.sms': '短信 988',
     'hotline.sdaocl.name': '圣地亚哥心理援助与危机热线',
     'hotline.sdaocl.desc':
-        '圣地亚哥县 24 小时心理健康与药物使用危机热线，可为你或你担心的人拨打。提供 200 '
-            '多种语言的免费翻译。也可派出移动危机响应团队。',
+        '圣地亚哥县 24 小时心理健康与物质使用危机热线，本人或关心他人均可拨打，提供 200 '
+        '多种语言免费口译，并在需要时派出移动危机响应团队。',
     'hotline.sdaocl.call': '拨打 1-888-724-7240',
     'hotline.crisistext.name': 'Crisis Text Line（短信热线）',
     'hotline.crisistext.desc':
-        '比起说话更愿意打字？把困扰你的事发短信给受过训练的志愿者。免费、24 小时、保密。',
+        '如果打字比打电话更方便，可随时发短信联系受过训练的危机辅导员，免费且保密。',
     'hotline.crisistext.sms': '发送 HOME 至 741741',
     'hotline.trevor.name': 'The Trevor Project',
-    'hotline.trevor.desc': '为 LGBTQ+ 青少年提供 24 小时危机与自杀预防支持。你值得被认真对待。',
+    'hotline.trevor.desc':
+        '面向 LGBTQ+ 青少年的 24 小时免费保密危机干预与自杀预防支持，可电话或短信联系。',
     'hotline.trevor.call': '拨打 1-866-488-7386',
     'hotline.trevor.sms': '发送 START 至 678678',
     'hotline.sandyhook.name': 'Say Something 匿名报告',
     'hotline.sandyhook.desc':
-        '匿名报告威胁、武器或可能处于危险中的人——由危机辅导员接听。适合“我担心某个同学”，'
-            '不只用于紧急情况。',
+        '由危机辅导员接听的匿名报告渠道，可报告威胁、武器或可能面临伤害风险的同学。',
     'hotline.sandyhook.call': '拨打 1-844-5-SAYNOW',
-    'hotline.pusdtip.name': 'PUSD“See Something, Say Something”举报热线',
+    'hotline.pusdtip.name': 'PUSD "See Something, Say Something" 举报热线',
     'hotline.pusdtip.desc':
-        'Poway 联合学区的 24 小时匿名举报热线，由执法部门监控，用于报告校园威胁和安全问题。'
-            '号码印在你的学生证背面。',
+        'Poway 联合学区由执法部门监控的 24 小时匿名举报热线，用于报告校园威胁与安全问题'
+        '（号码亦印在学生证背面）。',
     'hotline.pusdtip.call': '拨打 1-844-PUSD-TIP',
 
     'settings.title': '设置',
     'settings.safety': '安全',
     'settings.getHelp': '立即求助',
-    'settings.getHelpSub': 'Westview 辅导员、危机热线，以及如何报告安全问题。离线也可使用。',
-    'settings.quickExit': '快速离开',
-    'settings.quickExitSub': '长按“求助”按钮立即离开应用。你刚才看的内容不会留在屏幕上。',
-    'settings.hideRecents': '在多任务中隐藏预览',
-    'settings.hideRecentsSub': '让最近任务列表中不显示应用的最后一屏（Android）。',
+    'settings.getHelpSub':
+        'Westview 辅导员、24 小时危机热线及匿名安全举报，离线可用。',
+    'settings.quickExit': '快速退出',
+    'settings.quickExitSub':
+        '长按“求助”按钮即可立即关闭当前页面并将应用切到后台。',
+    'settings.hideRecents': '在最近任务中隐藏预览',
+    'settings.hideRecentsSub':
+        '切到后台时将 Android 最近任务列表中的应用缩略图设为空白。',
     'settings.language': '语言',
-    'settings.languageSub': '适用于求助、设置和导航。',
+    'settings.languageSub': '应用于求助、设置和导航栏。',
     'settings.privacy': '隐私与数据',
     'settings.about': '关于本应用',
 
     'privacy.title': '你的隐私',
-    'privacy.intro': '本应用最多向学校自己的服务器发送两项内容，除此之外没有别的：',
-    'privacy.bullet1': '• 匿名使用次数——打开了哪些页面、刷新是否成功。不含姓名或账号。',
-    'privacy.bullet2': '• 崩溃报告——错误文本，并已删除你在设置中输入的内容，以便修复问题。',
+    'privacy.intro': '开启后，本应用仅向学校服务器发送两类匿名数据：',
+    'privacy.bullet1':
+        '• 匿名使用计数：打开了哪些标签页以及刷新是否成功，不含姓名或账号。',
+    'privacy.bullet2':
+        '• 崩溃报告：发送前会先移除你在设置中填写的课程名、老师和教室号。',
     'privacy.never':
-        '它绝不收集你的姓名、学号、通讯录、位置或广告标识符，也不与第三方共享。没有第三方分析工具。',
-    'privacy.offUntil': '除非你主动开启，两项功能都处于关闭状态；你可随时在“设置 ▸ 隐私”中更改。',
+        '本应用不使用第三方统计工具，也绝不收集姓名、学号、通讯录、位置或广告标识符。',
+    'privacy.offUntil':
+        '两项开关默认关闭，除非你主动开启，且可随时在“设置 > 隐私与数据”中修改。',
     'privacy.dontShare': '不分享',
     'privacy.share': '匿名分享',
-    'settings.notifications':
-        '通知',
-    'settings.notificationsSub':
-        '允许 Westview HS 发送通知',
-    'settings.liveActivity':
-        '实时活动',
-    'settings.liveOn':
-        '显示本节剩余时间的常驻通知',
-    'settings.liveOff':
-        '开启通知后才能使用实时活动',
-    'settings.privacyData':
-        '隐私与数据',
-    'settings.analytics':
-        '匿名使用统计',
-    'settings.analyticsSub':
-        '记录打开了哪些页面、刷新是否成功。不会识别你的身份。',
-    'settings.crash':
-        '崩溃报告',
-    'settings.crashSub':
-        '应用出错时的错误文本和堆栈，用于修复问题。不会识别你的身份。',
-    'settings.collectTitle':
-        '我们收集什么（以及不收集什么）',
+    'settings.notifications': '通知',
+    'settings.notificationsSub': '允许 Westview HS 发送通知',
+    'settings.liveActivity': '实时活动',
+    'settings.liveOn': '常驻通知，实时倒计时显示当前课时结束时间',
+    'settings.liveOff': '开启通知后才能使用实时活动',
+    'settings.privacyData': '隐私与数据',
+    'settings.analytics': '匿名使用统计',
+    'settings.analyticsSub': '统计页面打开次数和刷新结果，不会识别你的身份。',
+    'settings.crash': '崩溃报告',
+    'settings.crashSub': '应用崩溃时发送错误信息与堆栈以便修复问题，不会识别你的身份。',
+    'settings.collectTitle': '本应用收集的数据',
     'settings.collectBody':
-        '除非你主动开启，上面两个开关都处于关闭状态。开启后，应用会发送匿名使用统计和崩溃报告以便改进，发送前会先删除你在设置中输入的内容。它绝不收集你的姓名、学号、通讯录、位置或广告标识符。报告只发送到学校服务器。',
-    'settings.savedContent':
-        '已保存的内容',
-    'settings.clear':
-        '清除已保存内容',
+        '上方两个开关默认关闭。开启后，应用会先剔除你在“我的课程”中填写的内容，再将匿名使用计数和崩溃报告发送至学校服务器；应用绝不收集姓名、学号、通讯录、位置或广告 ID。',
+    'settings.savedContent': '已保存的内容',
+    'settings.clear': '清除已保存内容',
     'settings.clearSub':
-        '删除为离线使用而保存的日历、午餐菜单和营养数据。下次打开时会重新下载。',
-    'settings.cleared':
-        '已清除保存的内容',
-    'settings.classDetails':
-        '课程信息',
-    'settings.showTeacher':
-        '显示老师',
-    'settings.showTeacherSub':
-        '在课表、通知和小组件中显示老师',
-    'settings.showRoom':
-        '显示教室号',
-    'settings.showRoomSub':
-        '在课表、通知和小组件中显示教室',
-    'settings.myClasses':
-        '我的课程',
-    'settings.resetClasses':
-        '重置所有课程名称',
-    'settings.resetTitle':
-        '重置课程名称？',
-    'settings.resetBody':
-        '这会删除你输入的所有名称、老师和教室。',
-    'settings.reset':
-        '重置',
-    'settings.tapToAdd':
-        '点按添加名称、老师或教室',
-    'settings.editClass':
-        '课程名称',
-    'settings.leaveEmpty':
-        '留空则保留当前名称',
-    'settings.teacher':
-        '老师',
-    'settings.room':
-        '教室号',
-    'settings.clearField':
-        '清除',
-    'settings.cancel':
-        '取消',
-    'settings.save':
-        '保存',
+        '清除供离线查看的日历、午餐菜单和营养数据缓存，下次打开时会重新下载。',
+    'settings.cleared': '已清除保存的内容',
+    'settings.classDetails': '课程信息',
+    'settings.showTeacher': '显示老师',
+    'settings.showTeacherSub': '在课表、通知和小组件中显示老师姓名',
+    'settings.showRoom': '显示教室号',
+    'settings.showRoomSub': '在课表、通知和小组件中显示教室号',
+    'settings.myClasses': '我的课程',
+    'settings.resetClasses': '重置所有课程名称',
+    'settings.resetTitle': '重置课程名称？',
+    'settings.resetBody': '这会清除你填写的所有自定义课程名称、老师和教室号。',
+    'settings.reset': '重置',
+    'settings.tapToAdd': '点按添加课程名称、老师或教室',
+    'settings.editClass': '课程名称',
+    'settings.leaveEmpty': '留空则保留默认节次名称',
+    'settings.teacher': '老师',
+    'settings.room': '教室号',
+    'settings.clearField': '清除',
+    'settings.cancel': '取消',
+    'settings.save': '保存',
     'settings.notCrisis':
-        '本应用不是危机服务，也没有人实时查看。如果你或他人处于危险中，请拨打 911。遇到情绪危机时，请拨打或发送短信至 988。',
+        '本应用不是危机干预服务，也没有人实时查看。如果你或他人面临危险，请拨打 911。遇到情绪危机时，请拨打或发送短信至 988。',
     'settings.verified':
-        '课表、菜单和链接可能过时或有误。时间敏感的信息请务必向学校办公室确认。辅导员联系方式最后核对于 2025 年 11 月；以辅导办公室和学校网站为准。',
-    'settings.langLabel':
-        '语言',
-    'settings.langSystem':
-        '跟随系统',
-    'schedule.monFri':
-        '周一/周五',
-    'schedule.tueThu':
-        '周二/周四',
-    'schedule.wed':
-        '周三',
-    'schedule.noActivePeriod':
-        '当前没有课程',
-    'schedule.now':
-        '现在',
+        '由于课表、菜单和链接可能在学年中变动，时间敏感的信息请向学校办公室确认。辅导员联系方式最后于 2025 年 11 月对照 Westview 辅导网页核实。',
+    'settings.langLabel': '语言',
+    'settings.langSystem': '跟随系统',
+    'schedule.monFri': '周一/周五',
+    'schedule.tueThu': '周二/周四',
+    'schedule.wed': '周三',
+    'schedule.noActivePeriod': '当前没有课程',
+    'schedule.now': '现在',
     'schedule.endsAt': '结束于',
-    'schedule.special':
-        '今天有特殊课表',
+    'schedule.special': '今天启用特殊课表',
     'schedule.mayNotBeAccurate':
-        '无法连接课表服务器，今天的课表可能不准确。',
-    'schedule.dismiss':
-        '关闭',
-    'schedule.checking':
-        '正在检查课表更新',
-    'schedule.settings':
-        '设置',
-    'schedule.help':
-        '求助',
-    'schedule.helpTooltip':
-        '立即求助。长按可快速离开应用（如果不想让别人看到此页面）。',
-    'common.selected':
-        '已选择',
+        '无法连接特殊课表服务器，因此今天显示的课表可能不是最新内容。',
+    'schedule.dismiss': '关闭',
+    'schedule.checking': '正在检查课表更新',
+    'schedule.settings': '设置',
+    'schedule.help': '求助',
+    'schedule.helpTooltip': '立即求助。长按此按钮可立即退出到后台。',
+    'common.selected': '已选择',
     'common.refresh': '刷新',
     'common.dismiss': '关闭',
     'common.retry': '重试',
@@ -1024,7 +959,7 @@ const Map<String, Map<String, String>> _catalog = {
     'web.errorTitle': '无法打开此页面',
     'web.errorBody': '页面无法加载。请检查网络连接后重试。',
     'web.loading': '正在加载页面…',
-    'web.stale': '无法刷新，仍在显示上次加载的页面。',
+    'web.stale': '刷新失败，当前仍显示之前已加载的页面。',
     'calendar.tabSchool': '学校日历',
     'calendar.tabAthletics': '体育赛事',
     'calendar.tabLunch': '学校午餐',
@@ -1032,7 +967,7 @@ const Map<String, Map<String, String>> _catalog = {
     'calendar.errorBody': '无法连接日历服务器。请检查网络连接后重试。',
     'calendar.loading': '正在加载活动…',
     'calendar.emptyTitle': '暂无即将举行的活动',
-    'calendar.emptyBody': '此日历目前没有安排。下拉可刷新。',
+    'calendar.emptyBody': '该日历目前没有安排活动，下拉即可刷新。',
     'calendar.savedCopy': '已保存副本：',
     'calendar.untitled': '未命名活动',
     'calendar.description': '说明',
@@ -1050,12 +985,12 @@ const Map<String, Map<String, String>> _catalog = {
     'common.loading': '正在加载…',
     'common.errorTitle': '目前无法加载',
     'help.iconTooltip': '立即求助',
-    'help.iconTooltipQuickExit': '%s（长按即可立即退出应用）',
+    'help.iconTooltipQuickExit': '%s（长按可立即退出应用）',
     'lunch.errorTitle': '无法加载午餐菜单',
     'lunch.errorBody': '无法连接菜单服务器。请检查网络连接后重试。',
     'lunch.loading': '正在加载菜单…',
     'lunch.emptyTitle': '尚未发布午餐菜单',
-    'lunch.emptyBody': '本月的菜单尚未发布。下拉可刷新。',
+    'lunch.emptyBody': '本月的午餐菜单尚未发布，下拉即可刷新。',
     'lunch.savedCopy': '已保存菜单：',
     'lunch.noSchool': '停课',
     'lunch.entrees': '午餐主菜',
@@ -1099,255 +1034,240 @@ const Map<String, Map<String, String>> _catalog = {
     'common.close': 'Isara',
     'common.cancel': 'Kanselahin',
     'common.openInBrowser': 'Buksan sa browser',
-    'common.copyNumber':
-        'Kopyahin ang numerong ito',
-    'sms.confirmTitle':
-        'Ipadala ang text na ito?',
-    'sms.openApp':
-        'Buksan ang Messages',
+    'common.copyNumber': 'Kopyahin ang numerong ito',
+    'sms.confirmTitle': 'Ipadala ang text na ito?',
+    'sms.openApp': 'Buksan ang Messages',
     'sms.editNote':
-        'Bubukas ang messaging app mo na may nakasulat nang mensahe. Maaari mong i-edit o dagdagan bago ipadala.',
+        'Bubukas ang iyong messaging app na nakalagay na ang keyword na ito '
+        'para masuri o madagdagan mo bago ipadala.',
 
     'disclaimer.short':
-        'Hindi ito app ng Poway Unified. Hindi ito itinataguyod o sinusuportahan ng '
-            'Poway Unified School District o ng Westview High School.',
+        'Hindi ito app ng Poway Unified. Ginawa ito nang hiwalay ng mga '
+        'estudyante at hindi itinataguyod o sinusuportahan ng Poway Unified '
+        'School District o ng Westview High School.',
     'disclaimer.title': 'Hindi bahagi ng Poway Unified ang app na ito',
     'disclaimer.plain':
-        'Sa simpleng salita: ang Westview HS (WVAA) ay app na ginawa ng mga estudyante. '
-            'Hindi ito ginawa, pinapatakbo, o sinuri ng Poway Unified School District at '
-            'ng Westview High School. Maaaring luma o mali ang anumang makita rito — '
-            'palaging i-verify sa opisina ng paaralan, sa iyong counselor, o sa website '
-            'ng paaralan.',
+        'Ang Westview HS (WVAA) ay isang hiwalay na app na binuo ng mga '
+        'estudyante at hindi ng Poway Unified School District o ng Westview '
+        'High School. Dahil hindi ito pinapatakbo o sinusuri ng paaralan, '
+        'maaaring hindi na updated ang mga iskedyul, link, o contact dito, '
+        'kaya kumpirmahin ang mahahalagang detalye sa opisina ng paaralan, sa '
+        'iyong counselor, o sa website ng Westview.',
     'disclaimer.crisis':
-        'Hindi serbisyo para sa krisis ang app na ito at walang nagbabantay dito. Kung '
-            'ikaw o ang iba ay nasa panganib, tumawag sa 911. Sa emosyonal na krisis, '
-            'tumawag o mag-text sa 988.',
+        'Hindi serbisyo para sa krisis ang app na ito at walang nagbabantay '
+        'dito. Kung ikaw o ang ibang tao ay nasa panganib, tumawag sa 911. Sa '
+        'emosyonal na krisis, tumawag o mag-text sa 988.',
     'disclaimer.translationNote':
-        'Ang salin ng disclaimer ay para lamang maintindihan ito. Ang opisyal na '
-            'Ingles at Espanyol na bersyon na hinihiling ng distrito ang sinusunod.',
+        'Isinama ang mga isinaling buod para mas madaling maunawaan ang '
+        'paalalang ito, habang ang opisyal na tekstong Ingles at Espanyol ng '
+        'distrito pa rin ang umiiral na bersyon.',
 
     'help.title': 'Tulong',
     'help.emergency.title': 'May agarang panganib ba?',
     'help.emergency.body':
-        'Tumawag agad sa 911 kung ikaw o ang iba ay malapit nang masaktan, o kailangan mo '
-            'ng tulong ngayon mismo.',
+        'Tumawag agad sa 911 kung ikaw o ang ibang tao ay nanganganib masaktan '
+        'at nangangailangan ng agarang tulong.',
     'help.emergency.call': 'Tumawag sa 911',
     'help.emergency.note':
-        'Kung hindi ka sigurado kung emergency ito, tumawag o mag-text sa 988. May sasagot '
-            'at tutulungan kang magpasya sa susunod na hakbang.',
+        'Kung hindi ka sigurado kung emergency ang sitwasyon, tumawag o '
+        'mag-text sa 988 para matulungan ka ng counselor sa susunod na '
+        'hakbang.',
 
     'help.counselor.title': 'Kausapin ang counselor sa Westview',
     'help.counselor.body':
-        'Nasa Wolverine Center ang mga counselor sa oras ng klase. Maaari kang dumaan, '
-            'humiling ng tulong sa teacher para makapunta roon, o mag-email nang direkta sa '
-            'iyong counselor — hindi mo kailangang ipaliwanag lahat para makakuha ng '
-            'appointment.',
+        'Nasa Wolverine Center ang mga counselor ng Westview sa oras ng klase. '
+        'Maaaring dumaan nang personal, humingi ng pass sa teacher, o '
+        'mag-email nang direkta sa iyong counselor nang hindi kailangang '
+        'ipaliwanag ang lahat sa unang mensahe.',
     'help.counselor.callOffice': 'Tumawag sa opisina',
     'help.counselor.website': 'Website ng counseling',
     'help.counselor.find': 'Hanapin ang iyong counselor',
-    'help.counselor.byLast': 'Batay sa unang letra ng iyong apelyido.',
+    'help.counselor.byLast': 'Naka-assign ayon sa unang letra ng apelyido mo.',
     'help.counselor.career': 'Mga tanong sa kolehiyo at karera',
     'help.counselor.verified':
-        'Maaaring magbago ang staff at assignment sa loob ng taon. Tingnan ang website ng '
-            'paaralan o ang counseling office kung wala ang letra ng iyong apelyido. '
-            '(Sinuri noong Nobyembre 2025.)',
+        'Maaaring magbago ang naka-assign na counselor sa loob ng school year, '
+        'kaya tingnan ang website ng Westview o ang counseling office kung '
+        'hindi tugma ang apelyido mo sa listahan sa ibaba. (Sinuri noong '
+        'Nobyembre 2025.)',
 
-    'help.crisis.title': 'Mga crisis line — libre, kompidensyal, 24/7',
+    'help.crisis.title': 'Libreng 24/7 at kompidensyal na mga crisis line',
     'help.crisis.call': 'Tumawag',
     'help.crisis.text': 'Mag-text',
     'help.crisis.deaf':
-        'May problema sa pandinig o hindi makapagsalita sa telepono? Lahat ng '
-            'opsyon sa ibaba ay gumagana rin sa text o online. Ang 988 at Crisis '
-            'Text Line ay text-first, at maaari ring abutin ang linya ng San '
-            'Diego County sa pamamagitan ng relay operator: i-dial ang 711.',
+        'Kung ikaw ay bingi, hirap sa pandinig, o hindi makapagsalita nang '
+        'malakas, lahat ng serbisyo sa ibaba ay maaabot din sa text o online. '
+        'Direktang tumatanggap ng text ang 988 at Crisis Text Line, habang '
+        'tumatanggap naman ng 711 relay call ang linya ng San Diego County.',
 
-    'help.report.title': 'Iulat ang isyu sa kaligtasan',
+    'help.report.title': 'Mag-ulat ng alalahanin sa kaligtasan',
     'help.report.body':
-        'May nag-aalala sa iyong kaklase, isang banta, armas, o nakita mo sa online? Sabihin '
-            'sa mapagkakatiwalaang matanda — teacher, counselor, coach, o magulang. Maaari '
-            'ding iulat ito nang anonymous:',
+        'Kung nag-aalala ka tungkol sa isang kaklase, banta, armas, o isang '
+        'post online, magsabi sa mapagkakatiwalaang nakatatanda gaya ng '
+        'teacher, counselor, coach, o magulang. Maaari ding mag-ulat nang '
+        'anonymous sa mga linyang ito:',
     'help.report.note':
-        'Hindi mo kailangang maging sigurado. Maaaring magkamali ang ulat at okay lang '
-            'iyon — sinanay ang mga nagche-check nito.',
+        'Hindi mo kailangang magkaroon ng buong ebidensya bago mag-ulat, dahil '
+        'sinusuri ng sinanay na staff ang bawat tip para malaman kung anong '
+        'tulong ang kailangan.',
 
     'help.about.title': 'Tungkol sa app na ito',
 
     'hotline.988.name': '988 Suicide & Crisis Lifeline',
     'hotline.988.desc':
-        'Libre at kompidensyal na suporta para sa sinumang may emosyonal na paghihirap o '
-            'krisis sa pagpapatiwakal. Tumawag o mag-text anumang oras.',
+        'Libre at kompidensyal na 24/7 na suporta sa tawag o text para sa '
+        'sinumang nakararanas ng matinding lungkot o krisis.',
     'hotline.988.call': 'Tumawag sa 988',
     'hotline.988.sms': 'I-text ang 988',
     'hotline.sdaocl.name': 'San Diego Access & Crisis Line',
     'hotline.sdaocl.desc':
-        '24/7 na linya ng San Diego County para sa mental health at substance use crisis, '
-            'para sa iyo o sa taong nag-aalala ka. Libreng interpreter sa 200+ wika. Maaari '
-            'din silang magpadala ng Mobile Crisis Response Team.',
+        '24/7 na linya ng San Diego County para sa mental health o '
+        'substance-use crisis para sa iyo o sa kakilala mo, na may libreng '
+        'interpreter sa mahigit 200 wika at mobile crisis team kung kailangan.',
     'hotline.sdaocl.call': 'Tumawag sa 1-888-724-7240',
     'hotline.crisistext.name': 'Crisis Text Line',
     'hotline.crisistext.desc':
-        'Mas gusto mong mag-type kaysa magsalita? Mag-text sa sinanay na volunteer tungkol '
-            'sa kahit ano. Libre, 24/7, at kompidensyal.',
+        'Nagkokonekta sa iyo sa sinanay na crisis counselor sa pamamagitan ng '
+        'text anumang oras kung mas madali ang mag-type kaysa tumawag. Libre '
+        'at kompidensyal.',
     'hotline.crisistext.sms': 'I-text ang HOME sa 741741',
     'hotline.trevor.name': 'The Trevor Project',
     'hotline.trevor.desc':
-        'Suporta sa krisis at pag-iwas sa pagpapatiwakal para sa LGBTQ+ na kabataan, 24/7. '
-            'Karapat-dapat kang seryosohin.',
+        'Libre at kompidensyal na 24/7 na suporta sa krisis at pag-iwas sa '
+        'pagpapatiwakal para sa mga kabataang LGBTQ+ sa tawag o text.',
     'hotline.trevor.call': 'Tumawag sa 1-866-488-7386',
     'hotline.trevor.sms': 'I-text ang START sa 678678',
     'hotline.sandyhook.name': 'Say Something Anonymous Reporting',
     'hotline.sandyhook.desc':
-        'Anonymous na paraan para iulat ang banta, armas, o taong maaaring nasa panganib — '
-            'mga crisis counselor ang sasagot. Para sa “may nag-aalala ako sa kaklase ko,” '
-            'hindi lang sa emergency.',
+        'Anonymous na linya na sinasagot ng mga crisis counselor para sa mga '
+        'banta, armas, o pag-aalala na baka mapahamak ang isang kaklase.',
     'hotline.sandyhook.call': 'Tumawag sa 1-844-5-SAYNOW',
-    'hotline.pusdtip.name': 'PUSD “See Something, Say Something” Tip Line',
+    'hotline.pusdtip.name': 'PUSD "See Something, Say Something" Tip Line',
     'hotline.pusdtip.desc':
-        '24-oras na anonymous na tip line ng Poway Unified, binabantayan ng law '
-            'enforcement, para sa banta at isyu sa kaligtasan ng paaralan. Nasa likod ng '
-            'student ID mo ang numero.',
+        '24-oras na anonymous tip line ng Poway Unified na binabantayan ng law '
+        'enforcement para sa mga banta at kaligtasan sa paaralan (nakaprinta '
+        'rin sa likod ng student ID).',
     'hotline.pusdtip.call': 'Tumawag sa 1-844-PUSD-TIP',
 
     'settings.title': 'Mga Setting',
     'settings.safety': 'Kaligtasan',
     'settings.getHelp': 'Kumuha ng tulong ngayon',
     'settings.getHelpSub':
-        'Mga counselor sa Westview, crisis line, at paano iulat ang isyu sa kaligtasan. '
-            'Gumagana offline.',
+        'Mga counselor sa Westview, 24/7 crisis line, at anonymous na pag-uulat '
+        'sa kaligtasan. Gumagana kahit offline.',
     'settings.quickExit': 'Mabilisang paglabas',
     'settings.quickExitSub':
-        'Pindutin nang matagal ang Help button para agad lumabas sa app. Walang natitira sa '
-            'screen ng tiningnan mo.',
+        'Pindutin nang matagal ang Help button para isara agad ang screen na '
+        'ito at ilipat ang app sa background.',
     'settings.hideRecents': 'Itago ang preview sa app switcher',
     'settings.hideRecentsSub':
-        'Hindi ipapakita ang huling screen sa listahan ng recent apps (Android).',
+        'Ginagawang blangko ang preview ng app sa listahan ng recent apps sa '
+        'Android habang nasa background.',
     'settings.language': 'Wika',
-    'settings.languageSub': 'Naaangkop sa Tulong, Mga Setting at navigation.',
+    'settings.languageSub': 'Naaangkop sa Tulong, Mga Setting, at navigation.',
     'settings.privacy': 'Privacy at data',
     'settings.about': 'Tungkol sa app na ito',
 
     'privacy.title': 'Ang iyong privacy',
     'privacy.intro':
-        'Maaaring magpadala ang app na ito ng dalawang bagay sa server ng paaralan, at wala '
-            'nang iba:',
+        'Kapag binuksan mo ito, dalawang uri lang ng anonymous na data ang '
+        'ipinapadala ng app sa server ng paaralan:',
     'privacy.bullet1':
-        '• Anonymous na bilang ng paggamit — kung aling screen ang binuksan at kung '
-            'nagtagumpay ang refresh. Walang pangalan o account.',
+        '• Anonymous na bilang ng paggamit: kung aling tab ang binubuksan at '
+        'kung gumana ang refresh, nang walang pangalan o account.',
     'privacy.bullet2':
-        '• Crash report — ang error text, na tinanggal ang anumang itina-type mo sa '
-            'Settings, para maayos ito.',
+        '• Mga crash report: detalye ng error matapos alisin ang anumang '
+        'pangalan ng klase, teacher, o room na inilagay sa Mga Setting.',
     'privacy.never':
-        'Hindi nito kinokolekta ang pangalan, student ID, contacts, lokasyon, o advertising '
-            'identifier, at wala itong ibinabahagi sa third party. Walang third-party '
-            'analytics.',
+        'Hindi gumagamit ang app ng third-party analytics at hindi nito '
+        'kinokolekta ang pangalan, student ID, contacts, lokasyon, o '
+        'advertising ID.',
     'privacy.offUntil':
-        'Naka-off ang dalawa maliban kung buksan mo, at mababago mo ito anumang oras sa '
-            'Settings ▸ Privacy.',
+        'Naka-off ang parehong opsyon maliban kung buksan mo, at maaari mo '
+        'itong baguhin anumang oras sa Mga Setting > Privacy at data.',
     'privacy.dontShare': 'Huwag ibahagi',
     'privacy.share': 'Ibahagi nang anonymous',
-    'settings.notifications':
-        'Mga abiso',
+    'settings.notifications': 'Mga abiso',
     'settings.notificationsSub':
         'Payagan ang Westview HS na magpadala ng abiso',
-    'settings.liveActivity':
-        'Live na aktibidad',
+    'settings.liveActivity': 'Live na aktibidad',
     'settings.liveOn':
-        'Palagiang abiso na may countdown hanggang matapos ang kasalukuyang period',
-    'settings.liveOff':
-        'Buksan ang abiso para magamit ang live na aktibidad',
-    'settings.privacyData':
-        'Privacy at data',
-    'settings.analytics':
-        'Anonymous na estadistika ng paggamit',
+        'Tuloy-tuloy na abiso na may countdown hanggang matapos ang '
+        'kasalukuyang period',
+    'settings.liveOff': 'Buksan ang abiso para magamit ang live na aktibidad',
+    'settings.privacyData': 'Privacy at data',
+    'settings.analytics': 'Anonymous na estadistika ng paggamit',
     'settings.analyticsSub':
-        'Bilang ng mga screen na binuksan at kung nagtagumpay ang refresh. Hindi ka tinutukoy.',
-    'settings.crash':
-        'Mga crash report',
+        'Binibilang kung aling screen ang binubuksan at kung gumagana ang '
+        'refresh, nang hindi ka nakikilala.',
+    'settings.crash': 'Mga crash report',
     'settings.crashSub':
-        'Error text at stack trace kapag nagka-error ang app, para maayos ito. Hindi ka tinutukoy.',
-    'settings.collectTitle':
-        'Ano ang kinokolekta namin (at hindi)',
+        'Nagpapadala ng detalye ng error at stack trace kapag nag-crash ang '
+        'app para maayos ang bug, nang hindi ka nakikilala.',
+    'settings.collectTitle': 'Ano ang kinokolekta ng app na ito',
     'settings.collectBody':
-        'Naka-off ang dalawang switch sa itaas maliban kung binuksan mo. Kapag bukas, nagpapadala ang app ng anonymous na bilang ng paggamit at crash report para maayos ito — tinanggal muna ang anumang itina-type mo sa Settings. Hindi nito kinokolekta ang pangalan, student ID, contacts, lokasyon, o advertising identifier. Sa server ng paaralan lang napupunta ang mga report.',
-    'settings.savedContent':
-        'Naka-save na content',
-    'settings.clear':
-        'Burahin ang naka-save na content',
+        'Naka-off ang dalawang switch hangga\'t hindi mo binubuksan. Kapag '
+        'naka-on, nagpapadala ang app ng anonymous na bilang ng paggamit at '
+        'crash report sa server ng paaralan matapos alisin ang anumang '
+        'inilagay sa Aking mga klase, at hindi ito kumokolekta ng pangalan, '
+        'student ID, contacts, lokasyon, o advertising ID.',
+    'settings.savedContent': 'Naka-save na content',
+    'settings.clear': 'Burahin ang naka-save na content',
     'settings.clearSub':
-        'Tinatanggal ang mga kalendaryo, menu ng tanghalian at nutrition data na naka-save para sa offline. Magda-download muli kapag binuksan mo.',
-    'settings.cleared':
-        'Nabura ang naka-save na content',
-    'settings.classDetails':
-        'Detalye ng klase',
-    'settings.showTeacher':
-        'Ipakita ang teacher',
+        'Tinatanggal ang naka-cache na kalendaryo, menu ng tanghalian, at '
+        'nutrition data para ma-download nang bago sa susunod na bukas.',
+    'settings.cleared': 'Nabura ang naka-save na content',
+    'settings.classDetails': 'Detalye ng klase',
+    'settings.showTeacher': 'Ipakita ang teacher',
     'settings.showTeacherSub':
-        'Ipakita ang teacher sa iskedyul, abiso at widget',
-    'settings.showRoom':
-        'Ipakita ang room number',
+        'Ipakita ang pangalan ng teacher sa iskedyul, abiso, at widget',
+    'settings.showRoom': 'Ipakita ang room number',
     'settings.showRoomSub':
-        'Ipakita ang room sa iskedyul, abiso at widget',
-    'settings.myClasses':
-        'Aking mga klase',
-    'settings.resetClasses':
-        'I-reset ang lahat ng pangalan ng klase',
-    'settings.resetTitle':
-        'I-reset ang mga pangalan?',
+        'Ipakita ang room number sa iskedyul, abiso, at widget',
+    'settings.myClasses': 'Aking mga klase',
+    'settings.resetClasses': 'I-reset ang lahat ng pangalan ng klase',
+    'settings.resetTitle': 'I-reset ang mga pangalan?',
     'settings.resetBody':
-        'Tinatanggal nito ang lahat ng pangalan, teacher at room na inilagay mo.',
-    'settings.reset':
-        'I-reset',
-    'settings.tapToAdd':
-        'I-tap para magdagdag ng pangalan, teacher o room',
-    'settings.editClass':
-        'Pangalan ng klase',
+        'Buburahin nito ang lahat ng custom na pangalan ng klase, teacher, at '
+        'room number na inilagay mo.',
+    'settings.reset': 'I-reset',
+    'settings.tapToAdd': 'I-tap para magdagdag ng klase, teacher, o room',
+    'settings.editClass': 'Pangalan ng klase',
     'settings.leaveEmpty':
-        'Iwanang blangko para mapanatili ang kasalukuyang pangalan',
-    'settings.teacher':
-        'Teacher',
-    'settings.room':
-        'Room number',
-    'settings.clearField':
-        'Burahin',
-    'settings.cancel':
-        'Kanselahin',
-    'settings.save':
-        'I-save',
+        'Iwanang blangko para panatilihin ang default na pangalan ng period',
+    'settings.teacher': 'Teacher',
+    'settings.room': 'Room number',
+    'settings.clearField': 'Burahin',
+    'settings.cancel': 'Kanselahin',
+    'settings.save': 'I-save',
     'settings.notCrisis':
-        'Hindi serbisyo para sa krisis ang app na ito at walang nagbabantay dito. Kung ikaw o ang iba ay nasa panganib, tumawag sa 911. Sa emosyonal na krisis, tumawag o mag-text sa 988.',
+        'Hindi serbisyo para sa krisis ang app na ito at walang nagbabantay '
+        'dito. Kung ikaw o ang ibang tao ay nasa panganib, tumawag sa 911. Sa '
+        'emosyonal na krisis, tumawag o mag-text sa 988.',
     'settings.verified':
-        'Maaaring luma o mali ang iskedyul, menu at link. Palaging i-verify sa opisina ng paaralan ang mga sensitibo sa oras na impormasyon. Huling sinuri ang contacts ng counseling noong Nobyembre 2025; ang counseling office at website ng paaralan ang opisyal na pinagmulan.',
-    'settings.langLabel':
-        'Wika',
-    'settings.langSystem':
-        'Default ng system',
-    'schedule.monFri':
-        'Lun/Biy',
-    'schedule.tueThu':
-        'Mar/Huw',
-    'schedule.wed':
-        'Miy',
-    'schedule.noActivePeriod':
-        'Walang aktibong period',
-    'schedule.now':
-        'Ngayon',
+        'Dahil maaaring magbago ang mga iskedyul, menu, at link sa loob ng '
+        'school year, kumpirmahin sa opisina ng paaralan ang mahahalagang '
+        'detalye. Huling sinuri ang mga contact sa counseling noong Nobyembre '
+        '2025 batay sa counseling webpage ng Westview.',
+    'settings.langLabel': 'Wika',
+    'settings.langSystem': 'Default ng system',
+    'schedule.monFri': 'Lun/Biy',
+    'schedule.tueThu': 'Mar/Huw',
+    'schedule.wed': 'Miy',
+    'schedule.noActivePeriod': 'Walang aktibong period',
+    'schedule.now': 'Ngayon',
     'schedule.endsAt': 'matatapos nang',
-    'schedule.special':
-        'May espesyal na iskedyul ngayon',
+    'schedule.special': 'May espesyal na iskedyul ngayong araw',
     'schedule.mayNotBeAccurate':
-        'Hindi maabot ang server ng iskedyul, kaya maaaring hindi tumpak ang iskedyul ngayong araw.',
-    'schedule.dismiss':
-        'Isara',
-    'schedule.checking':
-        'Sinusuri ang update sa iskedyul',
-    'schedule.settings':
-        'Mga Setting',
-    'schedule.help':
-        'Tulong',
+        'Hindi maabot ang server ng espesyal na iskedyul, kaya maaaring hindi '
+        'updated ang iskedyul ngayong araw.',
+    'schedule.dismiss': 'Isara',
+    'schedule.checking': 'Sinusuri ang update sa iskedyul',
+    'schedule.settings': 'Mga Setting',
+    'schedule.help': 'Tulong',
     'schedule.helpTooltip':
-        'Kumuha ng tulong ngayon. Pindutin nang matagal para mabilis na lumabas sa app kung ayaw mong makita ang screen na ito.',
-    'common.selected':
-        'Napili',
+        'Kumuha ng tulong ngayon. Pindutin nang matagal ang button na ito para '
+        'isara agad ang app.',
+    'common.selected': 'Napili',
     'common.refresh': 'I-refresh',
     'common.dismiss': 'Isara',
     'common.retry': 'Subukan muli',
@@ -1357,17 +1277,24 @@ const Map<String, Map<String, String>> _catalog = {
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview Newscast',
     'web.errorTitle': 'Hindi mabuksan ang pahinang ito',
-    'web.errorBody': 'Hindi na-load ang pahina. Suriin ang koneksyon at subukan muli.',
+    'web.errorBody':
+        'Hindi na-load ang pahina. Suriin ang koneksyon at subukan muli.',
     'web.loading': 'Naglo-load ng pahina…',
-    'web.stale': 'Hindi na-refresh — ipinapakita pa rin ang huling na-load na pahina.',
+    'web.stale':
+        'Hindi gumana ang refresh, kaya ipinapakita pa rin ang huling na-load '
+        'na pahina.',
     'calendar.tabSchool': 'Kalendaryo ng Paaralan',
     'calendar.tabAthletics': 'Atletika',
     'calendar.tabLunch': 'Tanghalian sa Paaralan',
     'calendar.errorTitle': 'Hindi ma-load ang mga event',
-    'calendar.errorBody': 'Hindi maabot ang calendar server. Suriin ang koneksyon at subukan muli.',
+    'calendar.errorBody':
+        'Hindi maabot ang calendar server. Suriin ang koneksyon at subukan '
+        'muli.',
     'calendar.loading': 'Naglo-load ng mga event…',
     'calendar.emptyTitle': 'Walang darating na event',
-    'calendar.emptyBody': 'Walang naka-iskedyul sa kalendaryong ito ngayon. Hilahin pababa para i-refresh.',
+    'calendar.emptyBody':
+        'Walang naka-iskedyul sa kalendaryong ito ngayon. Hilahin pababa para '
+        'i-refresh.',
     'calendar.savedCopy': 'Naka-save na kopya mula',
     'calendar.untitled': 'Event na walang pamagat',
     'calendar.description': 'Paglalarawan',
@@ -1376,7 +1303,8 @@ const Map<String, Map<String, String>> _catalog = {
     'calendar.today': 'Ngayon',
     'calendar.yesterday': 'Kahapon',
     'calendar.tomorrow': 'Bukas',
-    'calendar.weekdays': 'Lunes,Martes,Miyerkules,Huwebes,Biyernes,Sabado,Linggo',
+    'calendar.weekdays':
+        'Lunes,Martes,Miyerkules,Huwebes,Biyernes,Sabado,Linggo',
     'calendar.am': 'AM',
     'calendar.pm': 'PM',
     'schedule.refresh': 'Nire-refresh ang iskedyul…',
@@ -1385,15 +1313,18 @@ const Map<String, Map<String, String>> _catalog = {
     'common.loading': 'Naglo-load…',
     'common.errorTitle': 'Hindi ma-load ngayon',
     'help.iconTooltip': 'Humingi ng tulong ngayon',
-    'help.iconTooltipQuickExit': '%s (mahabang pindot para agad lumabas sa app)',
+    'help.iconTooltipQuickExit': '%s (pindutin nang matagal para lumabas agad)',
     'lunch.errorTitle': 'Hindi ma-load ang menu',
-    'lunch.errorBody': 'Hindi maabot ang menu server. Suriin ang koneksyon at subukan muli.',
+    'lunch.errorBody':
+        'Hindi maabot ang menu server. Suriin ang koneksyon at subukan muli.',
     'lunch.loading': 'Naglo-load ng menu…',
     'lunch.emptyTitle': 'Walang naka-publish na menu',
-    'lunch.emptyBody': 'Wala pang naka-publish na menu ngayong buwan. Hilahin pababa para i-refresh.',
+    'lunch.emptyBody':
+        'Wala pang naka-post na menu ng tanghalian ngayong buwan. Hilahin '
+        'pababa para i-refresh.',
     'lunch.savedCopy': 'Naka-save na menu mula',
     'lunch.noSchool': 'Walang pasok',
-    'lunch.entrees': 'Pangunahing Putihe',
+    'lunch.entrees': 'Pangunahing Putahe',
     'lunch.vegetables': 'Gulay',
     'lunch.fruit': 'Prutas at Juice',
     'lunch.milk': 'Pagpipilian ng Gatas',
@@ -1414,7 +1345,8 @@ const Map<String, Map<String, String>> _catalog = {
     'lunch.protein': 'Protein',
     'help.counselor.callA11y': 'Tumawag kay %s',
     'help.counselor.emailA11y': 'I-email si %s',
-    'help.counselor.emailSubject': 'Tanong ng estudyante para sa aking counselor',
+    'help.counselor.emailSubject':
+        'Tanong ng estudyante para sa aking counselor',
     'help.counselor.careerTitle': 'Gabay sa kolehiyo at karera',
     'help.counselor.careerRole': 'College & Career Guidance Technician',
     'settings.roomShort': 'Rm',

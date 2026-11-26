@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """Structural check for lib/l10n/strings.dart.
 
-The catalogue is a large hand-edited Dart map, and a mistake in it is a Dart
-*compile* error — which in CI shows up as an opaque "The Dart compiler exited
-unexpectedly". This script parses the file with the same rules the Dart parser
-uses for a `const Map<String, Map<String, String>>` literal and fails loudly.
+Because `lib/l10n/strings.dart` is a large hand-edited Dart map, a missing comma
+or stray `$` turns into a vague Dart compiler failure later in CI. This script
+parses each language block directly and reports exact line numbers right away.
 
 Checks:
-  * every entry is `'key': 'value',` or `'key':` followed by one or more
-    adjacent string literals (implicit concatenation) ending in a comma;
+  * every entry is `'key': 'value',` or `'key':` followed by indented adjacent
+    string literals ending in a comma;
   * keys are unique within each language;
-  * all four languages define the same key set;
-  * no empty values, no stray tab characters, no `$` (which Dart would
-    interpolate);
-  * every value's quoting is consistent.
+  * all four languages (`en`, `es`, `zh`, `tl`) define the exact same key set;
+  * no empty values, no tab characters, and no `$` interpolation characters.
 
-Usage: python3 tools/check_strings.py [--fix-report]
+Usage: python3 tools/check_strings.py
 Exit code 1 on any problem.
 """
 
@@ -26,7 +23,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CATALOGUE = ROOT / "lib" / "l10n" / "strings.dart"
+STRINGS_FILE = ROOT / "lib" / "l10n" / "strings.dart"
 LANGUAGES = ["en", "es", "zh", "tl"]
 
 ENTRY = re.compile(r"^    '([^']+)':(.*)$")
@@ -148,13 +145,13 @@ def parse_block(
 
 
 def main() -> int:
-    text = CATALOGUE.read_text()
+    text = STRINGS_FILE.read_text()
     blocks = language_blocks(text)
     problems: list[str] = []
 
     missing = [lang for lang in LANGUAGES if lang not in blocks]
     if missing:
-        problems.append(f"catalogue languages not found: {missing}")
+        problems.append(f"string catalog languages not found: {missing}")
         print("\n".join(problems))
         return 1
 
@@ -185,7 +182,7 @@ def main() -> int:
                 problems.append(f"{lang}: {key!r} contains a tab")
 
     if problems:
-        print(f"{len(problems)} problem(s) in {CATALOGUE.relative_to(ROOT)}:")
+        print(f"{len(problems)} problem(s) in {STRINGS_FILE.relative_to(ROOT)}:")
         for problem in problems:
             print("  -", problem)
         return 1

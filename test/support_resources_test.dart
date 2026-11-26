@@ -6,10 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:westview_app/safety.dart';
 import 'package:westview_app/support.dart';
 
-/// These tests exist to catch the one class of bug that matters most here:
-/// a mistyped hotline number or a softened disclaimer reaching a student.
-/// They deliberately hard-code the expected digits instead of reading them
-/// from the constants they are checking.
+/// Hardcode the expected hotline numbers, extensions, and disclaimer clauses
+/// here rather than reading them from `support.dart` so an accidental edit to
+/// a phone number or disclaimer immediately fails the test suite.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -77,7 +76,7 @@ void main() {
       );
     });
 
-    test('counselors are reachable by phone and e-mail', () {
+    test('counselors are reachable by phone and email', () {
       for (final c in westviewCounselors) {
         // Main line is (858) 780-2000, extension encoded after the pause.
         expect(c.phoneUri.scheme, 'tel');
@@ -87,7 +86,7 @@ void main() {
       }
     });
 
-    test('no duplicate extensions or e-mail addresses', () {
+    test('no duplicate extensions or email addresses', () {
       expect(westviewCounselors.map((c) => c.extension).toSet(),
           hasLength(westviewCounselors.length));
       expect(westviewCounselors.map((c) => c.email).toSet(),

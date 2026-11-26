@@ -20,29 +20,28 @@ import 'widget_sync.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load persisted settings before the first frame so nothing flashes with
-  // the defaults.
+  // Load saved settings before drawing the first frame so the UI doesn't flash
+  // default values on startup.
   await AppSettings.instance.load();
 
-  // Safety toggles (quick exit, recents privacy). Loaded before the first
-  // frame so the recents thumbnail is never briefly un-hidden.
+  // Load safety switches (quick exit and app-switcher hiding) before the first
+  // frame so the recent-apps preview is never briefly exposed.
   await SafetySettings.instance.load();
   unawaited(QuickExit.applyRecentsPrivacy(SafetySettings.instance.hideRecents));
 
-  // Rehydrate the special-schedule cache from disk. The network refresh
-  // happens lazily from the schedule page.
+  // Load any cached special schedules from local storage; the actual network
+  // check runs when the Schedule tab opens.
   await SpecialScheduleService.instance.init();
 
-  // Every settings change must also reach the Android home-screen widget.
+  // Push every settings update straight to the Android home-screen widget.
   AppSettings.instance.onSaved = syncHomeWidget;
 
-  // Prime the widget with today's schedule so it's correct even before the
-  // user opens the schedule page.
+  // Sync today's schedule right away so the widget stays accurate even if the
+  // user opens another tab first.
   await syncHomeWidget();
 
-  // Crash reporting: framework widget errors, platform-dispatcher errors and
-  // anything escaping the zone all funnel into the anonymous reporter below.
-  // Rendering continues as normal afterwards.
+  // Hook framework, platform, and uncaught zone errors into the opt-in crash
+  // reporter while letting Flutter keep rendering normally afterward.
   final previousFlutterOnError = FlutterError.onError;
   FlutterError.onError = (details) {
     Telemetry.instance
@@ -54,9 +53,8 @@ Future<void> main() async {
     return true;
   };
 
-  // Sends anything queued from previous offline launches, then records the
-  // anonymous app-open event. Both are no-ops until the student opts in (see
-  // settings.dart / telemetry.dart).
+  // Flush any reports left over from offline sessions and log `app_open`. Both
+  // do nothing unless the user opted in (see settings.dart and telemetry.dart).
   unawaited(Telemetry.instance.init());
 
   await runZonedGuarded(() async {
@@ -80,12 +78,11 @@ class WestviewApp extends StatelessWidget {
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: ThemeMode.system,
-          // Pin the language when the student picked one, otherwise follow the
-          // device. `localeResolutionCallback` keeps the app's own translations
-          // authoritative instead of Flutter's default fallback.
+          // Lock the locale if the user picked a specific language; otherwise
+          // resolve against the phone's system locale.
           locale: language == AppLanguage.system ? null : Locale(language.code),
-          // `fil` is included so Flutter's own delegates accept a device set
-          // to Filipino; the app resolves it to the `tl` catalogue.
+          // Include `fil` so Flutter's Material delegates accept phones set to
+          // Filipino while `AppLanguage.resolve` maps it to our `tl` strings.
           supportedLocales: const [
             Locale('en'),
             Locale('es'),
@@ -98,19 +95,18 @@ class WestviewApp extends StatelessWidget {
             final tag = AppLanguage.system.resolve(locale ?? const Locale('en'));
             return Locale(tag);
           },
-          // Without these delegates Flutter's own widgets (the date picker in
-          // Settings, "Back", the text-selection menu, semantic announcements)
-          // would stay in English even when the app copy is translated.
+          // Keep Flutter's built-in Material/Cupertino delegates wired up so
+          // system labels like "Back", selection menus, and screen-reader hints
+          // translate alongside our own strings.
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
           builder: (context, child) {
-            // Accessible text scaling: honour the OS setting all the way up to
-            // the largest supported size, and never let a runaway scale factor
-            // push a crisis phone number off screen. 2.0 keeps every safety
-            // action reachable while still doubling the type size.
+            // Respect the phone's font-size setting up to 200%, clamping at 2.0
+            // so huge scale multipliers can't push emergency call buttons off
+            // the screen.
             final media = MediaQuery.of(context);
             final scaler = media.textScaler.clamp(
               minScaleFactor: 0.85,
@@ -118,10 +114,8 @@ class WestviewApp extends StatelessWidget {
             );
             return MediaQuery(
               data: media.copyWith(textScaler: scaler),
-              // Respect the OS "remove animations" switch (Android: Settings ▸
-              // Accessibility ▸ Remove animations; iOS: Reduce Motion). Reduced
-              // motion is a vestibular-disorder accommodation and is also what
-              // some autistic and migraine-prone students turn on.
+              // Pass the system "Remove animations" / "Reduce Motion" setting
+              // down the widget tree so animations can switch to zero duration.
               child: _ReducedMotionScope(
                 enabled: media.disableAnimations,
                 child: child ?? const SizedBox.shrink(),
@@ -177,18 +171,17 @@ class _HomePageState extends State<_HomePage> {
   void _onTabSelected(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
-    // The Get-help tab is deliberately excluded from analytics: the app never
-    // records that a student looked at crisis or counseling resources.
+    // Never log visits to Get help so checking counseling or crisis resources
+    // leaves zero analytics trace.
     if (index != _helpIndex) {
       Telemetry.instance
           .logEvent('screen_view', {'screen': _screenNames[index]});
     }
   }
 
-  /// One-time, plain-language disclosure of what the app *may* report (and
-  /// what it never reports), with an explicit choice. Nothing is sent before
-  /// this dialog is answered, and either stream can be turned off later in
-  /// Settings ▸ Privacy.
+  /// Shows a one-time prompt on first launch explaining optional diagnostics.
+  /// Nothing gets queued before the user answers this dialog, and both switches
+  /// can be changed later under Settings > Privacy & data.
   Future<void> _maybeShowPrivacyNotice() async {
     if (!mounted || AppSettings.instance.privacyNoticeSeen) return;
 
@@ -198,8 +191,7 @@ class _HomePageState extends State<_HomePage> {
       builder: (context) => const _PrivacyNoticeDialog(),
     );
 
-    // Either way, both streams are set explicitly so the stored state always
-    // reflects a real decision rather than a default.
+    // Save both toggles explicitly so storage reflects what the user picked.
     final agreed = share ?? false;
     await AppSettings.instance.setAnalyticsEnabled(agreed);
     await AppSettings.instance.setCrashReportingEnabled(agreed);
@@ -255,9 +247,8 @@ class _HomePageState extends State<_HomePage> {
                           selectedIcon: const Icon(Icons.calendar_month),
                           label: AppStrings.of(context)['nav.calendars'],
                         ),
-                        // Always-available help: a student in a bad moment
-                        // should never have to guess which tab hides the
-                        // counselling and crisis resources.
+                        // Keep Get help permanently in the tab bar so counseling
+                        // and crisis contacts are always one tap away.
                         NavigationDestination(
                           icon: const Icon(Icons.support_agent),
                           selectedIcon: const Icon(Icons.support_agent),
@@ -274,10 +265,9 @@ class _HomePageState extends State<_HomePage> {
   }
 }
 
-/// Permanent, compact district disclaimer pinned under the navigation bar on
-/// every tab. The full wording (English + Spanish) lives on the Get-help
-/// screen; this is the always-visible one-liner so the app never looks like an
-/// official Poway Unified product at a glance.
+/// Short non-affiliation bar pinned under the bottom navigation bar on every
+/// tab. Tapping it opens the full English and Spanish Poway Unified disclaimer
+/// on the Get help screen.
 class _DistrictDisclaimerBar extends StatelessWidget {
   const _DistrictDisclaimerBar();
 
@@ -289,8 +279,8 @@ class _DistrictDisclaimerBar extends StatelessWidget {
       color: scheme.surfaceContainerHighest,
       child: InkWell(
         onTap: () => openSupportPage(context),
-        // The bar is tappable; keep a comfortable target even when the
-        // translated text wraps to three lines at 200% text scale.
+        // Keep a comfortable tap height even when the text wraps across
+        // multiple lines at 200% font scale.
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
@@ -303,8 +293,8 @@ class _DistrictDisclaimerBar extends StatelessWidget {
                 Expanded(
                   child: Text(
                     text,
-                    // No maxLines: the disclaimer must never be clipped, even
-                    // at 200% text scale or in a longer translation.
+                    // Leave maxLines unset so the disclaimer never clips at
+                    // large font sizes or in longer translations.
                     textAlign: TextAlign.center,
                     semanticsLabel: text,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -322,8 +312,7 @@ class _DistrictDisclaimerBar extends StatelessWidget {
   }
 }
 
-/// First-run privacy disclosure. Deliberately written in plain language and
-/// asked *before* anything is collected (opt-in, not opt-out).
+/// First-launch opt-in prompt shown before any diagnostics can be queued.
 class _PrivacyNoticeDialog extends StatelessWidget {
   const _PrivacyNoticeDialog();
 
@@ -370,14 +359,8 @@ class _PrivacyNoticeDialog extends StatelessWidget {
   }
 }
 
-/// Applies Flutter's [AnimatedX] widgets at a shorter duration when the OS asks
-/// for reduced motion.
-///
-/// Flutter does not implement "remove animations" for its own [AnimatedX]
-/// widgets, so every place that animates can read [reducedMotionFor] and get a
-/// near-zero duration instead. The app itself only animates page/tab
-/// transitions and the pull-to-refresh spinner, but third-party widgets
-/// (WebViews, the countdown) should be wrapped too if they ever animate.
+/// Exposes the system reduced-motion setting down the widget tree so explicit
+/// animation durations can drop to zero when animations are turned off.
 class _ReducedMotionScope extends InheritedWidget {
   const _ReducedMotionScope({required this.enabled, required super.child});
 
@@ -388,7 +371,7 @@ class _ReducedMotionScope extends InheritedWidget {
       oldWidget.enabled != enabled;
 }
 
-/// Duration to use for a decorative animation, honouring the OS setting.
+/// Returns `Duration.zero` when reduced motion is enabled, or [normal] otherwise.
 Duration reducedMotionFor(BuildContext context, Duration normal) {
   final scope = context.dependOnInheritedWidgetOfExactType<_ReducedMotionScope>();
   return (scope?.enabled ?? false) ? Duration.zero : normal;

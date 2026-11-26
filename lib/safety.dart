@@ -5,24 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Student-facing safety behaviors that are about *being safe while using an
-/// app on a shared or watched device*, rather than about crisis resources
-/// (those live in `support.dart`).
+/// Privacy controls for shared phones or shoulder-surfing situations (separate
+/// from the crisis and counselor contacts in `support.dart`).
 ///
-/// Two protections live here:
+/// Two settings live here:
 ///
-///  1. **Quick exit** — when enabled, a long-press on the Help button (or any
-///     other control wired to [QuickExit.longPressHandler]) instantly leaves
-///     the app and clears the help screen from the back stack, so a student
-///     researching support options is not left with that page on screen.
-///     No confirmation dialog: a quick exit that asks "are you sure?" is not
-///     a quick exit.
+///  1. **Quick exit:** Holding down any Help button pops Get help off the
+///     navigation stack and sends the app to the background right away without
+///     stopping to ask "Are you sure?".
 ///
-///  2. **Recents privacy** — an optional setting that asks Android to hide
-///     the app's content in the recents/app-switcher thumbnail.
+///  2. **Hide preview in app switcher:** Tells Android (`MainActivity.kt`) to
+///     blank out the recent-apps thumbnail whenever the app goes to the
+///     background.
 ///
-/// Both protections start switched on, are stored only on the device, and are
-/// never reported anywhere.
+/// Both default to on, save locally on the phone, and are never logged.
 
 /// Persisted safety toggles.
 class SafetySettings extends ChangeNotifier {

@@ -1,216 +1,143 @@
-# Compatibility review
+# Compatibility and Maintenance Review
 
-Written from three seats at once — **student**, **developer**, **administrator** —
-for Westview HS (WVAA). Sections are ordered by risk, not by effort. Each item
-says what breaks today, what to do, and roughly what it costs.
+This review evaluates Westview HS (WVAA) across three perspectives: **students using the app**, **developers maintaining the repository**, and **school administrators reviewing an unofficial project**. Entries are ordered from highest-impact risks to routine maintenance items. Each entry explains what can go wrong, how the current codebase handles it, and what follow-up remains.
 
-Status key: **[done]** already in the app · **[todo]** recommended, not started ·
-**[decide]** needs a human decision (school, district, or maintainer).
+Status labels: **[done]** implemented in the repository · **[todo]** recommended follow-up · **[decide]** requires a policy or maintenance decision.
 
 ---
 
-## A. Things that break safety if they fail (fix first)
+## A. Safety-Critical Maintenance Risks
 
-### A1. Contact data goes stale — [todo] [decide]
+### A1. Counselor or Hotline Details Becoming Outdated [todo] [decide]
 
-The counselor roster, caseloads, extensions and crisis-line numbers are compiled
-into `lib/support.dart`. That is deliberate (it works offline, on bad Wi-Fi, on a
-dead phone), but it means **a June staffing change silently makes the app wrong**
-until someone ships a release.
+Counselor names, last-name caseload ranges, phone extensions, and crisis-line numbers are compiled directly into `lib/support.dart`. Compiling those contacts guarantees that Get help works without internet access, though it also means that a summer staffing change at Westview makes the bundled list outdated until a new APK is released.
 
-- **Student impact:** a student is told to call an extension that no longer
-  exists, or is routed to the wrong counselor and gives up.
-- **Do:** keep the "list checked November 2025" note on screen (already there),
-  and add a **quarterly reminder** to the repo — the `.github/ISSUE_TEMPLATE`
-  or a calendar entry owned by the maintainer. Re-verify:
-  `westview.powayusd.com/apps/pages/counseling-staff`, the district crisis page,
-  and 988/741741/678678.
-- **Consider:** an optional, offline-first remote override (a tiny JSON on the
-  same `studycs.org` host as the special schedule) that updates *phone numbers
-  only*, with the compiled values as the fallback when the fetch fails. This
-  keeps the offline guarantee and removes the "stale until next release" gap.
-  Don't do this for caseload letters — those are cheap to leave manual.
+- **Effect on students:** A student might dial an extension that was reassigned or email the wrong counselor for their last name.
+- **Current and recommended mitigation:** Keep the on-screen verification date ("checked November 2025") and the link to `westview.powayusd.com/apps/pages/counseling-staff`, and set a start-of-semester reminder each August and January to re-check counselor caseloads as well as 988, `741741`, and `678678`.
+- **Optional design choice:** Host a small, optional JSON file on `studycs.org` that updates phone numbers and extensions while keeping the compiled list in `lib/support.dart` as the offline fallback whenever a fetch fails.
 
-### A2. The school year changes the schedule — [done] partly
+### A2. Annual Bell-Schedule Updates [done] (requires yearly check)
 
-Regular schedules are hard-coded (`monFriSchedule`, `tueThursSchedule`,
-`wedSchedule`), and special schedules are fetched from the server. Block
-scheduling changes most years.
+Regular weekday bell schedules (`monFriSchedule`, `tueThursSchedule`, and `wedSchedule`) live in `lib/data.dart` and `ScheduleWidgetRenderer.kt`, while single-day modified schedules are fetched from `studycs.org`. Because high schools occasionally adjust passing periods or start times between school years, hardcoded base times can drift over the summer.
 
-- **Do:** before each August, re-check the bell schedule against the school's
-  page. The special-schedule override already covers assemblies and early
-  releases, so the risk is bounded to the base schedule.
+- **Recommended mitigation:** Re-verify `lib/data.dart` and the default fallback lists in `ScheduleWidgetRenderer.kt` against Westview's published bell schedule every August before school starts. Assemblies and minimum days are already handled dynamically by the special-schedule endpoint.
 
-### A3. Google API keys are in the client — [decide]
+### A3. Public Google Calendar API Keys in Client Code [decide]
 
-`lib/calendars.dart` and `lib/school_lunch.dart` contain Google API keys for
-public calendars. They are restricted-by-referrer API keys for *public* data, so
-leaking them exposes nothing private — but they can be abused to burn the
-project's quota.
+`lib/calendars.dart` and `lib/school_lunch.dart` include Google Calendar API keys used to read Westview's public School, Athletics, and Lunch calendars. Because those calendars are already public, the keys do not grant access to private student data; however, an unrestricted key extracted from an APK could be used by someone else to exhaust the project's daily request quota.
 
-- **Do:** restrict each key to the Android app's package name + SHA-1 in Google
-  Cloud, and keep the quota low. Document the key rotation owner.
-- **Why it matters for students:** a quota-exhausted key means the Calendar tab
-  goes empty on a day when it is actually needed.
+- **Effect on students:** If the API quota runs out, calendar and lunch fetches fail until the quota resets, forcing new installs without cached data onto an error screen.
+- **Recommended mitigation:** Restrict each key in Google Cloud Console to the Android package name (`com.westviewhs.app`) and signing certificate SHA-1, set a sensible per-day quota cap, and record who owns key rotation.
 
 ---
 
-## B. Student-side compatibility
+## B. Student Device Compatibility
 
-### B1. Old Android versions — [done]
+### B1. Older Android Versions [done]
 
-`minSdk = maxOf(flutter.minSdkVersion, 24)` (Android 7.0). That covers essentially
-every phone a student actually carries. Notification APIs degrade gracefully
-(channel importance, exact alarms fall back to inexact).
+`android/app/build.gradle.kts` sets `minSdk = maxOf(flutter.minSdkVersion, 24)` (Android 7.0), which supports virtually every Android phone currently carried on campus. Newer platform features degrade cleanly on older releases: notification channels are gated on API 26+, Android 13 notification permissions only prompt on API 33+, and `AlarmManager` falls back to inexact idle alarms if `SCHEDULE_EXACT_ALARM` is unavailable on Android 12+.
 
-### B2. Phones without Google Play Services — [done]
+### B2. Devices Without Google Play Services [done]
 
-No Firebase, no Play Services dependency, no analytics SDK. The app installs and
-works on de-Googled Android (GrapheneOS, Lineage) and on sideloaded APKs.
+The app does not depend on Firebase, Google Play Services libraries, or third-party analytics SDKs. As a result, sideloaded APKs install and run normally on stock Android as well as de-Googled distributions such as GrapheneOS and LineageOS.
 
-### B3. Screen sizes and text scaling — [done, needs a tablet test]
+### B3. Screen Sizes and Enlarged System Fonts [done] (needs tablet test)
 
-`textScaler` is clamped to 0.85–2.0 and nothing important is `maxLines`-clipped.
-The test suite renders the Help screen at 200 % in Spanish. **Still unverified:**
-tablets/foldables in landscape, and 200 % with the on-screen keyboard up (the
-"rename my class" dialog). Add a widget test with a 800×1280 surface.
+`MediaQuery.textScaler` scales up to `200%` (`2.0`), important text wraps without `maxLines` truncation, and `test/l10n_test.dart` verifies `SupportPage` at `2.0` text scale in Spanish. However, wide tablet/foldable landscape layouts and text dialogs with the software keyboard open at `200%` scale have not been tested automatically yet; adding an `800x1280` widget test would cover that gap.
 
-### B4. Storage pressure — [done]
+### B4. Local Storage Growth [done]
 
-Caches are bounded (`network_cache.dart`) and clearable in Settings ▸ Saved
-content. Nothing accumulates silently.
+`NetworkCache` stores only the latest response per cache key, caps individual entries at 2 MB, evicts entries older than 60 days, and lets students wipe all saved copies from `Settings > Saved content`. Special-schedule cache entries similarly prune old dates automatically.
 
-### B5. Data cost — [done, worth stating]
+### B5. Mobile Data Usage [done]
 
-The heavy tabs (newsletters, publications) are the school's own WebViews and are
-by far the biggest data users. Everything else is a few KB of JSON, cached. If
-the school ever wants a "data saver" note in the onboarding, this is where it
-goes.
+Schedules, calendars, and lunch menus transfer only small JSON responses and reuse local caches when offline. Almost all bandwidth usage comes from the embedded WebViews on the Newsletters and Publications tabs (especially Vimeo video playback on Westview Newscast), since those tabs load full school webpages and video streams.
 
-### B6. Accessibility — see [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md)
+### B6. Accessibility Coverage
+
+See [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md).
 
 ---
 
-## C. Developer-side compatibility
+## C. Developer and Build Compatibility
 
-### C1. CI only builds an APK — [done]
+### C1. Pre-Build Automated Checks in CI [done]
 
-`.github/workflows/build-apk.yml` now runs, before the Gradle build:
+Before running Gradle, `.github/workflows/build-apk.yml` runs three fast checks:
 
 ```sh
-python3 tools/audit_contrast.py --strict   # WCAG pairs + CVD ΔE
-flutter test                              # incl. test/l10n_test.dart
+python3 tools/audit_contrast.py --strict
+python3 tools/check_strings.py
+flutter test --reporter expanded
 ```
 
-so a broken translation or a contrast regression fails the PR in ~2 minutes
-instead of shipping.
+Running these steps ahead of `flutter build apk` catches contrast regressions, malformed or missing translations in `lib/l10n/strings.dart`, and broken contact or schedule logic within a couple of minutes rather than after a full Android build.
 
-### C2. Dependency pinning — [done] for the risky one
+### C2. Native Plugin Pinning [done]
 
-`live_activities` is pinned at 2.4.7 with the reason in `pubspec.yaml`; upgrading
-it renames the Android plugin package and breaks `CustomLiveActivityManager`.
-Everything else is caret-ranged.
+`pubspec.yaml` pins `live_activities` to exact version `2.4.7` because version `2.5.0` requires a newer Flutter SDK and renames its Kotlin package (`com.example.live_activities` to `com.istornz.live_activities`), which would break `CustomLiveActivityManager.kt` and `MainActivity.kt`. Other dependencies use standard caret ranges and should be checked periodically with `flutter pub outdated` when upgrading Flutter's stable channel.
 
-- **Do:** when Flutter's stable channel moves, run the whole suite. `flutter
-  pub outdated` quarterly.
+### C3. Static Analysis Step (`flutter analyze`) in CI [todo]
 
-### C3. No `flutter analyze` gate — [todo]
+Adding `flutter analyze` alongside `flutter test` in `.github/workflows/build-apk.yml` would catch lint warnings, unused imports, and `const` mistakes earlier during pull requests. `tools/annotate_ci.py` already includes an `analyze` mode ready to format its output.
 
-Add `flutter analyze` to CI. It is fast and would have caught several
-`const`-list/localization errors during the i18n work.
+### C4. Android System WebView Differences [known]
 
-### C4. WebView behaviour differs across Android WebView versions — [known]
+Newsletter rendering and the Vimeo picture-in-picture JavaScript bridge (`lib/vimeo_pip.dart`) depend on the device's installed Android System WebView and Vimeo's `postMessage` player events. If an older WebView build misses a media event or Vimeo changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
 
-The Vimeo PiP bridge and the newsletter WebViews rely on postMessage and on
-`webview_flutter`'s platform channels. On very old WebView builds the PiP
-hand-off can fail; the app degrades to normal playback, which is acceptable. Test
-the PiP path after any `webview_flutter` bump, on a real device.
+### C5. iOS Target Status [decide]
 
-### C5. iOS — [decide]
+The iOS project directory compiles in code, and `lib/publications.dart` preserves WebKit inline playback parameters, yet there is no Apple Developer signing setup or macOS CI workflow. Keeping the current note in `README.md` that Android is the supported target while iOS is unmaintained sets accurate expectations unless a macOS runner and signing certificates are added later.
 
-iOS compiles but is not maintained (no signing, no TestFlight). Either commit to
-it (needs an Apple Developer account and a Mac in CI) or state plainly in the
-README that it is unsupported. Right now the README says "compiles but is not
-actively maintained", which is honest.
+### C6. Release Signing and Versioning [todo]
 
-### C6. Release hygiene — [todo]
-
-- Set a real `versionName`/`versionCode` policy (currently `1.0.0+1` plus the CI
-  run number).
-- Sign with a **release keystore**, not the auto-generated debug key, before any
-  Play upload. Losing the debug key means every installed copy must be
-  uninstalled to update.
-- Keep the keystore and its password out of the repo; use GitHub Secrets.
+- **Signing key:** Release APKs in `android/app/build.gradle.kts` currently sign with the debug keystore so students can sideload CI artifacts easily. Before publishing to Google Play, or distributing long-lived sideloaded releases from multiple machines, configure a dedicated upload keystore via GitHub Secrets so updates can install over previous builds without requiring an uninstall.
+- **Version policy:** `pubspec.yaml` currently stays at `1.0.0+1` while CI passes `--build-number=${{ github.run_number }}` for `versionCode`; bumping `versionName` on tagged releases (`vX.Y.Z`) will make bug reports easier to match to builds.
 
 ---
 
-## D. Administrator-side compatibility
+## D. School and District Compatibility
 
-### D1. The district disclaimer — [done]
+### D1. Unofficial-App Disclaimer [done]
 
-The PUSD-required English and Spanish wording is shown **verbatim** on the Get
-help screen ("This app is not part of Poway Unified…" / "AVISO LEGAL…"), and a
-compact one-liner is pinned under the navigation bar on every tab. Translation of
-the *explanation* never replaces the required wording.
+Poway Unified's required English and Spanish outside-organization disclaimers appear verbatim on Get help and in Settings, while a short notice stays pinned above the bottom navigation bar on every tab. Translating the surrounding explanation into Chinese and Filipino supplements those notices without replacing the district's exact English and Spanish text.
 
-### D2. Nothing here needs a district account — [done]
+### D2. Zero District Account or SIS Integration [done]
 
-No student login, no SIS integration, no student IDs, no district SSO. That means
-no data-processing agreement is required to run the app, which is the single
-biggest administrative blocker for a student-built project.
+WVAA never asks for a Poway Unified login, Synergy/Canvas credentials, or a student ID number. Operating solely on public schedules, public calendars, and student-typed class labels avoids handling protected student education records and removes the need for a district data-sharing agreement.
 
-### D3. Analytics and consent — [done]
+### D3. Opt-In, Scrubbed Diagnostics [done]
 
-Opt-in, off by default, first-run plain-language dialog, per-stream switch,
-scrubbed payloads, school-hosted endpoint (`studycs.org`), and the Get help tab
-is never logged. Consent version is bumped (`privacyConsentVersion = 2`) so a
-changed disclosure re-asks instead of silently inheriting old consent.
+Usage counts and crash reports start disabled, ask for explicit opt-in on first launch, strip custom class text and email/phone patterns on the client, send only to `studycs.org`, and never record visits to Get help. Consent is versioned (`privacyConsentVersion = 2` in `lib/settings.dart`) so any future change to what is collected can prompt users again rather than assuming older consent still applies.
 
-- **Do:** if the endpoint ever moves to a vendor, that is a new consent version
-  and a new disclosure.
+### D4. Google Play Store Distribution [todo] [decide]
 
-### D4. Publishing on Play — [todo] [decide]
+Sideloading APKs from GitHub Releases works today without store review, whereas listing an app named "Westview HS" with school imagery on Google Play can trigger trademark or impersonation review unless authorized. Before submitting to Google Play:
 
-A student-built app using the school's name and logo invites a trademark
-question. Before publishing:
+- Request written permission from Westview's administration to use the school name and icon in a student-built listing.
+- Complete Google Play's Data Safety declaration to match Section D3 (no data collected unless the user opts into anonymous diagnostics).
+- Include the non-affiliation disclaimer directly in the Play Store description.
 
-- get written permission (or a clear blessing) from Westview's administration for
-  the name/icon, and
-- fill in Play's Data safety form to match §D3 (nothing collected unless opted
-  in), and
-- keep the disclaimer visible in the store listing, not just in-app.
+### D5. Upstream Data Accuracy Expectations [todo] [decide]
 
-Sideloading an APK from the repo needs none of this and is how it works today.
-
-### D5. Content accuracy — [todo] [decide]
-
-Lunch menus, calendars and newsletters are the school's data. If a menu is wrong,
-students blame the app. The "saved copy" banner and the verification dates are
-the mitigation; a short "data comes from the school's public pages" line in the
-About footer would close the loop.
+Because calendars, lunch menus, nutrition facts, and newsletters come from school-managed feeds and webpages, upstream mistakes can look like app bugs to students. The "Saved copy from ..." offline banner and the counselor verification date already distinguish stale caches from live pages, and keeping a clear note in `About this app` that feed data comes from Westview's public pages helps set accurate expectations.
 
 ---
 
-## E. Legal / personal-risk items for the developer — [done]
+## E. Summary of Developer Liability Protections [done]
 
-- The app **never** claims to be a crisis service; the disclaimer says it is not
-  monitored and routes to 911/988.
-- Crisis lines are linked, not "partnered with" — no affiliation is implied and
-  no money changes hands (stated on screen).
-- No medical or diagnostic advice is given; the counselor roster is factual data
-  from a public page.
-- Telemetry cannot reconstruct an individual: no names, IDs, contacts, location,
-  or device identifiers, and typed text is scrubbed.
-- Quick-exit and hidden-recents protect a student who is being monitored, and
-  neither creates a record that they used them.
+- The app states clearly that it is not a monitored crisis service and directs emergencies to 911 and 988.
+- Listed crisis lines are presented as independent public services with no sponsorship, partnership, or financial tie.
+- Counselor entries reproduce public staff directory information without offering medical or counseling advice.
+- Diagnostics cannot reconstruct an individual student's identity or schedule because identifiers are ephemeral and user-typed class strings are scrubbed before storage.
+- Quick exit and hidden app-switcher previews operate locally on the device without logging when they are triggered.
 
 ---
 
-## Suggested order of work
+## Recommended Priority Order
 
-1. **A1** quarterly contact re-verification (or the numbers-only remote override).
-2. **C3** `flutter analyze` in CI, and **B3** the tablet/keyboard widget test.
-3. **A3** restrict the Google API keys.
-4. **C6** release keystore + version policy.
-5. **D4** Play-store permissions and Data safety form.
-6. Everything else as it becomes relevant.
+1. **A1 & A2:** Set a recurring August/January check for Westview's counselor caseloads, hotline numbers, and base bell schedules.
+2. **C3 & B3:** Add `flutter analyze` to `.github/workflows/build-apk.yml` and add a landscape tablet/keyboard widget test at `200%` text scale.
+3. **A3:** Restrict the public Google Calendar API keys by Android package name and signing SHA-1 in Google Cloud Console.
+4. **C6:** Set up a dedicated release signing keystore in GitHub Secrets before broad distribution.
+5. **D4:** Obtain administrative sign-off before any Google Play Store submission.

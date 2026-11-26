@@ -30,12 +30,11 @@ class DailyLunch {
   final List<String> milk;
 }
 
-/// The monthly school lunch menu.
+/// Monthly school lunch menu view.
 ///
-/// Like the calendars, this view is cache-first: the last successful menu (and
-/// its nutrition-recipe data) is saved on disk and shown whenever the
-/// healthepro API cannot be reached, so the menu still opens on unreliable
-/// school Wi-Fi. Pull down to force a refresh.
+/// Like the calendar tabs, this reads the last saved menu and recipe nutrition
+/// data from disk first so it still opens when campus Wi-Fi can't reach the
+/// HealthePro API. Pull down to force a fresh download.
 class SchoolLunchView extends StatefulWidget {
   const SchoolLunchView({super.key});
 
@@ -463,10 +462,10 @@ class SchoolLunchViewState extends State<SchoolLunchView> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(8),
                 onTap: () => _showNutritionFacts(context, item),
-                // Full 48dp row height for an easy tap, with a label that
-                // tells screen-reader users what tapping does.
+                // Keep a 48dp row height with a TalkBack label explaining that
+                // tapping opens nutrition facts.
                 child: Semantics(
-                  label: '$item — view nutrition facts',
+                  label: '$item, view nutrition facts',
                   excludeSemantics: true,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 48),

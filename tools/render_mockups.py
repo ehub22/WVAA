@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Renders high-fidelity mockups of the new safety/accessibility UI.
+"""Renders PNG layout mockups of the safety and accessibility screens.
 
-There is no Flutter SDK (and no SVG delegate) in this environment, so these are
-drawn directly with ImageMagick primitives, using the *real* colour tokens from
-`lib/theme/colors.dart` and the real copy from `lib/support.dart`. They are
-layout mockups, not pixel-exact screenshots of a running build.
+When no Android device or Flutter SDK is attached, this script draws layout
+mockups directly with ImageMagick primitives using the real color tokens from
+`lib/theme/colors.dart` and the current UI copy from `lib/l10n/strings.dart`.
 
 Outputs (into docs/screenshots/):
   get-help-1.png            emergency card + counselors
   get-help-2.png            crisis lines, reporting, disclaimer
   home-with-help.png        schedule screen with the Help button + disclaimer bar
-  settings-safety.png       Settings ▸ Safety section
-  get-help-deuteranopia.png the same Get-help screen under deuteranopia
-  palette-simulated.png     colour chips under normal / deutan / protan / tritan
+  settings-safety.png       Settings > Safety section
+  get-help-deuteranopia.png the same Get help screen under deuteranopia
+  get-help-spanish.png      the Get help screen in Spanish
+  language-picker.png       Settings language picker sheet
+  palette-simulated.png     color chips under normal / deutan / protan / tritan
 
 Usage: python3 tools/render_mockups.py
 """
@@ -41,7 +42,7 @@ def hexc(name: str) -> str:
 
 
 def remap(name: str, kind: str | None) -> str:
-    """Colour token -> hex, optionally through a CVD simulation."""
+    """Color token -> hex, optionally through a CVD simulation."""
     r, g, b = simulate_cvd(L[name], kind)
     return f"#{r:02X}{g:02X}{b:02X}"
 
@@ -265,8 +266,8 @@ def get_help_screen(kind: str | None = None) -> Canvas:
     x, w = 12, W - 24
     y = 72
     inner_x, inner_w = x + 16, w - 32
-    text_h = measure("Call 911 now if you or someone else is about to be hurt, "
-                     "or you need help right this minute.", 13, False)
+    text_h = measure("Call 911 now if you or someone else is in danger of being "
+                     "hurt, or if you need emergency help right away.", 13, False)
     lines = 2
     h = 16 + 20 + 8 + lines * 19 + 12 + 48 + 10 + 2 * 17 + 16
     c.rect(x, y, w, h, "errorContainer", radius=12)
@@ -274,19 +275,19 @@ def get_help_screen(kind: str | None = None) -> Canvas:
     c.text(inner_x + 24, y + 31, "In immediate danger?", size=15,
            color="onErrorContainer", bold=True)
     cy = _paragraph(c, inner_x, y + 52,
-                    "Call 911 now if you or someone else is about to be hurt, "
-                    "or you need help right this minute.", inner_w, size=13,
-                    color="onErrorContainer")
+                    "Call 911 now if you or someone else is in danger of being "
+                    "hurt, or if you need emergency help right away.", inner_w,
+                    size=13, color="onErrorContainer")
     c.button(inner_x, cy + 6, inner_w, 48, "Call 911", style="filled",
              kind="phone")
     _paragraph(c, inner_x, cy + 66,
                "If you are not sure whether it is an emergency, call or text "
-               "988. Someone will answer and help you figure out next steps.",
+               "988 to talk through next steps with a counselor.",
                inner_w, size=11, color="onErrorContainer")
     y += h + 22
 
     # ---- counselors ----
-    c.section_title(12, y, "Talk to a counselor", "help")
+    c.section_title(12, y, "Talk to a counselor at Westview", "help")
     y += 14
     rows = [("A–C", "Taylor Oakley", "3080"), ("D–J", "Isabella Rusy", "3062"),
             ("K–M", "Christine Cudmore", "3030"),
@@ -297,9 +298,9 @@ def get_help_screen(kind: str | None = None) -> Canvas:
     c.card(12, y, w, card_h)
     ix, iw = x + 16, w - 32
     cy = _paragraph(c, ix, y + 24,
-                    "Counselors are in the Wolverine Center during the school "
-                    "day. You can drop in, ask a teacher to help you get there, "
-                    "or email your counselor directly.", iw, size=13,
+                    "Counselors are in the Wolverine Center during school hours. "
+                    "You can drop in, ask a teacher for a pass, or email your "
+                    "counselor directly.", iw, size=13,
                     color="onSurface")
     c.button(ix, cy + 8, 168, 48, "Call the office", style="tonal", kind="phone")
     c.button(ix + 180, cy + 8, 172, 48, "Counseling site", style="outlined")
@@ -310,7 +311,7 @@ def get_help_screen(kind: str | None = None) -> Canvas:
     c.rect(ix, dy, iw, 1, "outlineVariant")
     c.text(ix, dy + 24, "Find your counselor", size=13, color="onSurface",
            bold=True)
-    c.text(ix, dy + 40, "By the first letter of your last name.", size=11)
+    c.text(ix, dy + 40, "Listed by the first letter of your last name.", size=11)
     ry = dy + 54
     for caseload, name, ext in rows:
         c.rect(ix, ry, 52, 26, "secondaryContainer", radius=8)
@@ -324,9 +325,9 @@ def get_help_screen(kind: str | None = None) -> Canvas:
     c.text(ix, ry + 14, "College & career · Danielle Beccarelli · ext 3019",
            size=10)
     _paragraph(c, ix, ry + 34,
-               "Staff and caseloads can change during the year. List checked "
-               "November 2025 — confirm with the counseling office.", iw,
-               size=10)
+               "Staff assignments can change during the school year. Verified "
+               "November 2025; confirm current caseloads with the counseling "
+               "office.", iw, size=10)
     return c
 
 
@@ -336,32 +337,30 @@ def get_help_screen_2(kind: str | None = None) -> Canvas:
     c.text(16, 35, "Get help", size=20, color="onPrimaryContainer", bold=True)
 
     y = 78
-    c.section_title(12, y, "Crisis lines — free, 24/7", "warn")
+    c.section_title(12, y, "24/7 free crisis lines", "warn")
     y += 22
 
-    # Deaf / hard-of-hearing note, above the phone numbers on purpose.
+    # Deaf / hard-of-hearing note placed above the phone numbers.
     deaf_note = (
-        "Hard of hearing, or can\u2019t speak on the phone? Every option below "
-        "also works by text or online. 988 and the Crisis Text Line are "
-        "text-first, and San Diego County\u2019s line can be reached through a "
-        "relay operator: dial 711."
+        "Deaf, hard of hearing, or unable to speak aloud? Every service below "
+        "supports text or online chat. 988 and Crisis Text Line work directly "
+        "by text, and San Diego County\u2019s line is reachable through 711 relay."
     )
     c.icon(22, y + 8, "help", color="onSurfaceVariant", size=7)
     y = _paragraph(c, 38, y, deaf_note, W - 52, size=11, line_h=15) + 10
 
     hotlines = [
-        ("988 Suicide & Crisis Line",
-         "Free, confidential support for anyone in emotional distress or "
-         "suicidal crisis. Call or text any time, day or night.",
+        ("988 Suicide & Crisis Lifeline",
+         "Free, confidential 24/7 support by call or text for emotional "
+         "distress or suicidal crisis.",
          "Call 988", "Text 988"),
         ("San Diego Access & Crisis Line",
-         "San Diego County's 24/7 line for mental health and substance use "
-         "crises, for you or someone you are worried about. Free interpreters "
-         "in 200+ languages.",
+         "San Diego County's 24/7 mental health and substance use crisis line "
+         "for yourself or someone else, with interpreters in 200+ languages.",
          "Call 1-888-724-7240", None),
         ("Crisis Text Line",
-         "Prefer typing to talking? Text a trained volunteer about anything "
-         "that is weighing on you. Free, 24/7, and confidential.",
+         "Free, confidential 24/7 crisis support over text with a trained "
+         "counselor.",
          None, "Text HOME to 741741"),
     ]
     for name, desc, call, text in hotlines:
@@ -395,16 +394,18 @@ def get_help_screen_2(kind: str | None = None) -> Canvas:
     y += 16
     probe = Canvas(W, 10, kind)
     intro_lines = int(round(probe.wrap(28, 0,
-        "Worried about a classmate, a threat, a weapon, or something you saw "
-        "online? Tell a trusted adult, or report it anonymously:",
+        "If you are concerned about a classmate, a threat, a weapon, or "
+        "something you saw online, tell a trusted adult or submit an anonymous "
+        "report:",
         W - 56, size=13) / (13 * 1.5)))
     report_h = 24 + intro_lines * 20 + 12 + 2 * 44 + 30
     c.card(12, y, W - 24, report_h)
     ix, iw = 28, W - 56
     cy = _paragraph(c, ix, y + 24,
-                    "Worried about a classmate, a threat, a weapon, or "
-                    "something you saw online? Tell a trusted adult, or report "
-                    "it anonymously:", iw, size=13, color="onSurface")
+                    "If you are concerned about a classmate, a threat, a "
+                    "weapon, or something you saw online, tell a trusted adult "
+                    "or submit an anonymous report:", iw, size=13,
+                    color="onSurface")
     for name, num in [("Say Something Anonymous Reporting",
                        "Call 1-844-5-SAYNOW"),
                       ("PUSD See Something, Say Something",
@@ -414,8 +415,8 @@ def get_help_screen_2(kind: str | None = None) -> Canvas:
         c.button(W - 100, cy + 2, 72, 40, "Call", style="tonal")
         cy += 44
     _paragraph(c, ix, cy + 12,
-               "You do not have to be certain. Reports can be wrong and that "
-               "is okay.", iw, size=10)
+               "You do not need to be certain before reporting a good-faith "
+               "safety concern.", iw, size=10)
     y += report_h + 22
 
     # disclaimer
@@ -433,7 +434,7 @@ def get_help_screen_2(kind: str | None = None) -> Canvas:
                          / (11 * 1.5)))
     es_lines = int(round(probe.wrap(28, 0, disp_es, W - 56, size=11, bold=True)
                          / (11 * 1.5)))
-    h = 16 + 26 + 10 + en_lines * 17 + 12 + es_lines * 17 + 12 + 3 * 15 + 16
+    h = 16 + 26 + 10 + en_lines * 17 + 12 + es_lines * 17 + 12 + 5 * 15 + 18
     c.rect(12, y, W - 24, h, "surfaceContainerHighest", radius=12,
            stroke="outlineVariant")
     c.icon(30, y + 26, "check", color="onSurfaceVariant", size=9)
@@ -444,14 +445,14 @@ def get_help_screen_2(kind: str | None = None) -> Canvas:
     cy = _paragraph(c, 28, cy + 8, disp_es, W - 56, size=11,
                     color="onSurfaceVariant", bold=True)
     cy = _paragraph(c, 28, cy + 10,
-                    "In plain terms: Westview HS (WVAA) is a student-built "
-                    "companion app. The district did not make it, does not run "
-                    "it, and has not reviewed it. Always confirm with the school "
+                    "Westview HS (WVAA) is built independently by a student and "
+                    "is not built, run, or reviewed by Poway Unified or Westview "
+                    "High School. Confirm schedules and contacts with the school "
                     "office.", W - 56, size=10)
     _paragraph(c, 28, cy + 8,
-               "Translations of the disclaimer are provided to help you "
-               "understand it; the official English and Spanish wording the "
-               "district requires governs.", W - 56, size=10,
+               "Translated summaries are provided for convenience; the official "
+               "English and Spanish district disclaimers above govern.", W - 56,
+               size=10,
                )
     return c
 
@@ -469,7 +470,7 @@ def home_screen(kind: str | None = None) -> Canvas:
                color="onSecondaryContainer" if i == 0 else "onSurfaceVariant",
                bold=i == 0, align="center")
 
-    # "now" card with the explicit, colour-independent label
+    # "Now" card with an icon and text label alongside the highlight fill
     c.rect(12, 68, W - 24, 104, "primaryContainer", radius=12)
     c.text(W / 2, 100, "Period 2 · Algebra 2", size=16,
            color="onPrimaryContainer", bold=True, align="center")
@@ -527,8 +528,9 @@ def home_screen(kind: str | None = None) -> Canvas:
     dy = nav_y + 80
     c.rect(0, dy, W, 52, "surfaceContainerHighest")
     c.icon(20, dy + 26, "warn", color="onSurfaceVariant", size=5)
-    c.wrap(34, dy + 18, "Not a Poway Unified app. Not sponsored or endorsed "
-           "by Poway Unified School District or Westview High School.",
+    c.wrap(34, dy + 18, "Not a Poway Unified app. Student-built; not sponsored "
+           "or endorsed by Poway Unified School District or Westview High "
+           "School.",
            W - 52, size=9, align="center", line_h=12)
     return c
 
@@ -545,13 +547,13 @@ def settings_screen(kind: str | None = None) -> Canvas:
     c.rect(16, y, W - 32, 64, "surfaceContainerLow", radius=12)
     c.icon(40, y + 32, "help", color="onSurfaceVariant", size=10)
     c.text(64, y + 26, "Get help now", size=14, color="onSurface")
-    c.wrap(64, y + 44, "Westview counselors, crisis lines and hotlines. Works "
-           "offline.", W - 120, size=10, line_h=12)
+    c.wrap(64, y + 44, "Westview counselors, 24/7 crisis lines, and safety "
+           "reporting (works offline).", W - 120, size=10, line_h=12)
     y += 76
 
     for title, sub, on in [
-        ("Quick exit", "Long-press the Help button to leave the app immediately.", True),
-        ("Hide preview in app switcher", "Stops the last screen showing in recent apps.", True),
+        ("Quick exit", "Long-press any Help button to leave the app right away.", True),
+        ("Hide preview in app switcher", "Blanks out the last screen in Android recent apps.", True),
     ]:
         c.rect(16, y, W - 32, 72, "surfaceContainerLow", radius=12)
         c.text(64, y + 28, title, size=14, color="onSurface")
@@ -567,8 +569,8 @@ def settings_screen(kind: str | None = None) -> Canvas:
     c.text(16, y + 10, "PRIVACY & DATA", size=11, color="primary", bold=True)
     y += 24
     for title, sub, on in [
-        ("Anonymous usage statistics", "Counts of screens opened. Off unless you opt in.", False),
-        ("Crash reports", "Error text, with anything you typed removed.", False),
+        ("Anonymous usage counts", "Counts which tabs open. Off unless you opt in.", False),
+        ("Crash reports", "Sends error logs with custom class text removed.", False),
     ]:
         c.rect(16, y, W - 32, 72, "surfaceContainerLow", radius=12)
         c.text(64, y + 28, title, size=14, color="onSurface")
@@ -583,8 +585,7 @@ def settings_screen(kind: str | None = None) -> Canvas:
 
 # ------------------------------------------------------- Spanish Get help
 def get_help_screen_es(kind: str | None = None) -> Canvas:
-    """The same screen with Spanish copy — proves the layout does not break
-    when the translation is ~20% longer than the English."""
+    """Spanish Get help layout, verifying that ~20% longer text wraps cleanly."""
     c = Canvas(W, 1200, kind)
     c.rect(0, 0, W, 56, "primaryContainer")
     c.text(16, 35, "Ayuda", size=20, color="onPrimaryContainer", bold=True)
@@ -593,8 +594,8 @@ def get_help_screen_es(kind: str | None = None) -> Canvas:
     x, w = 12, W - 24
     y = 72
     inner_x, inner_w = x + 16, w - 32
-    body = ("Llama al 911 ahora si tú o alguien más está a punto de salir "
-            "herido, o si necesitas ayuda en este momento.")
+    body = ("Llama al 911 ahora si t\u00fa o alguien m\u00e1s corre peligro de salir "
+            "herido, o si necesitas ayuda de emergencia de inmediato.")
     body_h = len(_wrap_lines(body, inner_w, 13)) * 19
     h = 16 + 20 + 8 + body_h + 10 + 56 + 10 + 3 * 17 + 16
     c.rect(x, y, w, h, "errorContainer", radius=12)
@@ -603,23 +604,22 @@ def get_help_screen_es(kind: str | None = None) -> Canvas:
            color="onErrorContainer", bold=True)
     cy = _paragraph(c, inner_x, y + 52, body, inner_w, size=13,
                     color="onErrorContainer")
-    # 56dp: the largest target in the app, for the most urgent action.
+    # 56dp button height for the primary emergency action.
     c.button(inner_x, cy + 4, inner_w, 56, "Llamar al 911", style="filled",
              kind="phone")
     _paragraph(c, inner_x, cy + 72,
-               "Si no sabes si es una emergencia, llama o env\u00eda un texto "
-               "al 988. Alguien contestar\u00e1 y te ayudar\u00e1 a decidir "
-               "qu\u00e9 hacer.", inner_w, size=11, color="onErrorContainer")
+               "Si no sabes con seguridad si es una emergencia, llama o env\u00eda "
+               "un texto al 988 para hablar con un consejero sobre qu\u00e9 hacer.",
+               inner_w, size=11, color="onErrorContainer")
     y += h + 22
 
-    c.section_title(12, y, u"L\u00edneas de crisis \u2014 gratis, 24/7", "warn")
+    c.section_title(12, y, u"L\u00edneas de crisis gratuitas 24/7", "warn")
     y += 20
-    # The deaf/HoH note sits *before* the phone-number list on purpose.
-    note = ("\u00bfTienes p\u00e9rdida auditiva o no puedes hablar por tel\u00e9fono? "
-            "Todas las opciones de abajo tambi\u00e9n funcionan por texto o en "
-            "l\u00ednea. El 988 y Crisis Text Line est\u00e1n pensados para texto, "
-            "y a la l\u00ednea del Condado de San Diego tambi\u00e9n se llega con un "
-            "operador de relevo: marca 711.")
+    # Deaf/HoH note placed above the phone numbers.
+    note = ("\u00bfSordo, con p\u00e9rdida auditiva o sin poder hablar en voz alta? "
+            "Todos los servicios de abajo funcionan por texto o chat en l\u00ednea. "
+            "El 988 y Crisis Text Line funcionan por mensaje de texto, y la "
+            "l\u00ednea del Condado de San Diego est\u00e1 disponible mediante el 711.")
     lines = _wrap_lines(note, w - 40, 11)
     c.icon(24, y + 6, "help", color="onSurfaceVariant", size=7)
     ny = _paragraph(c, 40, y, note, w - 52, size=11, line_h=15)
@@ -658,8 +658,7 @@ def _wrap_lines(text, max_w, size=13, bold=False):
 
 # ------------------------------------------------------ language picker
 def language_picker_screen(kind: str | None = None) -> Canvas:
-    """Settings with the language row, and the picker sheet open. Every entry
-    names its language in all four shipped languages."""
+    """Settings language row with the bottom-sheet picker open."""
     c = Canvas(W, 700, kind)
     c.rect(0, 0, W, 56, "primaryContainer")
     c.text(16, 35, "Settings", size=20, color="onPrimaryContainer", bold=True)
@@ -670,8 +669,8 @@ def language_picker_screen(kind: str | None = None) -> Canvas:
     c.rect(16, y, W - 32, 76, "surfaceContainerLow", radius=12)
     c.icon(40, y + 38, "help", color="onSurfaceVariant", size=10)
     c.text(64, y + 30, "Get help now", size=14, color="onSurface")
-    c.wrap(64, y + 48, "Westview counselors, crisis lines and hotlines. "
-           "Works offline.", W - 120, size=10, line_h=12)
+    c.wrap(64, y + 48, "Westview counselors, 24/7 crisis lines, and safety "
+           "reporting (works offline).", W - 120, size=10, line_h=12)
     y += 88
 
     # dimmed backdrop
@@ -707,7 +706,7 @@ def language_picker_screen(kind: str | None = None) -> Canvas:
 
 # ------------------------------------------------------------------- export
 def palette_sheet() -> None:
-    """Chips showing the brand and semantic colours under each CVD type."""
+    """Chips showing the brand and semantic colors under each CVD type."""
     kinds = [None, "deutan", "protan", "tritan"]
     names = ["primary", "primaryContainer", "secondaryContainer",
              "error", "errorContainer", "surfaceContainerLow"]

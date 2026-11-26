@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Turn a `flutter test` / `flutter analyze` log into GitHub annotations.
+"""Convert `flutter test`, `flutter analyze`, or `flutter build` logs into GitHub annotations.
 
-Why this exists: the raw step log is a 30 MB download from a storage host that
-some review environments cannot reach, while *annotations* are small and
-available through the check-run API. So the CI step pipes output here and this
-script prints one `::error` per distinct failure, which is then readable with:
+Raw step logs can be tens of megabytes and awkward to fetch from external review
+tools, whereas GitHub annotations are compact and show up directly through:
 
     gh api repos/OWNER/REPO/check-runs/<id>/annotations
 
@@ -12,7 +10,7 @@ Usage:
     flutter test --reporter expanded > /tmp/test.log 2>&1 || true
     python3 tools/annotate_ci.py /tmp/test.log test
 
-Exit code is always 0 — the calling step re-exits with the command's own status.
+Always exits 0 so the calling CI step can exit with the original command status.
 """
 
 from __future__ import annotations
@@ -150,11 +148,10 @@ def build_annotations(text: str) -> None:
             annotate("error", "gradle task", stripped[:MAX_LEN])
         if stripped.startswith("* Where:"):
             annotate("error", "gradle: where", stripped[:MAX_LEN])
-    # Gradle's "What went wrong:" block can be printed *before* "FAILURE:",
-    # and some failures only carry a "> ..." cause line. Emit the whole
-    # neighbourhood of the first FAILURE: marker, which always contains it.
-    # One annotation per line around the first failure, so nothing is lost to
-    # the 900-character cap. Progress bars and unzip chatter are dropped.
+    # Gradle's "What went wrong:" block can appear before "FAILURE:", and some
+    # failures only print a "> ..." cause line, so emit surrounding lines around
+    # the first FAILURE: marker one line per annotation to avoid hitting the
+    # 900-character cap. Progress bars and unzip lines are skipped.
     noise = re.compile(r"(Unzipping|^\[=+|^\s*$|Download |Installing |Preparing )")
     lines = text.splitlines()
     for i, line in enumerate(lines):

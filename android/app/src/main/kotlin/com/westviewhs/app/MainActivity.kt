@@ -60,15 +60,14 @@ class MainActivity : FlutterActivity() {
         applyRecentsPrivacy()
     }
 
-    /// Hides the app's content from the recents/app-switcher preview when the
-    /// student asked for it.
+    /// Blanks out the app's preview in Android's recent-apps switcher when
+    /// enabled in Settings.
     ///
-    /// Android only offers one mechanism for blanking the system snapshot
-    /// (`FLAG_SECURE`), and it also blocks screenshots — so the flag is set
-    /// only while the app is in the background (this is called from onPause
-    /// and when the setting changes), and always cleared on resume. Net
-    /// effect: your own timetable still screenshots fine; the thumbnail in the
-    /// app switcher is blank.
+    /// Android's `FLAG_SECURE` blanks the recent-apps snapshot, though it also
+    /// blocks screenshots while set. To avoid breaking normal screenshots, I
+    /// only set `FLAG_SECURE` when the app pauses into the background and clear
+    /// it again in `onResume()`, so you can still screenshot your own class
+    /// schedule while the app-switcher preview stays blank.
     private fun applyRecentsPrivacy() {
         try {
             if (hideRecents) {
@@ -81,8 +80,8 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /// Set the privacy flag as the app leaves the foreground, so the snapshot
-    /// the system captures for recents is blank (see applyRecentsPrivacy).
+    /// Turn `FLAG_SECURE` on as the activity leaves the foreground so Android's
+    /// recent-apps snapshot comes out blank.
     override fun onPause() {
         if (hideRecents) applyRecentsPrivacy()
         super.onPause()
@@ -91,14 +90,14 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         try {
-            // Forward: while the app is visible, screenshots/screen recording
-            // of the student's own timetable must keep working.
+            // Clear `FLAG_SECURE` while the app is open in front of you so
+            // taking screenshots of your own class schedule still works.
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } catch (_: Throwable) {
         }
-        // Re-assert channel settings every resume: if the channel's lockscreen
-        // visibility was loosened (by the user or an OEM) so that class details
-        // could leak onto a locked phone, repair it back to SECRET.
+        // Re-check notification channel settings on every resume so if the
+        // lock-screen visibility got loosened in system settings, it resets
+        // back to `VISIBILITY_SECRET`.
         ScheduleNotificationManager.ensureChannel(this)
     }
 }

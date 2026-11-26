@@ -22,23 +22,22 @@ class CalendarTab {
   const CalendarTab(this.titleKey, this.slug, this.url,
       {this.isApi = false, this.type = CalendarType.google});
 
-  /// Catalogue key for the tab label, so it follows the app language.
+  /// Key in `strings.dart` so tab labels translate with the app language.
   final String titleKey;
 
-  /// Language-independent identifier used for analytics and cache names —
-  /// never the translated label, so metrics stay comparable across languages.
+  /// Fixed English slug used for cache keys and optional usage counts so
+  /// switching languages doesn't split cache entries.
   final String slug;
   final String url;
   final bool isApi;
   final CalendarType type;
 }
 
-/// Shows the events of one Google Calendar.
+/// Displays upcoming events from one Google Calendar feed.
 ///
-/// Data flow is cache-first: the last successful response is shown
-/// immediately (if present) and reused whenever the network is unreachable, so
-/// the calendar still opens on unreliable school Wi-Fi. Pull down (or use
-/// Retry) to force a network refresh.
+/// This loads from local storage first so the calendar still opens right away
+/// when campus Wi-Fi is down, and pulling down (or tapping Retry) forces a
+/// fresh network fetch.
 class CalendarEventsView extends StatefulWidget {
   const CalendarEventsView({
     super.key,
@@ -64,8 +63,8 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   DateTime? _cachedAt;
   bool _loading = false;
   bool _showingSavedCopy = false;
-  /// Catalogue key for the error message, translated when it is rendered so
-  /// switching language also re-translates an error already on screen.
+  /// Tracks whether the initial load failed with nothing cached, stored as a
+  /// bool so switching languages updates the error text automatically.
   bool _error = false;
 
   /// Whether the initial scroll-to-today still needs to happen.
@@ -234,8 +233,8 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       return strings['calendar.tomorrow'];
     }
 
-    // Weekday names come from the catalogue so they translate; DateFormat
-    // would need a locale-aware intl setup for the same result.
+    // Weekday names come from `strings.dart` so we don't need extra locale
+    // date-format tables just for headers.
     final weekdays = strings['calendar.weekdays'].split(',');
     final name = weekdays[(date.weekday - 1).clamp(0, 6)];
     return '$name, ${shortDateLabel(date)}';

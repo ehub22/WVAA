@@ -7,7 +7,7 @@ import 'settings.dart';
 import 'support.dart';
 import 'telemetry.dart';
 
-/// Settings page, opened from the button in the bottom right of the home page.
+/// Settings screen opened from the gear button on the Schedule tab.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -16,8 +16,8 @@ class SettingsPage extends StatelessWidget {
     final settings = AppSettings.instance;
 
     return ListenableBuilder(
-      // Safety toggles live in their own notifier; merge so flipping either
-      // one repaints the switches immediately.
+      // Merge both notifiers so flipping a safety switch or a class setting
+      // updates this list right away.
       listenable: Listenable.merge([settings, SafetySettings.instance]),
       builder: (context, _) {
         final safety = SafetySettings.instance;
@@ -78,8 +78,9 @@ class SettingsPage extends StatelessWidget {
                   button: true,
                   child: ListTile(
                     leading: const Icon(Icons.translate),
-                    // Written in all four languages so it is findable from any
-                    // starting language, whatever the app is currently set to.
+                    // Show all four language names in the row title so someone
+                    // can still find this setting if the app was left in a
+                    // language they don't read.
                     title: const Text('Language · Idioma · 语言 · Wika'),
                     subtitle: Text(
                       AppSettings.instance.language == AppLanguage.system
@@ -160,9 +161,8 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  /// Language picker. Every option is listed in its own language, with the
-  /// English name underneath, so a student who cannot read the current UI
-  /// language can still find theirs.
+  /// Bottom sheet for switching the app language. Each option shows its native
+  /// name alongside all four language names on the subtitle line.
   Future<void> _pickLanguage(BuildContext context) async {
     final current = AppSettings.instance.language;
     final t = AppStrings.of(context);
@@ -239,8 +239,8 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-/// Permanent "who made this" footer: the district disclaimer in full, in both
-/// languages, plus the app's own limits.
+/// Footer at the bottom of Settings showing the full English and Spanish
+/// Poway Unified disclaimers and what the app does not monitor.
 class _AboutAppFooter extends StatelessWidget {
   const _AboutAppFooter();
 
@@ -313,7 +313,7 @@ class _AboutAppFooter extends StatelessWidget {
   }
 }
 
-/// Plain-language privacy disclosure, always visible in Settings.
+/// Card under Privacy & data summarizing what optional diagnostics send.
 class _PrivacyDisclosure extends StatelessWidget {
   const _PrivacyDisclosure();
 
