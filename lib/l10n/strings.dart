@@ -142,7 +142,7 @@ const Map<String, Map<String, String>> _catalog = {
         'High School.',
     'disclaimer.title': 'This app is not part of Poway Unified',
     'disclaimer.plain':
-        'Westview HS (WVAA) is an independent app built by students rather '
+        'Westview HS is an independent app built by students rather '
         'than Poway Unified School District or Westview High School. Because '
         'the school does not run or review this app, schedules, links, or '
         'contacts shown here could be out of date, so confirm important '
@@ -170,26 +170,25 @@ const Map<String, Map<String, String>> _catalog = {
     'help.counselor.title': 'Talk to a counselor at Westview',
     'help.counselor.body':
         'Westview counselors are available in the Wolverine Center during '
-        'school hours. Students can stop by in person, ask a teacher for a '
-        'pass, or email their counselor directly without having to explain '
-        'everything in the message.',
+        'school hours. Stop by in person, ask a teacher for a '
+        'pass, or email your counselor directly.',
     'help.counselor.callOffice': 'Call the office',
     'help.counselor.website': 'Counseling website',
-    'help.counselor.find': 'Find your counselor',
-    'help.counselor.byLast': 'Assigned by the first letter of your last name.',
+    'help.counselor.find': 'Counselors',
+    'help.counselor.byLast': '(First letter of your last name)',
     'help.counselor.career': 'College & career questions',
     'help.counselor.verified':
-        'Counselor assignments can change during the school year, so check '
+        'Counselor assignments can change. Check '
         'Westview\'s website or the counseling office if your last name does '
-        'not match the list below. (Checked November 2025.)',
+        'not match the list below. (Last checked November 2026.)',
 
     'help.crisis.title': '24/7 free and confidential crisis lines',
     'help.crisis.call': 'Call',
     'help.crisis.text': 'Text',
     'help.crisis.deaf':
-        'If you are deaf, hard of hearing, or unable to speak out loud, every '
-        'service below can also be reached by text or online. Both 988 and '
-        'Crisis Text Line support texting directly, while the San Diego County '
+        'If you are deaf, hard of hearing, or unable to speak out loud, '
+        'services below can be reached through text or online. 988 and '
+        'Crisis Text Line support texting. The San Diego County '
         'line accepts 711 relay calls.',
 
     'help.report.title': 'Report a safety concern',
@@ -268,7 +267,7 @@ const Map<String, Map<String, String>> _catalog = {
     'settings.clear': 'Clear saved content',
     'settings.clearSub':
         'Removes cached calendars, lunch menus, and nutrition data stored for '
-        'offline viewing so they download fresh next time.',
+        'offline viewing.',
     'settings.cleared': 'Saved content cleared',
     'settings.classDetails': 'Class details',
     'settings.showTeacher': 'Show teacher',
@@ -281,7 +280,7 @@ const Map<String, Map<String, String>> _catalog = {
     'settings.resetClasses': 'Reset all class names',
     'settings.resetTitle': 'Reset class names?',
     'settings.resetBody':
-        'This clears every custom class name, teacher, and room number you '
+        'This clears all custom class name, teacher, and room numbers you '
         'entered.',
     'settings.reset': 'Reset',
     'settings.tapToAdd': 'Tap to add a class name, teacher, or room',
@@ -297,10 +296,9 @@ const Map<String, Map<String, String>> _catalog = {
         'someone else is in danger, call 911. During an emotional crisis, call '
         'or text 988.',
     'settings.verified':
-        'Because schedules, menus, and links can change during the year, '
-        'confirm time-sensitive details with the school office. Counselor '
-        'contacts were last checked in November 2025 against Westview\'s '
-        'counseling webpage.',
+        'Schedules, menus, and links can change during the year. '
+        'Confirm time-sensitive details with the school office. Counselor '
+        'contacts were last checked in November 2026.',
     'settings.langLabel': 'Language',
     'settings.langSystem': 'System default',
     'schedule.monFri': 'Mon/Fri',
@@ -318,7 +316,7 @@ const Map<String, Map<String, String>> _catalog = {
     'schedule.settings': 'Settings',
     'schedule.help': 'Help',
     'schedule.helpTooltip':
-        'Get help now. Hold down this button to close the app right away.',
+        'Get help now.',
     'common.selected': 'Selected',
     'common.refresh': 'Refresh page',
     'common.dismiss': 'Dismiss',
@@ -336,7 +334,7 @@ const Map<String, Map<String, String>> _catalog = {
     'web.errorBody':
         'The page could not be loaded. Check your connection and try again.',
     'web.loading': 'Loading page…',
-    'web.stale': 'Refresh failed, so the previously loaded page is still shown.',
+    'web.stale': 'Refresh failed.',
     'calendar.tabSchool': 'School Calendar',
     'calendar.tabAthletics': 'Athletics',
     'calendar.tabLunch': 'School Lunches',
