@@ -113,6 +113,43 @@ void main() {
     });
   });
 
+  // Error 153 is what YouTube shows when the embed arrives without a Referer,
+  // and a WebView sends none on a top-level request. These assertions exist so
+  // the headers cannot be dropped again without a test failing.
+  group('embedRequest headers', () {
+    test('names the app as the referrer', () {
+      expect(embedHeaders['Referer'], embedOrigin);
+      expect(embedOrigin, startsWith('https://'));
+      // YouTube's documentation spells it `Referer`; `Referrer` is ignored.
+      expect(embedHeaders.containsKey('Referrer'), isFalse);
+    });
+
+    test('does not suppress the referrer', () {
+      expect(embedHeaders['Referrer-Policy'], 'strict-origin-when-cross-origin');
+    });
+
+    test('asks for inline playback so the player can be promoted to PiP', () {
+      // playsinline=0 hands the video to Android's own player, which is a
+      // different window and cannot be put in a picture-in-picture box.
+      expect(embedRequest('lGIZvN0V3w0').queryParameters['playsinline'], '1');
+    });
+
+    test('the origin it declares matches the referrer it sends', () {
+      expect(
+        embedRequest('lGIZvN0V3w0').queryParameters['origin'],
+        embedHeaders['Referer'],
+      );
+    });
+
+    test('keeps the embed locked to one video', () {
+      final uri = embedRequest('lGIZvN0V3w0');
+      expect(uri.host, 'www.youtube-nocookie.com');
+      expect(uri.path, '/embed/lGIZvN0V3w0');
+      expect(uri.queryParameters['rel'], '0');
+      expect(uri.queryParameters['iv_load_policy'], '3');
+    });
+  });
+
   group('NewscastPage', () {
     test('reads the channel upload feed rather than a channel page', () {
       expect(NewscastPage.feedUrl, contains('feeds/videos.xml'));

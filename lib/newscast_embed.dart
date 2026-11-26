@@ -74,16 +74,25 @@ class _NewscastEmbedState extends State<NewscastEmbed> {
                 : NavigationDecision.prevent;
           },
         ),
-      )
-      ..loadRequest(embedRequest(widget.videoId));
+      );
+    _load(widget.videoId);
   }
 
   @override
   void didUpdateWidget(covariant NewscastEmbed oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
-      _controller.loadRequest(embedRequest(widget.videoId));
+      _load(widget.videoId);
     }
+  }
+
+  /// Loads one video, with the headers YouTube requires.
+  ///
+  /// The headers matter: a WebView sends no referrer on a top-level request,
+  /// and YouTube answers a request it cannot identify with "Error 153: Video
+  /// player configuration error" instead of a player.
+  void _load(String videoId) {
+    _controller.loadRequest(embedRequest(videoId), headers: embedHeaders);
   }
 
   @override

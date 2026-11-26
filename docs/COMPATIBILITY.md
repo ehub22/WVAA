@@ -86,6 +86,8 @@ Adding `flutter analyze` alongside `flutter test` in `.github/workflows/build-ap
 
 Newsletter and newspaper rendering, the locked-down Newscast embed (`lib/newscast_embed.dart`), and the video picture-in-picture bridge (`lib/video_pip.dart`) depend on the device's installed Android System WebView, the Newscast upload feed at `youtube.com/feeds/videos.xml`, and YouTube's iframe API. If an older WebView build misses a media event, or either site changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
 
+The Newscast embed sends a `Referer` header naming the app (`https://com.westviewhs.app`) on every load. That is not cosmetic: YouTube refuses to configure its player for a request it cannot identify and shows "Error 153: Video player configuration error" instead. An Android WebView sends no referrer on a top-level navigation, so the header has to be set in code, and losing it breaks playback with a message that points at the video rather than at the app. `test/newscast_feed_test.dart` asserts the header, the referrer policy, and that the URL's `origin` parameter matches, so the failure is caught before it ships.
+
 ### C5. iOS Target Status [decide]
 
 The iOS project directory compiles in code, and `lib/publications.dart` preserves WebKit inline playback parameters, yet there is no Apple Developer signing setup or macOS CI workflow. Keeping the current note in `README.md` that Android is the supported target while iOS is unmaintained sets accurate expectations unless a macOS runner and signing certificates are added later.

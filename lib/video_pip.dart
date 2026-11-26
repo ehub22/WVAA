@@ -80,21 +80,46 @@ String? youtubeVideoId(String url) {
   return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(candidate) ? candidate : null;
 }
 
+/// The identity this app presents to the YouTube player.
+///
+/// YouTube will not configure its player for a request that arrives without a
+/// `Referer` header; it shows "Error 153: Video player configuration error"
+/// instead. An Android WebView sends no referrer on a top-level navigation, so
+/// the app has to name itself, and a package id is the closest thing a school
+/// app has to a domain. YouTube uses it only to identify the embedding client.
+const String embedOrigin = 'https://com.westviewhs.app';
+
+/// Header that tells YouTube which app is embedding the video.
+///
+/// Without it the player fails with error 153, so this is not optional.
+const Map<String, String> embedHeaders = <String, String>{
+  // Spelled `Referer`, not `Referrer`; the misspelling is in the HTTP standard.
+  'Referer': embedOrigin,
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
 /// An embed URL that shows one video and almost nothing else.
 ///
-/// `rel=0` limits the end-of-video grid to the same channel, `playsinline=0`
-/// keeps the fullscreen button available, and `modestbranding` drops the
-/// YouTube wordmark from the control bar so the player does not read as a
-/// browser. The page around it has no search box or recommendations at all.
+/// `rel=0` limits the end-of-video grid to the same channel, `playsinline=1`
+/// keeps playback inside the page instead of letting Android's player take over
+/// the screen, which is what the picture-in-picture bridge needs to find a
+/// `<video>` element to promote, and `modestbranding` drops the YouTube
+/// wordmark from the control bar so the player does not read as a browser. The
+/// page around it has no search box or recommendations at all.
+///
+/// `origin` matches [embedOrigin] so the player's idea of where it is embedded
+/// agrees with the `Referer` header it received. A mismatch is another way to
+/// land on error 153.
 Uri embedRequest(String videoId) => Uri.https(
       'www.youtube-nocookie.com',
       '/embed/$videoId',
       <String, String>{
         'rel': '0',
-        'playsinline': '0',
+        'playsinline': '1',
         'modestbranding': '1',
         'iv_load_policy': '3',
         'fs': '1',
+        'origin': embedOrigin,
       },
     );
 
