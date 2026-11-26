@@ -327,6 +327,11 @@ const Map<String, Map<String, String>> _catalog = {
     'newsletter.counseling': 'Counseling Newsletters',
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview Newscast',
+    'newscast.openOnYouTube': 'Open on YouTube',
+    'newscast.errorTitle': 'Couldn\'t load the Newscast',
+    'newscast.errorBody':
+        'The channel's video list didn\'t load. Check your connection and '
+        'try again.',
     'web.errorTitle': 'Couldn\'t open this page',
     'web.errorBody':
         'The page could not be loaded. Check your connection and try again.',
@@ -625,6 +630,11 @@ const Map<String, Map<String, String>> _catalog = {
     'newsletter.counseling': 'Boletines de consejería',
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Noticiero de Westview',
+    'newscast.openOnYouTube': 'Abrir en YouTube',
+    'newscast.errorTitle': 'No se pudo cargar el Noticiero',
+    'newscast.errorBody':
+        'No se cargó la lista de videos del canal. Revisa tu conexión e '
+        'inténtalo de nuevo.',
     'web.errorTitle': 'No se pudo abrir esta página',
     'web.errorBody':
         'No se pudo cargar la página. Revisa tu conexión e inténtalo de nuevo.',
@@ -874,6 +884,9 @@ const Map<String, Map<String, String>> _catalog = {
     'newsletter.counseling': '辅导通讯',
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview 新闻播报',
+    'newscast.openOnYouTube': '在 YouTube 中打开',
+    'newscast.errorTitle': '无法加载新闻播报',
+    'newscast.errorBody': '频道视频列表加载失败。请检查网络连接后重试。',
     'web.errorTitle': '无法打开此页面',
     'web.errorBody': '页面无法加载。请检查网络连接后重试。',
     'web.loading': '正在加载页面…',
@@ -1157,6 +1170,11 @@ const Map<String, Map<String, String>> _catalog = {
     'newsletter.counseling': 'Newsletter ng Counseling',
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview Newscast',
+    'newscast.openOnYouTube': 'Buksan sa YouTube',
+    'newscast.errorTitle': 'Hindi ma-load ang Newscast',
+    'newscast.errorBody':
+        'Hindi na-load ang listahan ng video ng channel. Suriin ang '
+        'koneksyon at subukan muli.',
     'web.errorTitle': 'Hindi mabuksan ang pahinang ito',
     'web.errorBody':
         'Hindi na-load ang pahina. Suriin ang koneksyon at subukan muli.',
@@ -1467,6 +1485,11 @@ const Map<String, Map<String, String>> _catalog = {
     'newsletter.counseling': 'Bulletins des conseillers',
     'publications.nexus': 'Westview Nexus',
     'publications.newscast': 'Westview Newscast',
+    'newscast.openOnYouTube': 'Ouvrir sur YouTube',
+    'newscast.errorTitle': 'Impossible de charger le Newscast',
+    'newscast.errorBody':
+        'La liste des vidéos de la chaîne n\'a pas pu être chargée. Vérifiez '
+        'votre connexion et réessayez.',
     'web.errorTitle': 'Impossible d\'ouvrir cette page',
     'web.errorBody':
         'La page n\'a pas pu être chargée. Vérifiez votre connexion et '

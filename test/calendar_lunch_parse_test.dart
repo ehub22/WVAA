@@ -6,44 +6,47 @@ import 'package:westview_app/school_lunch.dart';
 
 void main() {
   group('CalendarEventsViewState.parseEvents', () {
+    // Fixed "today" so the yesterday-onward filter never makes a test flaky.
+    final now = DateTime(2026, 11, 26, 12);
+
     String feed(String events) =>
         'BEGIN:VCALENDAR\r\nVERSION:2.0\r\n$events\r\nEND:VCALENDAR\r\n';
 
     test('expands multi-day all-day events into one entry per day', () {
       final body = feed(
         'BEGIN:VEVENT\r\n'
-        'DTSTART;VALUE=DATE:20260928\r\n'
+        'DTSTART;VALUE=DATE:20261127\r\n'
         // iCalendar all-day end dates are exclusive.
-        'DTEND;VALUE=DATE:20260930\r\n'
+        'DTEND;VALUE=DATE:20261129\r\n'
         'SUMMARY:Homecoming Week\r\n'
         'END:VEVENT',
       );
 
-      final events = CalendarEventsViewState.parseEvents(body);
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
 
       expect(events, hasLength(2));
-      expect((events[0]['displayDate'] as DateTime).day, 28);
-      expect((events[1]['displayDate'] as DateTime).day, 29);
-      expect(events[0]['start']['date'], '2026-09-28');
+      expect((events[0]['displayDate'] as DateTime).day, 27);
+      expect((events[1]['displayDate'] as DateTime).day, 28);
+      expect(events[0]['start']['date'], '2026-11-27');
     });
 
     test('sorts by display date and keeps timed event details', () {
       final body = feed(
         'BEGIN:VEVENT\n'
-        'DTSTART:20260902T170000Z\n'
-        'DTEND:20260902T180000Z\n'
+        'DTSTART:20261128T170000Z\n'
+        'DTEND:20261128T180000Z\n'
         'SUMMARY:Later event\n'
         'END:VEVENT\n'
         'BEGIN:VEVENT\n'
-        'DTSTART:20260901T150000Z\n'
-        'DTEND:20260901T160000Z\n'
+        'DTSTART:20261127T150000Z\n'
+        'DTEND:20261127T160000Z\n'
         'LOCATION:Westview High School\\, San Diego\\, CA\n'
         'DESCRIPTION:First line\\nSecond line\\, with a comma\n'
         'SUMMARY:Earlier event\n'
         'END:VEVENT',
       );
 
-      final events = CalendarEventsViewState.parseEvents(body);
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
 
       expect(events, hasLength(2));
       expect(events[0]['summary'], 'Earlier event');
@@ -51,30 +54,83 @@ void main() {
       expect(events[0]['location'], 'Westview High School, San Diego, CA');
       expect(events[0]['description'],
           'First line\nSecond line, with a comma');
-      // Timed values are stored as UTC and read back as local wall-clock time,
-      // so the exact hour depends on the test machine's zone.
-      expect(events[0]['start']['dateTime'], isA<String>());
+      // UTC values are converted to the phone's zone, so the exact hour
+      // depends on where the test runs.
+      expect(DateTime.parse(events[0]['start']['dateTime'] as String).isUtc,
+          isFalse);
     });
 
     test('joins folded lines before reading a value', () {
       final body = feed(
         'BEGIN:VEVENT\n'
-        'DTSTART;VALUE=DATE:20261111\n'
-        'DTEND;VALUE=DATE:20261112\n'
+        'DTSTART;VALUE=DATE:20261127\n'
+        'DTEND;VALUE=DATE:20261128\n'
         'SUMMARY:A summary Google wrapped across\n'
         '  two lines\n'
         'END:VEVENT',
       );
 
-      final events = CalendarEventsViewState.parseEvents(body);
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
 
       expect(events.single['summary'],
           'A summary Google wrapped across two lines');
     });
 
+    test('reads the district feed style: TZID, DURATION, and RDATE', () {
+      // Copied from the Westview athletics feed on westview.powayusd.com:
+      // local wall-clock times with a zone name, DURATION instead of DTEND,
+      // and one event repeated with RDATE.
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'UID:51738449@westview.powayusd.com#20260825\n'
+        'DTSTART;VALUE=DATE:20261127\n'
+        'DURATION:P1D\n'
+        'SUMMARY:Back to School Night\n'
+        'END:VEVENT\n'
+        'BEGIN:VEVENT\n'
+        'UID:60768832@westview.powayusd.com#20261130\n'
+        'DTSTART;TZID=US/Pacific:20261130T193000\n'
+        'DTEND;TZID=US/Pacific:20261130T203000\n'
+        'RDATE;TZID=US/Pacific:20261202T193000,20261203T190000\n'
+        'SUMMARY:Boys Basketball (JV) Winter Classic\n'
+        'END:VEVENT',
+      );
+
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
+
+      expect(events, hasLength(4));
+      expect(events[0]['summary'], 'Back to School Night');
+      expect(events[0]['start']['date'], '2026-11-27');
+      // The RDATE days show up even though the event only has one DTSTART.
+      expect(
+        events.map((e) => (e['displayDate'] as DateTime).day).toList(),
+        <int>[27, 30, 2, 3],
+      );
+      expect(events[3]['summary'], 'Boys Basketball (JV) Winter Classic');
+    });
+
     test('an empty feed parses to an empty list', () {
-      expect(CalendarEventsViewState.parseEvents(feed('')), isEmpty);
-      expect(CalendarEventsViewState.parseEvents(''), isEmpty);
+      expect(CalendarEventsViewState.parseEvents(feed(''), now: now), isEmpty);
+      expect(CalendarEventsViewState.parseEvents('', now: now), isEmpty);
+    });
+
+    test('drops events older than yesterday', () {
+      final body = feed(
+        'BEGIN:VEVENT\n'
+        'DTSTART;VALUE=DATE:20250101\n'
+        'DTEND;VALUE=DATE:20250102\n'
+        'SUMMARY:Old news\n'
+        'END:VEVENT\n'
+        'BEGIN:VEVENT\n'
+        'DTSTART;VALUE=DATE:20261127\n'
+        'DTEND;VALUE=DATE:20261128\n'
+        'SUMMARY:Coming up\n'
+        'END:VEVENT',
+      );
+
+      final events = CalendarEventsViewState.parseEvents(body, now: now);
+
+      expect(events.single['summary'], 'Coming up');
     });
   });
 

@@ -17,6 +17,14 @@ class MainActivity : FlutterActivity() {
     /// Whether the app's content should be hidden in the recents thumbnail.
     private var hideRecents = true
 
+    /// True while the activity is the picture-in-picture window.
+    ///
+    /// `FLAG_SECURE` is inherited by the PiP window, and Android draws a secure
+    /// window as a blank rectangle inside PiP. So the flag has to come off the
+    /// moment the activity shrinks, or a student who leaves the app mid-video
+    /// gets a black box where the video should be.
+    private var inPictureInPicture = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -70,7 +78,8 @@ class MainActivity : FlutterActivity() {
     /// schedule while the app-switcher preview stays blank.
     private fun applyRecentsPrivacy() {
         try {
-            if (hideRecents) {
+            // Never secure the PiP window: it would blank the video.
+            if (hideRecents && !inPictureInPicture) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             } else {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -80,11 +89,15 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /// Turn `FLAG_SECURE` on as the activity leaves the foreground so Android's
-    /// recent-apps snapshot comes out blank.
-    override fun onPause() {
-        if (hideRecents) applyRecentsPrivacy()
-        super.onPause()
+    /// Keeps the recents-privacy flag from blanking the PiP window, and turns
+    /// it back on once the app returns to its normal full-screen size.
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        inPictureInPicture = isInPictureInPictureMode
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        applyRecentsPrivacy()
     }
 
     override fun onResume() {

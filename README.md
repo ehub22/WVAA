@@ -13,9 +13,9 @@ I built WVAA as an Android-first Flutter app for students at Westview High Schoo
 - **Special schedules:** On early-release, assembly, or Link Crew days, the app fetches the modified schedule from the school server and overrides the regular bell schedule in the app, on the widget, and in the countdown notification. Responses stay cached for at least two days so the schedule still loads if the server goes down.
 - **Live countdown notification:** An ongoing Android notification displays the current period, teacher/room, and a ticking `Chronometer`. On a locked phone, the notification stays hidden (`VISIBILITY_SECRET`) so strangers walking by can't read your class schedule; your class details only show up after you unlock the screen. It also reschedules itself across reboots through `AlarmManager`.
 - **Home-screen widget:** The "Current Period" widget shows your active class, a live countdown, and what period comes next. Because `Chronometer` ticks inside the launcher process and `AlarmManager` only wakes the app at period transitions, the timer stays accurate without draining battery.
-- **Calendars and lunch menu:** The school calendar and Athletics calendar, alongside the daily school lunch menu and nutrition facts. Both calendars are read from their public iCalendar feeds, so the app needs no Google API key at all.
+- **Calendars and lunch menu:** The school calendar and Athletics calendar, alongside the daily school lunch menu and nutrition facts. The school calendar is read from its public Google Calendar `.ics` address and the Athletics tab from the district's own athletics feed, so the app needs no API key at all.
 - **Newsletters:** The weekly newsletter and the counseling newsletters, each loaded inside an in-app WebView.
-- **Publications:** The Westview Nexus student newspaper and the Westview Newscast YouTube channel. If you leave the app while a video is playing, it automatically switches into Android picture-in-picture mode instead of cutting off playback.
+- **Publications:** The Westview Nexus student newspaper and the Westview Newscast. The Newscast is a list of episodes read from the channel's public upload feed and drawn with normal app widgets, so there is no YouTube search box, home page, or recommendation rail anywhere inside the app. Tapping an episode plays that one video, and leaving the app mid-video switches to Android picture-in-picture instead of cutting playback off.
 - **Light and dark themes:** Material 3 light and dark palettes built from Westview's gold and brass colors, following your phone's system theme while keeping every text and surface pair above WCAG AA contrast minimums.
 - **Offline fallbacks for bad campus Wi-Fi:** Campus Wi-Fi drops pretty often in certain buildings, so calendars, lunch menus, and special schedules save their last good response on the device and show a "saved copy" banner when a refresh fails. Newsletter and publication WebViews also keep an already-loaded page on screen rather than replacing it with an error screen mid-session.
 - **Manual refresh everywhere:** Pull-to-refresh on calendars and lunch menus, a refresh button in the header on newsletters and publications, and retry buttons whenever an initial load fails.
@@ -96,11 +96,13 @@ lib/
   network_cache.dart     Local cache for calendars, menus, and nutrition data
   widget_sync.dart       Syncs schedules and class names to the Android widget
   calendars.dart         Calendar tabs (School, Athletics, Lunches) and the
-                         `.ics` parser for the public Google Calendar feeds
+                         `.ics` parser for both calendar feeds
   school_lunch.dart      Daily lunch menu and nutrition facts sheet
   newsletter_page.dart   Newsletter WebView tabs
-  publications.dart      Publications WebViews and video PiP handling
-  video_pip.dart         Injected JS bridge between Vimeo/YouTube players and PiP
+  publications.dart      Nexus WebView plus the Publications tab switcher
+  newscast_page.dart     Newscast episode list and the one-video player page
+  newscast_embed.dart    Locked-down YouTube embed and its URL allowlist
+  video_pip.dart         Injected JS bridge between video players and Android PiP
   web_page.dart          Shared WebView wrapper with loading/error/retry UI
   theme/                 Color tokens and light/dark Material 3 themes
   widgets/
@@ -206,7 +208,7 @@ If you want to publish a build to Google Play, set up a real upload keystore fol
 - **State management:** `AppSettings` and `SpecialScheduleService` are `ChangeNotifier` singletons, and screens rebuild from them using `ListenableBuilder` or listener hooks in `initState` and `dispose`.
 - **Countdown timer:** One 1-second `Timer.periodic` in `SchedulePage` handles the on-screen countdown, midnight date rollovers, and syncing updates to the widget, while the rest of the app updates only when events happen.
 - **Networking:** `SpecialScheduleService` takes an injected `http.Client` (which makes mocking responses in tests straightforward) with a 10-second timeout, and failed requests fall back to cached data instead of crashing the screen.
-- **Video picture-in-picture:** `video_pip.dart` injects a small JavaScript bridge into the Publications WebView so it can watch playback. Vimeo reports through its `postMessage` player API, while YouTube is driven through its iframe API, which the bridge turns on by adding `enablejsapi=1` to the embed. When you background the app during playback, the Flutter shell hides its own headers and navigation bar so the video fills the entire activity window before Android shrinks it into PiP.
+- **Video picture-in-picture:** `video_pip.dart` injects a small JavaScript bridge into a video page so the app can see whether something is playing. Vimeo pages report through their `postMessage` player API, and YouTube through its iframe API, which the bridge turns on by adding `enablejsapi=1` to the embed. The Newscast player owns PiP itself, since it is the only tab that plays YouTube. When you leave the app during playback, the shell hides its header and navigation bar and promotes the player to fill the whole window *before* Android shrinks it, because PiP captures whatever the activity is drawing. If the bridge cannot find a playing player it reports that back and the app stays full screen rather than shrinking into a picture of a page. The window is also never marked secure while in PiP, since Android draws a secure window as a blank rectangle.
 - **Package ID:** The Android `applicationId` and namespace are both `com.westviewhs.app`.
 
 ## Tests

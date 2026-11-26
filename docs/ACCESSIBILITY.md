@@ -65,7 +65,7 @@ Embedded WebViews (newsletters, Westview Nexus, and Westview Newscast) display e
 - **Explicit SMS keyword confirmation:** Before opening the phone's messaging app for a keyword-triggered hotline (`HOME` or `START`), the app displays a confirmation dialog showing the number and keyword and copies the keyword if needed, since sending a blank message to an automated shortcode can fail to start a session.
 - **No audio-only cues:** No feature in the app depends on sound effects or spoken prompts, and the period countdown is entirely visual and text-based.
 - **Silent ongoing notifications:** `ScheduleNotificationManager.kt` registers the countdown channel with `IMPORTANCE_LOW`, which prevents period transitions from playing alert tones or vibrating during class.
-- **Embedded video captions:** Westview Newscast videos play from the channel's YouTube page inside a WebView, so closed captions depend on the caption tracks the Newscast team uploads to YouTube (see Section 7).
+- **Embedded video captions:** Westview Newscast episodes play through a single-video YouTube embed, so closed captions depend on the caption tracks the Newscast team uploads to YouTube (see Section 7). The episode list shows each video's title and date as ordinary text, so a student never has to read a thumbnail to know what an episode is.
 
 ---
 
@@ -116,6 +116,7 @@ Separately, `python3 tools/audit_contrast.py --strict` verifies light and dark c
 | French (`fr`) strings have not had native-speaker review | Wording follows standard metropolitan French and should read correctly, though phrasing may sound formal to some students | Ask a fluent French-speaking student or staff member to review the `fr` map in `lib/l10n/strings.dart` |
 | Embedded newsletters and publications are English-only | WebViews show external school pages as published | Suggest short multilingual summaries to ASB or counseling; cannot be solved inside the app alone |
 | Newscast videos may lack closed captions | Deaf and hard-of-hearing students cannot follow uncaptioned broadcasts | Ask the Westview Newscast editors to enable YouTube's automatic captions or upload their own |
+| The Newscast list comes from YouTube's upload feed | If the feed format changes, the tab shows a retry view instead of the episode list | The parser is covered by `test/newscast_feed_test.dart` against the real feed shape |
 | No dedicated high-contrast (`forced-colors`) theme yet | Users needing contrast well above WCAG AA rely on standard light/dark palettes | Add `highContrastLight` and `highContrastDark` `ThemeData` variants in `lib/theme/theme.dart` |
 | Tablet landscape layout at 200% text scale is untested | Dialogs with open keyboards could crowd vertical space on wide screens | Add widget tests covering an `800x1280` landscape viewport at `2.0` text scale |
 

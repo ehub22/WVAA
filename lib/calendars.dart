@@ -86,7 +86,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
     try {
       cache = await NetworkCache.instance.read(widget.feedUrl);
       if (_events == null && cache != null) {
-        final cached = _visibleEvents(parseEvents(cache.body));
+        final cached = parseEvents(cache.body);
         if (cached.isNotEmpty) {
           _events = cached;
           _cachedAt = cache.cachedAt;
@@ -111,7 +111,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
 
     try {
       final body = await _fetchEventsBody();
-      final events = _visibleEvents(parseEvents(body));
+      final events = parseEvents(body);
       await NetworkCache.instance.write(widget.feedUrl, body);
       if (!mounted) return;
       setState(() {
@@ -171,86 +171,135 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
   /// `summary`, `description`, `location`, and `start` with either a `date` or
   /// a `dateTime`, plus `displayDate` for the day the row belongs to.
   ///
+  /// Two feed styles have to work here. Google publishes UTC timestamps
+  /// (`DTSTART:20260313T223000Z`) or plain dates. The district's Edlio feeds
+  /// publish local wall-clock times with a zone name
+  /// (`DTSTART;TZID=US/Pacific:20261007T193000`), sometimes with `DURATION`
+  /// instead of `DTEND`, and often repeat one event with `RDATE`. Both get read
+  /// into the same shape.
+  ///
+  /// Pass [now] to make the date filter deterministic in tests.
+  ///
   /// Public and static so it can be unit-tested against saved feeds.
   @visibleForTesting
-  static List<Map<String, dynamic>> parseEvents(String body) {
+  static List<Map<String, dynamic>> parseEvents(String body,
+      {DateTime? now}) {
+    final lines = _unfoldLines(body);
     final expanded = <Map<String, dynamic>>[];
 
-    for (final properties in _unfoldLines(body)) {
-      final summary = properties['SUMMARY'];
-      if (summary == null) continue;
+    for (final event in _vevents(lines)) {
+      final summary = event.values['SUMMARY'];
+      if (summary == null || summary.trim().isEmpty) continue;
 
-      final start = _parseIcsDate(properties['DTSTART']);
+      final startProperty = event.dates['DTSTART'];
+      if (startProperty == null) continue;
+      final start = _parseIcsDate(startProperty);
       if (start == null) continue;
+
       final allDay = !start.hasTime;
-      final end = _parseIcsDate(properties['DTEND']) ??
+      final end = _parseIcsDate(event.dates['DTEND']) ??
+          _endFromDuration(start, event.values['DURATION']) ??
           (allDay
               ? _IcsDate(start.value.add(const Duration(days: 1)), false)
               : start);
 
       // All-day end dates are exclusive, and a timed event's end is the
-      // moment it stops, so both get backed off by a moment before the days
-      // are enumerated.
+      // moment it stops, so both get backed off a moment before the days are
+      // enumerated.
       final lastMoment = end.value.isAfter(start.value)
           ? end.value.subtract(const Duration(seconds: 1))
           : start.value;
 
-      var current = DateTime(start.value.year, start.value.month, start.value.day);
-      final last = DateTime(lastMoment.year, lastMoment.month, lastMoment.day);
+      // A repeating event lists the extra days explicitly.
+      final starts = <_IcsDate>[
+        start,
+        for (final raw in event.multiDates['RDATE'] ?? const <String>[])
+          if (_parseIcsDate(raw) case final _IcsDate date) date,
+      ];
 
-      while (!current.isAfter(last)) {
-        expanded.add(<String, dynamic>{
-          'summary': summary,
-          if (properties['DESCRIPTION'] != null)
-            'description': properties['DESCRIPTION'],
-          if (properties['LOCATION'] != null) 'location': properties['LOCATION'],
-          'start': allDay
-              ? <String, dynamic>{'date': _isoDate(start.value)}
-              : <String, dynamic>{'dateTime': start.value.toIso8601String()},
-          'displayDate': current,
-        });
-        current = current.add(const Duration(days: 1));
+      for (final occurrence in starts) {
+        final span = occurrence == start
+            ? (lastMoment.difference(start.value))
+            : (end.value.difference(start.value));
+        final occurrenceLast = occurrence.value.add(span);
+
+        var current = _dayOnly(occurrence.value);
+        final last = _dayOnly(occurrenceLast);
+        while (!current.isAfter(last)) {
+          expanded.add(<String, dynamic>{
+            'summary': summary,
+            if (event.values['DESCRIPTION'] != null)
+              'description': event.values['DESCRIPTION'],
+            if (event.values['LOCATION'] != null)
+              'location': event.values['LOCATION'],
+            'start': allDay
+                ? <String, dynamic>{'date': _isoDate(occurrence.value)}
+                : <String, dynamic>{
+                    'dateTime': occurrence.value.toIso8601String(),
+                  },
+            'displayDate': current,
+          });
+          current = current.add(const Duration(days: 1));
+        }
       }
     }
 
     expanded.sort((a, b) =>
         (a['displayDate'] as DateTime).compareTo(b['displayDate'] as DateTime));
-    return expanded;
+    return _visibleEvents(expanded, now);
   }
 
   /// Keeps yesterday onward, since a public feed carries every year of history
   /// and the list only needs what is current.
+  ///
+  /// Comparing whole days matters: the athletics feed runs on Pacific time, so
+  /// its first event of a day lands on the previous day in UTC, and a raw
+  /// moment comparison would hide it for anyone reading the app in UTC.
   static List<Map<String, dynamic>> _visibleEvents(
-      List<Map<String, dynamic>> all) {
-    final now = DateTime.now();
-    final cutoff = DateTime(now.year, now.month, now.day)
+      List<Map<String, dynamic>> all, [DateTime? now]) {
+    final today = now ?? DateTime.now();
+    final cutoff = DateTime(today.year, today.month, today.day)
         .subtract(const Duration(days: 1));
     return all
-        .where((e) => !(e['displayDate'] as DateTime).isBefore(cutoff))
+        .where((e) => !_dayOnly(e['displayDate'] as DateTime).isBefore(cutoff))
         .take(100)
         .toList(growable: false);
   }
 
-  /// Groups a feed into one property map per `VEVENT`.
+  /// Strips the time from [date] so two moments can be compared by day.
+  static DateTime _dayOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  /// Turns `PT1H30M`, `P1D`, or `P2W` into the matching span.
+  static _IcsDate? _endFromDuration(_IcsDate start, String? raw) {
+    if (raw == null) return null;
+    final match = RegExp(
+            r'^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$')
+        .firstMatch(raw.trim().toUpperCase());
+    if (match == null) return null;
+
+    int part(int index) => int.tryParse(match.group(index) ?? '') ?? 0;
+
+    final span = Duration(
+      days: part(1) * 7 + part(2),
+      hours: part(3),
+      minutes: part(4),
+      seconds: part(5),
+    );
+    if (span == Duration.zero) return null;
+    return _IcsDate(start.value.add(span), start.hasTime);
+  }
+
+  /// Splits the feed into one parsed `VEVENT` at a time.
   ///
   /// Handles line folding (a long line continues on the next line, which
   /// starts with a space) and unescapes the `\,`, `\;`, and `\n` sequences
-  /// Google writes into text values.
-  static Iterable<Map<String, String>> _unfoldLines(String body) sync* {
-    final lines = <String>[];
-    for (final raw in body.split('\n')) {
-      final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
-      if (line.startsWith(' ') && lines.isNotEmpty) {
-        lines[lines.length - 1] += line.substring(1);
-      } else {
-        lines.add(line);
-      }
-    }
-
-    Map<String, String>? event;
+  /// written into text values.
+  static Iterable<_IcsEvent> _vevents(List<String> lines) sync* {
+    _IcsEvent? event;
     for (final line in lines) {
       if (line == 'BEGIN:VEVENT') {
-        event = <String, String>{};
+        event = _IcsEvent();
         continue;
       }
       if (line == 'END:VEVENT') {
@@ -262,9 +311,42 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
 
       final colon = line.indexOf(':');
       if (colon <= 0) continue;
-      final name = line.substring(0, colon).split(';').first.toUpperCase();
-      event[name] = _unescapeIcs(line.substring(colon + 1).trim());
+
+      // `DTSTART;TZID=US/Pacific:20261007T193000` — keep the parameters so
+      // the zone and the value type survive.
+      final header = line.substring(0, colon);
+      final value = _unescapeIcs(line.substring(colon + 1).trim());
+      final name = header.split(';').first.toUpperCase();
+
+      switch (name) {
+        case 'DTSTART':
+        case 'DTEND':
+          // Keep the whole line so `_parseIcsDate` can read the value type
+          // and any `TZID` alongside the value.
+          event.dates[name] = line;
+        case 'RDATE':
+        case 'EXDATE':
+          event.multiDates[name] = [
+            ...?event.multiDates[name],
+            ...value.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty),
+          ];
+        default:
+          event.values[name] = value;
+      }
     }
+  }
+
+  static List<String> _unfoldLines(String body) {
+    final lines = <String>[];
+    for (final raw in body.split('\n')) {
+      final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
+      if (line.startsWith(' ') && lines.isNotEmpty) {
+        lines[lines.length - 1] += line.substring(1);
+      } else {
+        lines.add(line);
+      }
+    }
+    return lines;
   }
 
   static String _unescapeIcs(String value) => value
@@ -279,11 +361,23 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
-  /// Reads `20260928` (all day) or `20260928T153000Z` (timed, UTC).
-  static _IcsDate? _parseIcsDate(String? raw) {
-    if (raw == null) return null;
+  /// Reads one `DTSTART`/`DTEND` property, keeping its `TZID` and value type.
+  ///
+  /// Accepts `20260928` (all day), `20260928T153000Z` (UTC), and
+  /// `20260928T153000` (already local, possibly with a `TZID`).
+  static _IcsDate? _parseIcsDate(String? property) {
+    if (property == null) return null;
+    // `RDATE` hands us bare values, while `DTSTART` arrives as the whole line
+    // (`DTSTART;TZID=US/Pacific:20261007T193000`), so the parameters are only
+    // there when a colon splits them off.
+    final split = property.lastIndexOf(':');
+    final parameters =
+        split > 0 ? property.substring(0, split).toUpperCase() : '';
+    final raw = (split > 0 ? property.substring(split + 1) : property).trim();
+    final tzid = RegExp(r'TZID=([^;:]+)').firstMatch(parameters)?.group(1);
+
     final match = RegExp(r'^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$')
-        .firstMatch(raw.trim());
+        .firstMatch(raw);
     if (match == null) return null;
 
     final year = int.parse(match.group(1)!);
@@ -293,7 +387,7 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       return _IcsDate(DateTime(year, month, day), false);
     }
 
-    final value = DateTime.utc(
+    final wallClock = DateTime(
       year,
       month,
       day,
@@ -301,9 +395,49 @@ class CalendarEventsViewState extends State<CalendarEventsView> {
       int.parse(match.group(5)!),
       int.parse(match.group(6)!),
     );
-    // Timed values are UTC (`Z`); anything without it is already local.
-    return _IcsDate(match.group(7) == null ? value : value.toLocal(), true);
+
+    if (match.group(7) != null) {
+      // UTC: convert to the phone's zone so times read the way the student
+      // sees a clock.
+      return _IcsDate(DateTime.utc(
+        wallClock.year,
+        wallClock.month,
+        wallClock.day,
+        wallClock.hour,
+        wallClock.minute,
+        wallClock.second,
+      ).toLocal(), true);
+    }
+
+    // A bare local time is already what the school means. When a zone is
+    // named and it is not this phone's zone, shift it using the same date's
+    // offset so the wall-clock time survives across time zones.
+    if (tzid != null && !_zoneIsLocal(tzid)) {
+      final offset = _utcOffsetForLocal(wallClock);
+      return _IcsDate(wallClock.subtract(offset), true);
+    }
+    return _IcsDate(wallClock, true);
   }
+
+  /// The district publishes everything in Pacific time, which is where the
+  /// app is used, so a named zone only needs special handling when the phone
+  /// itself is somewhere else.
+  static bool _zoneIsLocal(String tzid) {
+    final upper = tzid.toUpperCase();
+    if (!upper.contains('PACIFIC') && !upper.contains('LOS_ANGELES')) {
+      return true; // Not a zone this app has an opinion about; trust the value.
+    }
+    final now = DateTime.now();
+    final localName = now.timeZoneName.toUpperCase();
+    return localName.contains('PST') || localName.contains('PDT');
+  }
+
+  /// Offset of this phone's zone at [local], used to keep a Pacific wall-clock
+  /// time meaning the same instant on a phone set to another zone.
+  static Duration _utcOffsetForLocal(DateTime local) =>
+      DateTime.utc(local.year, local.month, local.day, local.hour,
+              local.minute, local.second)
+          .difference(local.toUtc());
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -597,6 +731,24 @@ class _IcsDate {
 
   /// False for an all-day value like `20260928`.
   final bool hasTime;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _IcsDate && other.value == value && other.hasTime == hasTime;
+
+  @override
+  int get hashCode => Object.hash(value, hasTime);
+}
+
+/// One `VEVENT` as it comes off the feed.
+///
+/// [values] holds plain text properties, [dates] keeps `DTSTART`/`DTEND` with
+/// their parameters intact so a `TZID` is not lost, and [multiDates] collects
+/// `RDATE`/`EXDATE` occurrences.
+class _IcsEvent {
+  final Map<String, String> values = <String, String>{};
+  final Map<String, String> dates = <String, String>{};
+  final Map<String, List<String>> multiDates = <String, List<String>>{};
 }
 
 class CalendarsPage extends StatefulWidget {
@@ -617,8 +769,7 @@ class _CalendarsPageState extends State<CalendarsPage> {
     ),
     CalendarTab(
       'calendar.tabAthletics',
-      'https://calendar.google.com/calendar/ical/'
-      'c_bdlim8dben51vvr6p2omiguh1k%40group.calendar.google.com/public/basic.ics',
+      'https://westview.powayusd.com/apps/events/ical?id=1',
     ),
     CalendarTab(
       'calendar.tabLunch',

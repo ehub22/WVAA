@@ -6,17 +6,27 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'l10n/strings.dart';
+import 'newscast_page.dart';
 import 'support.dart';
 import 'video_pip.dart';
 import 'widgets/section_selector.dart';
 import 'widgets/status_views.dart';
 
 class _Publication {
-  const _Publication(this.titleKey, this.url);
+  const _Publication(this.titleKey, this.url, {this.isNewscast = false});
 
   /// Key in `strings.dart` for the translated tab label.
   final String titleKey;
+
+  /// Page loaded in a WebView. Ignored for the Newscast tab, which draws its
+  /// own episode list instead of embedding youtube.com.
   final String url;
+
+  /// When true this tab is the Newscast: a Flutter list fed by the channel's
+  /// upload feed, with one embedded video per tap. Nothing on this tab is a
+  /// YouTube page, so there is no search box or recommendation rail to wander
+  /// into from a school app.
+  final bool isNewscast;
 }
 
 class PublicationsPage extends StatefulWidget {
@@ -32,8 +42,10 @@ class _PublicationsPageState extends State<PublicationsPage> {
   static const List<_Publication> _publications = [
     _Publication('publications.nexus', 'https://wvnexus.org/category/news/'),
     _Publication(
-        'publications.newscast',
-        'https://www.youtube.com/@westviewnewscast7337/videos'),
+      'publications.newscast',
+      'https://www.youtube.com/@westviewnewscast7337/videos',
+      isNewscast: true,
+    ),
   ];
 
   /// One key per publication so the header refresh button can reach the
@@ -47,7 +59,15 @@ class _PublicationsPageState extends State<PublicationsPage> {
     setState(() => selectedIndex = index);
   }
 
+  /// Key for the Newscast list so the header refresh button can reach it.
+  final GlobalKey<NewscastPageState> _newscastKey =
+      GlobalKey<NewscastPageState>();
+
   void _refreshCurrent() {
+    if (_publications[selectedIndex].isNewscast) {
+      _newscastKey.currentState?.refresh();
+      return;
+    }
     _webKeys[selectedIndex].currentState?.reload();
   }
 
@@ -103,10 +123,16 @@ class _PublicationsPageState extends State<PublicationsPage> {
                   child: LazyIndexedStack(
                     index: selectedIndex,
                     itemCount: _publications.length,
-                    itemBuilder: (context, index) => PublicationWebView(
-                      key: _webKeys[index],
-                      url: _publications[index].url,
-                    ),
+                    itemBuilder: (context, index) {
+                      final publication = _publications[index];
+                      if (publication.isNewscast) {
+                        return NewscastPage(key: _newscastKey);
+                      }
+                      return PublicationWebView(
+                        key: _webKeys[index],
+                        url: publication.url,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -118,9 +144,10 @@ class _PublicationsPageState extends State<PublicationsPage> {
   }
 }
 
-/// WebView that bridges video playback (Vimeo or YouTube) to Android
-/// picture-in-picture. Only used by the Publications tab because other tabs do
-/// not host videos.
+/// WebView for the sites that are read as pages, like the Nexus. It is the only
+/// thing on the Publications tab that could play a video, so the PiP bridge
+/// lives here; the Newscast draws its own list and player instead of loading
+/// youtube.com.
 ///
 /// Exposes the same last-known-content error handling as `web_page.dart`
 /// (full-screen retry state on first load, non-destructive notice when a
@@ -149,7 +176,9 @@ class PublicationWebViewState extends State<PublicationWebView>
   bool _initialLoadFailed = false;
   bool _refreshFailed = false;
 
-  /// Only pages the bridge understands get the script and PiP wiring.
+  /// Whether this page can hold a video the PiP bridge understands. Only the
+  /// Nexus tab loads a site directly now; the Newscast draws its own list and
+  /// player (`newscast_page.dart`), so it never reaches this widget.
   bool get _isPipVideoPage => isPipVideoUrl(widget.url);
 
   @override
@@ -157,8 +186,12 @@ class PublicationWebViewState extends State<PublicationWebView>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Android 12+ shrinks the window on its own when the app is backgrounded
+    // mid-video. `onPipEntered` then fires after the shrink, so promoting the
+    // video there is a recovery step; `_enterPipVisual` also runs ahead of the
+    // shrink wherever the app controls the timing.
     _pip = SimplePip(
-      onPipEntered: _enterPipVisual,
+      onPipEntered: () => unawaited(_enterPipVisual()),
       onPipExited: _exitPipVisual,
     );
 
@@ -257,6 +290,13 @@ class PublicationWebViewState extends State<PublicationWebView>
   void _handlePipMessage(String message) {
     if (!mounted || !_isPipVideoPage) return;
     final state = message.trim();
+    // `entered` / `no-target` come back from the promotion itself so the app
+    // knows whether there is a video to show before it shrinks.
+    if (state == 'no-target') {
+      videoPipActive.value = false;
+      return;
+    }
+    if (state == 'entered') return;
     if (state != 'playing' && state != 'paused') return;
     final playing = state == 'playing';
     if (playing == _isVideoPlaying) return;
@@ -278,18 +318,38 @@ class PublicationWebViewState extends State<PublicationWebView>
     }
   }
 
-  Future<void> _enterPipVisual() async {
-    if (!_isPipVideoPage) return;
+  /// Makes the playing video the only thing on screen, then lets Android
+  /// shrink the activity.
+  ///
+  /// Order matters. PiP captures whatever the activity is drawing, so the
+  /// video has to be promoted *before* the window shrinks — otherwise the
+  /// snapshot Android takes is the page as it was, and the video ends up tiny
+  /// inside a picture of the app. The promotion is only worth starting when
+  /// the bridge can actually find a playing player; if it cannot, the app
+  /// stays full screen rather than shrinking into something that shows a page
+  /// instead of a video.
+  Future<bool> _enterPipVisual() async {
+    if (!_isPipVideoPage) return false;
+
     // Tell the app shell to hide its header and bottom navigation bar without
-    // detaching the WebView so video playback keeps running smoothly.
+    // detaching the WebView so playback keeps running smoothly.
     videoPipActive.value = true;
+
+    bool promoted = false;
     try {
-      await _controller.runJavaScript(
+      final result = await _controller.runJavaScriptReturningResult(
         'window.__westviewVideoPip && window.__westviewVideoPip.enter();',
       );
+      promoted = result == true || result == 'true';
     } catch (e) {
       debugPrint('PiP visual enter error: $e');
     }
+
+    if (!promoted) {
+      // No player to show: undo the layout change and leave the app alone.
+      videoPipActive.value = false;
+    }
+    return promoted;
   }
 
   Future<void> _exitPipVisual() async {
@@ -336,7 +396,7 @@ class PublicationWebViewState extends State<PublicationWebView>
   /// Android <12 doesn't support auto-enter; we manually enter PiP when the
   /// app backgrounds while a video is playing.
   Future<void> _enterLegacyPip() async {
-    await _enterPipVisual();
+    if (!await _enterPipVisual()) return;
     bool entered = false;
     try {
       entered = await _pip.enterPipMode(

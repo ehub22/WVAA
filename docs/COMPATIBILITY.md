@@ -24,9 +24,10 @@ Regular weekday bell schedules (`monFriSchedule`, `tueThursSchedule`, and `wedSc
 
 ### A3. No API Keys in Client Code [done]
 
-`lib/calendars.dart` reads the school and Athletics calendars from their public iCalendar (`.ics`) addresses instead of the Google Calendar API, so no key ships in the APK. Without a key there is no quota for anyone to exhaust and nothing to rotate, which removes the failure mode where a leaked key could lock every student out of the calendar at once. The lunch menu was always keyless: `lib/school_lunch.dart` calls a public menus API.
+`lib/calendars.dart` reads the school calendar from its public Google Calendar `.ics` address and the Athletics calendar from the district's own athletics feed (`westview.powayusd.com/apps/events/ical?id=1`). Neither needs an API key, so none ships in the APK. Without a key there is no quota for anyone to exhaust and nothing to rotate, which removes the failure mode where a leaked key could lock every student out of the calendar at once. The lunch menu was always keyless: `lib/school_lunch.dart` calls a public menus API.
 
-- **Trade-off:** The feed returns every year of history, so the parser filters to yesterday onward and caps the list at 100 rows before rendering. A calendar that stops being public also stops working, since there is no authenticated fallback.
+- **Trade-off:** The Google feed returns every year of history, so the parser filters to yesterday onward and caps the list at 100 rows before rendering. The two feeds also disagree on format: Google publishes UTC timestamps and plain dates, while the district publishes local wall-clock times with a zone name, `DURATION` instead of `DTEND`, and repeated days as `RDATE`. The parser handles both. A feed that stops being public also stops working, since there is no authenticated fallback.
+- **Why Athletics moved:** The old Athletics Google calendar stopped being updated after the 2026 spring season, which left the tab empty while the school's own athletics page was showing November and December games. The district feed is the one the athletics office keeps current.
 - **Follow-up:** If a calendar is ever made private again, host a nightly export somewhere the app can reach rather than reintroducing a key into the APK.
 
 ---
@@ -83,7 +84,7 @@ Adding `flutter analyze` alongside `flutter test` in `.github/workflows/build-ap
 
 ### C4. Android System WebView Differences [known]
 
-Newsletter rendering and the video picture-in-picture bridge (`lib/video_pip.dart`) depend on the device's installed Android System WebView, Vimeo's `postMessage` player events, and YouTube's iframe API. If an older WebView build misses a media event, or either site changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
+Newsletter and newspaper rendering, the locked-down Newscast embed (`lib/newscast_embed.dart`), and the video picture-in-picture bridge (`lib/video_pip.dart`) depend on the device's installed Android System WebView, the Newscast upload feed at `youtube.com/feeds/videos.xml`, and YouTube's iframe API. If an older WebView build misses a media event, or either site changes its page wrapper, PiP handoff fails safely back to regular in-app video playback rather than crashing. Any `webview_flutter` upgrade should be checked on a physical Android phone.
 
 ### C5. iOS Target Status [decide]
 

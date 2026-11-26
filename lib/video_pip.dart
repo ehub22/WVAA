@@ -13,7 +13,11 @@ final ValueNotifier<bool> videoPipActive = ValueNotifier<bool>(false);
 /// JavaScript cannot read. Each host below gets handled one of two ways: its
 /// documented `postMessage` player API (Vimeo) or its public iframe API
 /// (YouTube), so playback state can be observed from the parent page.
-const Set<String> _videoHosts = <String>{'vimeo.com', 'youtube.com'};
+const Set<String> _videoHosts = <String>{
+  'vimeo.com',
+  'youtube.com',
+  'youtube-nocookie.com',
+};
 
 /// Returns whether [url] points at a page whose video the PiP bridge can follow.
 ///
@@ -37,6 +41,62 @@ bool isVimeoUrl(String url) => _matchesHost(url, 'vimeo.com');
 
 /// Returns whether [url] is a YouTube page.
 bool isYouTubeUrl(String url) => _matchesHost(url, 'youtube.com');
+
+/// The video id from a YouTube link, or null when [url] is not a video.
+///
+/// Handles the three shapes the channel page produces (`/watch?v=`,
+/// `/shorts/`, and `youtu.be/`) plus the embed URL this app builds itself.
+String? youtubeVideoId(String url) {
+  final Uri? uri = Uri.tryParse(url);
+  if (uri == null) return null;
+
+  final String host = uri.host.toLowerCase();
+  if (!(host == 'youtu.be' ||
+      host == 'youtube.com' ||
+      host.endsWith('.youtube.com') ||
+      host == 'youtube-nocookie.com' ||
+      host.endsWith('.youtube-nocookie.com'))) {
+    return null;
+  }
+
+  final List<String> segments = uri.pathSegments;
+  String? candidate;
+
+  if (host == 'youtu.be' && segments.isNotEmpty) {
+    candidate = segments.first;
+  } else if (uri.queryParameters['v'] != null) {
+    candidate = uri.queryParameters['v'];
+  } else if (segments.length >= 2 &&
+      (segments[0] == 'embed' ||
+          segments[0] == 'shorts' ||
+          segments[0] == 'live' ||
+          segments[0] == 'v')) {
+    candidate = segments[1];
+  }
+
+  if (candidate == null) return null;
+  // Ids are always 11 URL-safe characters; anything else is a redirect or a
+  // path we should not treat as a video.
+  return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(candidate) ? candidate : null;
+}
+
+/// An embed URL that shows one video and almost nothing else.
+///
+/// `rel=0` limits the end-of-video grid to the same channel, `playsinline=0`
+/// keeps the fullscreen button available, and `modestbranding` drops the
+/// YouTube wordmark from the control bar so the player does not read as a
+/// browser. The page around it has no search box or recommendations at all.
+Uri embedRequest(String videoId) => Uri.https(
+      'www.youtube-nocookie.com',
+      '/embed/$videoId',
+      <String, String>{
+        'rel': '0',
+        'playsinline': '0',
+        'modestbranding': '1',
+        'iv_load_policy': '3',
+        'fs': '1',
+      },
+    );
 
 bool _matchesHost(String url, String host) {
   final Uri? uri = Uri.tryParse(url);
@@ -241,6 +301,12 @@ const String videoPipScript = r'''
     } catch (_) {}
   }
 
+  function reportEntered(ok) {
+    try {
+      PiPChannel.postMessage(ok ? 'entered' : 'no-target');
+    } catch (_) {}
+  }
+
   function attachVideo(video) {
     if (!video || video.__westviewPipObserved) return;
     video.__westviewPipObserved = true;
@@ -378,7 +444,10 @@ const String videoPipScript = r'''
   }
 
   function enterVisual(attempt) {
-    if (visualEntered) return true;
+    if (visualEntered) {
+      reportEntered(true);
+      return true;
+    }
 
     var target = selectPlayer();
     if (!target) {
@@ -389,6 +458,10 @@ const String videoPipScript = r'''
         retryTimer = setTimeout(function() {
           enterVisual((attempt || 0) + 1);
         }, 100);
+      } else {
+        // Nothing to show. Dart uses this to leave the app full screen
+        // instead of shrinking a page into a PiP window.
+        reportEntered(false);
       }
       return false;
     }
@@ -450,6 +523,7 @@ const String videoPipScript = r'''
     important(target, 'opacity', '1');
     important(target, 'object-fit', 'contain');
     important(target, 'background', '#000');
+    reportEntered(true);
     return true;
   }
 
