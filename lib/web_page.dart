@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -13,7 +12,9 @@ import 'widgets/status_views.dart';
 /// local files, downgrade to cleartext, or smuggle an external scheme past
 /// the app. External actions belong in the phone's own apps via
 /// `url_launcher` (see `support.dart`), not in an embedded browser.
-@visibleForTesting
+///
+/// Used by both `WebPageView` and `PublicationWebView`, so it is a regular
+/// public helper (not `@visibleForTesting`).
 bool isAllowedWebNavigation(Uri uri) {
   if (uri.scheme == 'about') return true;
   return uri.scheme == 'https' && uri.host.isNotEmpty;

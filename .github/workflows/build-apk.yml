@@ -120,10 +120,14 @@ jobs:
         run: python3 tools/check_strings.py
 
       - name: Run static analysis
+        # --no-fatal-infos: Flutter 3.50 pre-release emits info-level
+        # deprecations (e.g. flutter/material.dart -> material_ui) for the
+        # whole codebase; those must not fail the build. Errors and
+        # warnings still fail it.
         shell: bash
         run: |
           set +e
-          flutter analyze > /tmp/analyze.log 2>&1
+          flutter analyze --no-fatal-infos > /tmp/analyze.log 2>&1
           status=$?
           python3 tools/annotate_ci.py /tmp/analyze.log analyze
           cat /tmp/analyze.log

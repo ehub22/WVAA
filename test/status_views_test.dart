@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:westview_app/l10n/strings.dart';
 import 'package:westview_app/settings.dart';
 import 'package:westview_app/theme/theme.dart';
 import 'package:westview_app/widgets/status_views.dart';
