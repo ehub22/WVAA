@@ -266,6 +266,9 @@ class _DistrictDisclaimerBar extends StatelessWidget {
                         ),
                   ),
                 ),
+                // Mirror the leading icon + gap so the text is centered on
+                // the whole bar rather than shifted right by the icon width.
+                const SizedBox(width: 22),
               ],
             ),
           ),
