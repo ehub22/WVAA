@@ -169,15 +169,13 @@ class _HomePageState extends State<_HomePage> {
       valueListenable: videoPipActive,
       builder: (context, isPipActive, _) {
         return Scaffold(
-          body: ColoredBox(
-            color: Colors.black,
-            child: IndexedStack(
-              // During PiP the app must always surface the Publications tab
-              // (which owns the video WebView), no matter which tab the user
-              // last selected.
-              index: isPipActive ? _publicationsIndex : _selectedIndex,
-              children: _pages,
-            ),
+          backgroundColor: isPipActive ? Colors.black : null,
+          body: IndexedStack(
+            // During PiP the app must always surface the Publications tab
+            // (which owns the video WebView), no matter which tab the user
+            // last selected.
+            index: isPipActive ? _publicationsIndex : _selectedIndex,
+            children: _pages,
           ),
           // NavigationBar destinations expose their labels to TalkBack, and
           // each destination keeps a 48dp+ touch target at any text scale.

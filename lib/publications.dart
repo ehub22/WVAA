@@ -78,7 +78,7 @@ class _PublicationsPageState extends State<PublicationsPage> {
       valueListenable: videoPipActive,
       builder: (context, isPipActive, _) {
         return Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: isPipActive ? Colors.black : null,
           body: SafeArea(
             top: !isPipActive,
             bottom: !isPipActive,
@@ -435,66 +435,63 @@ class PublicationWebViewState extends State<PublicationWebView>
     final scheme = Theme.of(context).colorScheme;
     final strings = AppStrings.of(context);
 
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_initialLoadFailed)
-            ErrorStatusView(
-              title: strings['web.errorTitle'],
-              message: strings['web.errorBody'],
-              onRetry: reload,
-              retryLabel: strings['web.retry'],
-            )
-          else if (!_hasLoadedOnce && _loading < 100)
-            LoadingStatusView(label: strings['web.loading'])
-          else if (_loading < 100)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(minHeight: 4),
-            ),
-          if (_refreshFailed)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Material(
-                color: scheme.errorContainer,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.cloud_off,
-                          size: 18, color: scheme.onErrorContainer),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          strings['web.stale'],
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: scheme.onErrorContainer),
-                        ),
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (_initialLoadFailed)
+          ErrorStatusView(
+            title: strings['web.errorTitle'],
+            message: strings['web.errorBody'],
+            onRetry: reload,
+            retryLabel: strings['web.retry'],
+          )
+        else if (!_hasLoadedOnce && _loading < 100)
+          LoadingStatusView(label: strings['web.loading'])
+        else if (_loading < 100)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(minHeight: 4),
+          ),
+        if (_refreshFailed)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Material(
+              color: scheme.errorContainer,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_off,
+                        size: 18, color: scheme.onErrorContainer),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        strings['web.stale'],
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: scheme.onErrorContainer),
                       ),
-                      IconButton(
-                        tooltip: strings['common.dismiss'],
-                        iconSize: 18,
-                        color: scheme.onErrorContainer,
-                        icon: const Icon(Icons.close),
-                        onPressed: () =>
-                            setState(() => _refreshFailed = false),
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      tooltip: strings['common.dismiss'],
+                      iconSize: 18,
+                      color: scheme.onErrorContainer,
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _refreshFailed = false),
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
