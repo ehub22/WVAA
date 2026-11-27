@@ -35,6 +35,10 @@ jobs:
   build:
     name: Build release APK + AAB
     runs-on: ubuntu-latest
+    # `secrets` is not available in step `if` conditions, so expose a boolean
+    # flag at job level and gate Play-signing steps on `env.HAS_PLAY_SIGNING`.
+    env:
+      HAS_PLAY_SIGNING: ${{ secrets.KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout repository
@@ -140,7 +144,7 @@ jobs:
       # builds with it (see android/app/build.gradle.kts). Skipped entirely
       # when secrets are not configured, preserving debug-signed sideloads.
       - name: Set up Play upload signing (if secrets configured)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.HAS_PLAY_SIGNING == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -156,7 +160,7 @@ jobs:
           echo "::notice title=Play signing::Upload keystore decoded; release builds will use Play upload signing."
 
       - name: Note Play signing status
-        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
+        if: env.HAS_PLAY_SIGNING != 'true'
         run: echo "::notice title=Play signing::No KEYSTORE_BASE64 secret; AAB will be skipped and APK will use debug signing. See docs/PLAY_RELEASE.md"
 
       # Build the release APK using `github.run_number` for `versionCode` so
@@ -179,7 +183,7 @@ jobs:
       # Build the Play Store AAB (only when Play signing is configured).
       # Play Console requires an AAB; the APK above remains for sideloading.
       - name: Build release AAB (Play Store)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.HAS_PLAY_SIGNING == 'true'
         shell: bash
         run: |
           set +e
@@ -212,7 +216,7 @@ jobs:
           retention-days: 30
 
       - name: Upload AAB as a build artifact
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.HAS_PLAY_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab-${{ github.run_number }}
@@ -232,7 +236,7 @@ jobs:
 
       # Attach the Play AAB to the same GitHub Release when it was built.
       - name: Attach AAB to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') && secrets.KEYSTORE_BASE64 != ''
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_PLAY_SIGNING == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
