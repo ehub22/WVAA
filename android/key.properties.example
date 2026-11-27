@@ -1,0 +1,11 @@
+# Copy this file to android/key.properties and fill in your real values.
+# android/key.properties is gitignored — never commit it or the keystore.
+# See docs/PLAY_RELEASE.md for how to generate the upload keystore and
+# add it to GitHub Secrets for CI builds.
+#
+# storeFile is resolved relative to android/app/ (so "upload-keystore.jks"
+# means android/app/upload-keystore.jks) or as an absolute path.
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=upload-keystore.jks

@@ -1,10 +1,19 @@
-name: Build Android APK
+name: Build Android APK + AAB
 
 # When does this workflow run?
-#   - on every push to the default branch (uploads an APK build artifact)
+#   - on every push to the default branch (uploads an APK build artifact,
+#     plus an AAB artifact when Play signing secrets are configured)
 #   - on every pull request targeting the default branch (validates the build)
-#   - when a version tag "vX.Y.Z" is pushed (creates a GitHub Release with the APK)
+#   - when a version tag "vX.Y.Z" is pushed (creates a GitHub Release with the
+#     APK, plus the AAB when Play signing secrets are configured)
 #   - manually from the Actions tab (workflow_dispatch)
+#
+# Play Store signing: if the repository secrets KEYSTORE_BASE64,
+# KEYSTORE_PASSWORD, KEYSTORE_ALIAS, and KEYSTORE_KEY_PASSWORD are set, CI
+# decodes the upload keystore, writes android/key.properties, and builds a
+# signed AAB (flutter build appbundle) for upload to Play Console. Without
+# those secrets the workflow behaves exactly as before: APK only, debug
+# signing. See docs/PLAY_RELEASE.md.
 on:
   push:
     branches: ["main"]
@@ -24,7 +33,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build release APK
+    name: Build release APK + AAB
     runs-on: ubuntu-latest
 
     steps:
@@ -126,9 +135,34 @@ jobs:
           cat /tmp/test.log
           exit $status
 
+      # Play Store upload signing (optional): decode the upload keystore from
+      # secrets and write android/key.properties so Gradle signs release
+      # builds with it (see android/app/build.gradle.kts). Skipped entirely
+      # when secrets are not configured, preserving debug-signed sideloads.
+      - name: Set up Play upload signing (if secrets configured)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          chmod 600 android/app/upload-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$KEYSTORE_PASSWORD" "$KEYSTORE_KEY_PASSWORD" "$KEYSTORE_ALIAS" > android/key.properties
+          chmod 600 android/key.properties
+          echo "::notice title=Play signing::Upload keystore decoded; release builds will use Play upload signing."
+
+      - name: Note Play signing status
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
+        run: echo "::notice title=Play signing::No KEYSTORE_BASE64 secret; AAB will be skipped and APK will use debug signing. See docs/PLAY_RELEASE.md"
+
       # Build the release APK using `github.run_number` for `versionCode` so
-      # every CI build gets a higher version number automatically. Sideload
-      # builds use Flutter's debug signing config (`android/app/build.gradle.kts`).
+      # every CI build gets a higher version number automatically. Signing
+      # uses the Play upload keystore when configured above, otherwise
+      # Flutter's debug signing config (`android/app/build.gradle.kts`).
       - name: Build release APK
         # Emit key Gradle/Dart error lines as GitHub annotations just like the
         # test step above.
@@ -142,14 +176,30 @@ jobs:
           tail -n 120 /tmp/build.log
           exit $status
 
-      # Upload the full build log whenever the APK step fails since GitHub
+      # Build the Play Store AAB (only when Play signing is configured).
+      # Play Console requires an AAB; the APK above remains for sideloading.
+      - name: Build release AAB (Play Store)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          set +e
+          flutter build appbundle --release --build-number=${{ github.run_number }} \
+            > /tmp/build-aab.log 2>&1
+          status=$?
+          python3 tools/annotate_ci.py /tmp/build-aab.log build
+          tail -n 120 /tmp/build-aab.log
+          exit $status
+
+      # Upload the full build logs whenever a build step fails since GitHub
       # annotations are capped in length.
       - name: Upload build log (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ github.run_number }}
-          path: /tmp/build.log
+          path: |
+            /tmp/build.log
+            /tmp/build-aab.log
           if-no-files-found: ignore
           retention-days: 14
 
@@ -161,6 +211,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload AAB as a build artifact
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab-${{ github.run_number }}
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 90
+
       # Runs only when a "vX.Y.Z" tag is pushed.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -170,3 +229,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: build/app/outputs/flutter-apk/app-release.apk
+
+      # Attach the Play AAB to the same GitHub Release when it was built.
+      - name: Attach AAB to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.KEYSTORE_BASE64 != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: build/app/outputs/bundle/release/app-release.aab

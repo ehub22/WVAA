@@ -113,12 +113,14 @@ docs/
   SAFETY.md              Safety design notes, contact sources, and disclaimers
   ACCESSIBILITY.md       Translations, screen readers, contrast, and motion notes
   COMPATIBILITY.md       Device, maintenance, and school-policy compatibility notes
+  PLAY_RELEASE.md        Google Play signing, AAB builds, and store checklist
 
 tools/
   audit_contrast.py      WCAG contrast and colorblind separation checker
   check_strings.py       Verifies lib/l10n/strings.dart formatting and key parity
   render_mockups.py      Renders docs/screenshots/ from app colors and copy
   annotate_ci.py         Formats Flutter test/analyze/build failures for GitHub CI
+  generate_upload_keystore.sh  Generates the Play upload keystore (once)
 
 android/app/src/main/kotlin/com/westviewhs/app/
   MainActivity.kt                    Flutter activity, PiP hooks, and safety channel
@@ -193,15 +195,23 @@ flutter pub get
 flutter build apk --release
 ```
 
-This writes `build/app/outputs/flutter-apk/app-release.apk`, signed with the debug keystore so you can install it directly on an Android phone.
+This writes `build/app/outputs/flutter-apk/app-release.apk`. Without Play signing configured (below) it is signed with the debug keystore so you can install it directly on an Android phone.
 
 ### Google Play signing
 
-If you want to publish a build to Google Play, set up a real upload keystore following the [Flutter Android signing guide](https://docs.flutter.dev/deployment/android#signing-the-app), create `android/key.properties`, and update `release.signingConfig` in `android/app/build.gradle.kts`.
+Release builds use a real upload keystore when one is configured, and fall back to the debug keystore otherwise (`android/app/build.gradle.kts`). To configure it:
+
+1. Generate an upload keystore once: `./tools/generate_upload_keystore.sh` (creates `android/app/upload-keystore.jks`). Back it up — losing it means requesting an upload-key reset from Play Console.
+2. Locally, copy `android/key.properties.example` to `android/key.properties` and fill in the passwords/alias (`android/key.properties` and `*.jks` are gitignored — never commit them).
+3. In CI, add the four GitHub Secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEYSTORE_ALIAS`, `KEYSTORE_KEY_PASSWORD`) — see [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md) for the full Play Console checklist (listing, Data Safety, exact-alarm declaration, school permission, closed testing).
+
+```sh
+flutter build appbundle --release   # Play Store upload (AAB)
+```
 
 ### GitHub Actions
 
-`.github/workflows/build-apk.yml` runs on pushes and pull requests to `main` (plus manual `workflow_dispatch` runs), builds a release APK, and uploads it as a 30-day workflow artifact. Pushing a `vX.Y.Z` tag also creates a GitHub Release with the APK attached. In CI, `versionCode` uses `GITHUB_RUN_NUMBER` so every new build gets a higher version number automatically.
+`.github/workflows/build-apk.yml` runs on pushes and pull requests to `main` (plus manual `workflow_dispatch` runs), builds a release APK, and uploads it as a 30-day workflow artifact. When the Play signing secrets above are configured, it also builds a signed AAB (`flutter build appbundle`), uploads it as a 90-day artifact, and attaches it to GitHub Releases. Pushing a `vX.Y.Z` tag creates a GitHub Release with the APK (and AAB, when configured) attached. In CI, `versionCode` uses `GITHUB_RUN_NUMBER` so every new build gets a higher version number automatically.
 
 ## Architecture notes
 
