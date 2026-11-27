@@ -27,23 +27,31 @@ class SectionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            _SelectorPill(
-              label: labels[i],
-              selected: i == selectedIndex,
-              onTap: () => onSelected(i),
-              selectedColor: scheme.primary,
-              selectedContentColor: scheme.onPrimary,
-              unselectedColor: scheme.surfaceContainerHigh,
-              unselectedContentColor: scheme.onSurfaceVariant,
-              outlineColor: scheme.outlineVariant,
-            ),
-        ],
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        // Stretch the row to the available width so short label sets are
+        // centered; longer sets still overflow and scroll from the start.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth - 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                _SelectorPill(
+                  label: labels[i],
+                  selected: i == selectedIndex,
+                  onTap: () => onSelected(i),
+                  selectedColor: scheme.primary,
+                  selectedContentColor: scheme.onPrimary,
+                  unselectedColor: scheme.surfaceContainerHigh,
+                  unselectedContentColor: scheme.onSurfaceVariant,
+                  outlineColor: scheme.outlineVariant,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -93,19 +101,23 @@ class _SelectorPill extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48, minWidth: 72),
+              // Center the label on both axes. Padding alone is top-aligned
+              // inside the minimum-height box, which left the text visibly
+              // high in the pill.
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: foreground,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                      ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Center(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: foreground,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                  ),
                 ),
               ),
             ),
