@@ -92,9 +92,9 @@ The Newscast embed sends a `Referer` header naming the app (`https://com.westvie
 
 The iOS project directory compiles in code, and `lib/publications.dart` preserves WebKit inline playback parameters, yet there is no Apple Developer signing setup or macOS CI workflow. Keeping the current note in `README.md` that Android is the supported target while iOS is unmaintained sets accurate expectations unless a macOS runner and signing certificates are added later.
 
-### C6. Release Signing and Versioning [todo]
+### C6. Release Signing and Versioning [done] (code side; manual steps remain)
 
-- **Signing key:** Release APKs in `android/app/build.gradle.kts` currently sign with the debug keystore so students can sideload CI artifacts easily. Before publishing to Google Play, or distributing long-lived sideloaded releases from multiple machines, configure a dedicated upload keystore via GitHub Secrets so updates can install over previous builds without requiring an uninstall.
+- **Signing key:** `android/app/build.gradle.kts` loads a Play upload keystore from `android/key.properties` (local) or `KEYSTORE_*` environment variables (CI), falling back to the debug keystore when neither is present so sideload builds keep working. `.github/workflows/build-apk.yml` decodes the keystore from GitHub Secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEYSTORE_ALIAS`, `KEYSTORE_KEY_PASSWORD`), builds a signed AAB with `flutter build appbundle`, and attaches it to GitHub Releases on `vX.Y.Z` tags. Generate the keystore with `tools/generate_upload_keystore.sh`. Remaining manual steps (Play App Signing enrollment, listing, school permission) are in `docs/PLAY_RELEASE.md`.
 - **Version policy:** `pubspec.yaml` currently stays at `1.0.0+1` while CI passes `--build-number=${{ github.run_number }}` for `versionCode`; bumping `versionName` on tagged releases (`vX.Y.Z`) will make bug reports easier to match to builds.
 
 ---
@@ -141,5 +141,5 @@ Because calendars, lunch menus, nutrition facts, and newsletters come from schoo
 
 1. **A1 & A2:** Set a recurring August/January check for Westview's counselor caseloads, hotline numbers, and base bell schedules.
 2. **C3 & B3:** Add `flutter analyze` to `.github/workflows/build-apk.yml` and add a landscape tablet/keyboard widget test at `200%` text scale.
-3. **C6:** Set up a dedicated release signing keystore in GitHub Secrets before broad distribution.
+3. **C6 (manual remainder):** Generate the upload keystore, add the four GitHub Secrets, and enroll in Play App Signing (code side is done — see `docs/PLAY_RELEASE.md`).
 4. **D4:** Obtain administrative sign-off before any Google Play Store submission.
